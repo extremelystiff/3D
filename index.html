@@ -1,0 +1,2146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>3D Creator - Zstd & Undo (Fixed)</title>
+
+<!-- 1. CSS STYLES -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+
+<style>
+    body, html { margin: 0; padding: 0; overflow: hidden; height: 100%; background: #e0e0e0; font-family: 'Segoe UI', sans-serif; }
+
+    /* Full Screen Editor */
+    #designer-area {
+        position: absolute; top: 0; left: 0;
+        width: 100vw; height: 100vh;
+        z-index: 1;
+        background: radial-gradient(circle at center, #f0f0f0 0%, #d0d0d0 100%);
+    }
+    #designer-canvas { width: 100%; height: 100%; display: block; outline: none; }
+
+    /* UI Panels (Floating) */
+    .float-panel {
+        position: absolute;
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(5px);
+        border: 1px solid rgba(0,0,0,0.1);
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        padding: 8px;
+        z-index: 100;
+        pointer-events: auto;
+    }
+
+    /* Toolbar (Left) */
+    .float-toolbar { top: 20px; left: 20px; width: 50px; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+
+    /* Top Header */
+    .float-header { top: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; padding: 8px 15px; align-items: center;}
+
+    /* Object List (Bottom Right) */
+    .float-list { bottom: 20px; right: 20px; width: 220px; max-height: 300px; display: flex; flex-direction: column; }
+
+    /* Properties (Top Right) */
+    .float-props { top: 20px; right: 20px; width: 240px; display: none; }
+
+    /* Export Modal */
+    .float-export { top: 50%; left: 50%; transform: translate(-50%, -50%); width: 300px; display: none; padding: 20px; }
+
+    /* UI Elements */
+    .btn-tool { width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 6px; }
+    .active-tool { background-color: #0d6efd !important; color: white !important; border-color: #0b5ed7 !important; }
+    .divider { width: 80%; height: 1px; background: #ddd; margin: 2px 0; }
+
+    /* Measurement Labels */
+    .label-overlay { pointer-events: none; z-index: 50; font-family: sans-serif; overflow: hidden; }
+    .tinker-label-container { pointer-events: auto; padding: 2px; }
+    .tinker-input {
+        pointer-events: auto; background: rgba(255, 255, 255, 0.95);
+        border: 1px solid #0d6efd; border-radius: 4px; padding: 2px 0;
+        font-size: 13px; font-weight: bold; color: #000; width: 55px;
+        text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .dim-pos { color: #0d6efd; border-color: #0d6efd; }
+    .dim-size { color: #212529; border-color: #6c757d; }
+    .rot-label { background:rgba(0,0,0,0.8); color:#ffc107; padding:4px; border-radius:4px; font-weight:bold; font-size:12px; }
+
+    /* List Items */
+    .object-list-item { font-size: 0.85rem; padding: 8px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; align-items: center; background:white; }
+    .object-list-item:hover { background: #f8f9fa; }
+    .object-list-item.selected { background: #e7f1ff; border-left: 3px solid #0d6efd; font-weight: 600; }
+
+    .color-picker { display:flex; flex-wrap:wrap; gap:4px; margin-top: 5px; }
+    .color-option { width:20px; height:20px; border-radius:3px; cursor:pointer; border:1px solid rgba(0,0,0,0.1); }
+    .color-option.selected { border:2px solid #000; transform:scale(1.2); }
+</style>
+
+<!-- 2. IMPORT MAP -->
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+        "three-mesh-bvh": "https://unpkg.com/three-mesh-bvh@0.7.3/build/index.module.js",
+        "three-bvh-csg": "https://unpkg.com/three-bvh-csg@0.0.16/build/index.module.js",
+        "zstd-wasm": "https://unpkg.com/@bokuweb/zstd-wasm@0.0.27/dist/web/index.web.js",
+        "three-rounded-box": "https://unpkg.com/three@0.160.0/examples/jsm/geometries/RoundedBoxGeometry.js"
+    }
+}
+</script>
+
+<!-- 3. Polyfills -->
+<script async src="https://ga.jspm.io/npm:es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+</head>
+<body>
+
+<div id="designer-area">
+    <canvas id="designer-canvas"></canvas>
+
+    <!-- Auto Save Indicator -->
+    <div id="auto-save-status" style="position:absolute; bottom:20px; left:50%; transform:translateX(-50%); color:white; background:rgba(0,0,0,0.6); padding:4px 12px; border-radius:20px; opacity:0; pointer-events:none; transition: opacity 0.5s; font-size: 0.8rem;">Saved</div>
+
+    <!-- Header Controls -->
+    <div class="float-panel float-header">
+        <button class="btn btn-sm btn-outline-dark border-0" onclick="window.undo()" title="Undo (Ctrl+Z)">
+            <i class="bi bi-arrow-counterclockwise"></i>
+        </button>
+        <button class="btn btn-sm btn-outline-dark border-0" onclick="window.redo()" title="Redo (Ctrl+Y)">
+            <i class="bi bi-arrow-clockwise"></i>
+        </button>
+
+        <div style="border-left:1px solid #ccc; margin:0 5px; height:20px;"></div>
+
+        <!-- Settings Button -->
+        <button class="btn btn-sm btn-outline-dark border-0"
+        onclick="document.getElementById('settings-panel').style.display='block'; window.updateStorageUI()"
+        title="Settings">
+            <i class="bi bi-gear"></i>
+        </button>
+        <div style="border-left:1px solid #ccc; margin:0 5px; height:20px;"></div>
+
+        <button class="btn btn-sm btn-outline-dark border-0 fw-bold" onclick="document.getElementById('export-panel').style.display='block'">
+            <i class="bi bi-download me-1"></i> Export
+        </button>
+        <div style="border-left:1px solid #ccc; margin:0 5px; height:20px;"></div>
+        <button class="btn btn-sm btn-outline-danger border-0" onclick="if(confirm('Clear Scene?')) window.dDelAll()" title="Clear Scene">
+            <i class="bi bi-trash"></i>
+        </button>
+        <div style="border-left:1px solid #ccc; margin:0 5px; height:20px;"></div>
+        <button id="btn-ruler" class="btn btn-sm btn-outline-dark border-0" onclick="window.toggleRuler()" title="Toggle Ruler (M)">
+            <i class="bi bi-ruler"></i>
+        </button>
+        <div style="border-left:1px solid #ccc; margin:0 5px; height:20px;"></div>
+    </div>
+
+    <!-- Toolbar (Left) -->
+    <div class="float-panel float-toolbar">
+        <div class="small fw-bold text-muted" style="font-size:0.6rem">ADD</div>
+        <button class="btn btn-light border btn-tool" onclick="window.dAdd('cube')" title="Cube"><i class="bi bi-box"></i></button>
+        <button class="btn btn-light border btn-tool" onclick="window.dAdd('cyl')" title="Cylinder"><i class="bi bi-database"></i></button>
+        <button class="btn btn-light border btn-tool" onclick="window.dAdd('sph')" title="Sphere"><i class="bi bi-circle"></i></button>
+
+        <button class="btn btn-light border btn-tool" onclick="window.dAdd('cone')" title="Cone / Pyramid"><i class="bi bi-cone-striped"></i></button>
+        <button class="btn btn-light border btn-tool" onclick="window.dAdd('torus')" title="Torus (Donut)"><i class="bi bi-circle-half"></i></button>
+        <button class="btn btn-light border btn-tool" onclick="window.dAdd('wedge')" title="Wedge / Ramp"><i class="bi bi-caret-up-fill"></i></button>
+
+        <div class="divider"></div>
+
+        <div class="small fw-bold text-muted" style="font-size:0.6rem">EDIT</div>
+        <button class="btn btn-light border btn-tool" onclick="window.setMode('translate')" data-mode="translate" title="Move"><i class="bi bi-arrows-move"></i></button>
+        <button class="btn btn-light border btn-tool" onclick="window.setMode('rotate')" data-mode="rotate" title="Rotate"><i class="bi bi-arrow-repeat"></i></button>
+        <button class="btn btn-light border btn-tool" onclick="window.setMode('scale')" data-mode="scale" title="Scale"><i class="bi bi-arrows-angle-expand"></i></button>
+        <button class="btn btn-light border btn-tool" onclick="window.startAlignTool()" title="Snap Face to Face"><i class="bi bi-magnet"></i></button>
+        <div class="divider"></div>
+
+        <div class="small fw-bold text-muted" style="font-size:0.6rem">ACT</div>
+        <button class="btn btn-light border btn-tool" onclick="window.dDuplicate()" title="Duplicate"><i class="bi bi-files"></i></button>
+        <button class="btn btn-light border btn-tool" onclick="window.dLoft()" title="Loft / Hull"><i class="bi bi-bezier2"></i></button>
+        <button class="btn btn-light border btn-tool" onclick="window.dShell()" title="Hollow / Shell"><i class="bi bi-nut"></i></button>
+        <button class="btn btn-light border btn-tool" onclick="window.dDrop()" title="Drop to Floor"><i class="bi bi-arrow-bar-down"></i></button>
+
+        <div class="divider"></div>
+
+        <button class="btn btn-primary border btn-tool" onclick="document.getElementById('file-upload').click()" title="Import File"><i class="bi bi-upload"></i></button>
+        <input type="file" id="file-upload" accept=".stl,.obj,.glb,.gltf,.usdz" style="display:none" onchange="window.dImportFile(this)">
+    </div>
+
+    <!-- Object List (Bottom Right) -->
+    <div class="float-panel float-list">
+        <div class="d-flex justify-content-between align-items-center mb-2 border-bottom pb-1">
+            <span class="fw-bold small"><i class="bi bi-list-ul"></i> Scene Objects</span>
+        </div>
+        <ul id="object-list" class="mb-2" style="overflow-y:auto; list-style:none; padding:0; flex:1;"></ul>
+        <div class="btn-group w-100">
+            <button class="btn btn-sm btn-warning" id="merge-btn" onclick="window.dMerge()">Merge (0)</button>
+            <button class="btn btn-sm btn-danger" onclick="window.dDel()">Delete</button>
+        </div>
+    </div>
+
+    <!-- Properties (Top Right) -->
+    <div class="float-panel float-props" id="prop-panel">
+        <div class="d-flex justify-content-between border-bottom pb-1 mb-2">
+            <span class="fw-bold small">Properties</span>
+            <button class="btn-close btn-sm" onclick="window.selectObject(null)"></button>
+        </div>
+        <div class="mb-2">
+            <input type="text" id="opt-obj-name" class="form-control form-control-sm mb-1" placeholder="Name" onchange="window.updateObjectName(this.value)">
+            <div class="d-flex justify-content-between align-items-center">
+                 <select id="opt-d-type" class="form-select form-select-sm w-50" onchange="window.dUpdMat(this.value)">
+                    <option value="solid">Solid</option>
+                    <option value="hole">Hole (Sub)</option>
+                 </select>
+                 <div class="color-picker" id="color-picker"></div>
+            </div>
+        </div>
+        <!-- DYNAMIC SHAPE PARAMETERS -->
+        <div id="shape-params" class="mb-2 pt-2 border-top" style="display:none; background:#f8f9fa; padding:5px; border-radius:4px;">
+            <!-- Inputs will be injected here by JS -->
+        </div>
+        <div class="row g-1 mb-2">
+            <label class="small text-muted col-12 mb-0">Size (mm)</label>
+            <div class="col-4"><input type="number" id="opt-sz-x" class="form-control form-control-sm" placeholder="W" onchange="window.dSz()"></div>
+            <div class="col-4"><input type="number" id="opt-sz-y" class="form-control form-control-sm" placeholder="L" onchange="window.dSz()"></div>
+            <div class="col-4"><input type="number" id="opt-sz-z" class="form-control form-control-sm" placeholder="H" onchange="window.dSz()"></div>
+        </div>
+        <div class="row g-1">
+            <label class="small text-muted col-12 mb-0">Rotation (Deg)</label>
+            <div class="col-4"><input type="number" id="opt-rot-x" class="form-control form-control-sm" placeholder="X" onchange="window.dRot()"></div>
+            <div class="col-4"><input type="number" id="opt-rot-y" class="form-control form-control-sm" placeholder="Y" onchange="window.dRot()"></div>
+            <div class="col-4"><input type="number" id="opt-rot-z" class="form-control form-control-sm" placeholder="Z" onchange="window.dRot()"></div>
+        </div>
+    </div>
+
+    <!-- Export Panel -->
+    <div class="float-panel float-export" id="export-panel">
+        <div class="d-flex justify-content-between mb-3">
+            <strong><i class="bi bi-box-seam"></i> Export Design</strong>
+            <button class="btn-close" onclick="document.getElementById('export-panel').style.display='none'"></button>
+        </div>
+        <div class="mb-3">
+            <label class="small fw-bold">File Name</label>
+            <input id="d-name" class="form-control form-control-sm" placeholder="My Design">
+        </div>
+        <div class="mb-3">
+            <label class="small fw-bold">Format</label>
+            <select id="export-format" class="form-select form-select-sm">
+                <option value="stl">STL (3D Printing)</option>
+                <option value="obj">OBJ (Standard)</option>
+                <option value="gltf">GLTF (Web/Unity)</option>
+                <option value="glb">GLB (Android AR)</option>
+                <option value="usdz">USDZ (Apple AR)</option>
+            </select>
+        </div>
+        <div class="d-grid gap-2">
+            <button class="btn btn-primary" onclick="window.triggerExport()">
+                <i class="bi bi-download"></i> Download File
+            </button>
+        </div>
+    </div>
+    <!-- Settings Panel -->
+    <div class="float-panel float-export" id="settings-panel" style="display:none; width: 320px;">
+        <div class="d-flex justify-content-between mb-3 border-bottom pb-2">
+            <strong><i class="bi bi-sliders"></i> Scene Settings</strong>
+            <button class="btn-close" onclick="document.getElementById('settings-panel').style.display='none'"></button>
+        </div>
+
+        <!-- Lighting -->
+        <div class="mb-3">
+            <label class="small fw-bold text-muted">Lighting & Shadows</label>
+
+            <div class="d-flex justify-content-between align-items-center mt-2">
+                <span class="small">Shadow Darkness (Ambient)</span>
+                <input type="range" class="form-range w-50" min="0" max="2" step="0.1" id="set-ambient" oninput="window.updateSettings('ambient', this.value)">
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center">
+                <span class="small">Sun Brightness</span>
+                <input type="range" class="form-range w-50" min="0" max="3" step="0.1" id="set-direct" oninput="window.updateSettings('direct', this.value)">
+            </div>
+        </div>
+
+        <!-- Visuals -->
+        <div class="mb-3">
+            <label class="small fw-bold text-muted">Visual Style</label>
+
+            <div class="form-check form-switch mt-2">
+                <input class="form-check-input" type="checkbox" id="set-shadows" onchange="window.updateSettings('shadows', this.checked)">
+                <label class="form-check-label small">Cast Shadows</label>
+            </div>
+
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="set-grid" onchange="window.updateSettings('grid', this.checked)">
+                <label class="form-check-label small">Show Grid</label>
+            </div>
+
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="set-wireframe" onchange="window.updateSettings('wireframe', this.checked)">
+                <label class="form-check-label small">Wireframe Mode</label>
+            </div>
+        </div>
+
+
+
+        <!-- NEW: Storage Meter -->
+        <div class="mb-3 border-top pt-3">
+            <label class="small fw-bold text-muted mb-1">Local Storage Usage</label>
+            <div class="progress" style="height: 8px; background-color: #e9ecef;">
+                <div id="storage-bar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+            </div>
+            <div class="d-flex justify-content-between mt-1">
+                <span id="storage-text" class="small text-muted" style="font-size: 0.75rem;">Calculating...</span>
+                <span class="small text-muted" style="font-size: 0.75rem;">5.0 MB Limit</span>
+            </div>
+        </div>
+
+        <div class="text-end">
+            <button class="btn btn-sm btn-outline-secondary" onclick="window.resetSettings()">Reset Defaults</button>
+        </div>
+    </div>
+</div>
+
+<!-- 4. MAIN LOGIC -->
+<script type="module">
+import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { TransformControls } from "three/addons/controls/TransformControls.js";
+    import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
+    import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
+    import { RoundedBoxGeometry } from "three-rounded-box"; // NEW IMPORT
+    import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
+    import { OBJExporter } from "three/addons/exporters/OBJExporter.js";
+    import { STLExporter } from "three/addons/exporters/STLExporter.js";
+    import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
+    import { USDZExporter } from "three/addons/exporters/USDZExporter.js";
+
+    import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
+    import { STLLoader } from "three/addons/loaders/STLLoader.js";
+    import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+    import { USDZLoader } from "three/addons/loaders/USDZLoader.js";
+
+    import { SUBTRACTION, ADDITION, Brush, Evaluator } from "three-bvh-csg";
+
+    // IMPORT ZSTD
+    import { init as initZstd, compress, decompress } from "zstd-wasm";
+
+    // --- GLOBALS ---
+    let scene, cam, ren, labelRen, ctrl, tCtrl, ray;
+    let selectedObjects = [];
+    let liftCone, isLifting = false, liftStartMouseY = 0, liftStartObjZ = 0;
+    let rotLabelDiv, rotLabelObj;
+    let rulerGroup, rulerMode = 'endpoint';
+    let schematicGroup;
+    const activeLabels = [];
+    const MESH_HIGHLIGHT_COLOR = 0xff0000;
+
+    // --- ALIGN / SNAP FACE TOOL ---
+    let alignState = 'none'; // 'none', 'pick-source', 'pick-target'
+    let alignSourceInfo = null;
+    let alignGhost = null;
+    const invisibleFloor = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0); // Z-up floor
+
+    // Saving & History
+    let saveTimeout;
+    let zstdReady = false;
+    let historyStack = [];
+    let historyStep = -1;
+    const MAX_HISTORY = 30;
+    let isUndoRedoAction = false;
+
+    let isFaceLoftMode = false;
+    let selectedFacesData = [];
+    let faceMarkerGroup;
+    let showRuler = true; // Default off
+
+    let ambientLight, dirLight, gridHelper; // References to update them
+    let appSettings = {
+        ambient: 0.8,    // Higher default = lighter shadows
+        direct: 1.0,
+        shadows: true,
+        grid: true,
+        wireframe: false
+    };
+
+    window.startAlignTool = () => {
+        if (selectedObjects.length !== 1) {
+            alert("Select 1 object to align.");
+            return;
+        }
+
+        // 1. Enter Mode
+        alignState = 'pick-source';
+        document.body.style.cursor = 'crosshair';
+
+        // UI Feedback
+        const status = document.getElementById("auto-save-status");
+        status.innerText = "Step 1: Click a FACE on the selected object";
+        status.style.opacity = 1;
+
+        // Highlight button
+        document.querySelectorAll(".btn-tool").forEach(b => b.classList.remove("active-tool"));
+        document.querySelector('button[onclick="window.startAlignTool()"]').classList.add("active-tool");
+    };
+
+    function handleAlignHover(ray, mouse) {
+        // STEP 2: MOVING THE GHOST
+        if (alignState === 'pick-target' && alignGhost) {
+            // Raycast against everything EXCEPT the ghost and the source object
+            const targets = scene.children.filter(o =>
+                o.isMesh &&
+                o !== alignGhost &&
+                o !== selectedObjects[0] &&
+                !o.userData.isRuler &&
+                o !== liftCone
+            );
+
+            const intersects = ray.intersectObjects(targets, false);
+            let targetPoint = null;
+            let targetNormal = null;
+
+            // Did we hit an object?
+            if (intersects.length > 0) {
+                targetPoint = intersects[0].point;
+                // Transform normal to world space
+                targetNormal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion).normalize();
+            } else {
+                // Did we hit the floor?
+                const target = new THREE.Vector3();
+                const hit = ray.ray.intersectPlane(invisibleFloor, target);
+                if (hit) {
+                    targetPoint = target;
+                    targetNormal = new THREE.Vector3(0, 0, 1); // Floor points up
+                }
+            }
+
+            if (targetPoint && targetNormal) {
+                alignGhost.visible = true;
+
+                // MATH: Align Source Normal to NEGATIVE Target Normal (faces touching)
+                // 1. Calculate rotation needed to turn World Up (0,1,0) or Object Up into Target direction?
+                // Actually, simpler: Rotate 'alignSourceInfo.normal' to '-targetNormal'
+
+                // Get the quaternion that rotates the Source Normal to match the Target Normal (inverted)
+                const alignQuat = new THREE.Quaternion().setFromUnitVectors(alignSourceInfo.normal, targetNormal.clone().negate());
+
+                // Apply this rotation to the object's original rotation
+                const targetRotation = alignQuat.clone().multiply(selectedObjects[0].quaternion);
+                alignGhost.quaternion.copy(targetRotation);
+
+                // POSITIONING:
+                // We need the point on the ghost that corresponds to the clicked source point
+                // to match the target hit point.
+
+                // 1. Get the vector from Object Center to Source Click Point (Rotated by new orientation)
+                const offsetVec = alignSourceInfo.localPoint.clone().applyQuaternion(alignGhost.quaternion);
+
+                // 2. Subtract that offset from the target point to place center correctly
+                alignGhost.position.copy(targetPoint).sub(offsetVec);
+            } else {
+                alignGhost.visible = false;
+            }
+        }
+    }
+
+    function handleAlignClick(ray) {
+        if (alignState === 'pick-source') {
+            // User clicking their own object to pick the face
+            const intersects = ray.intersectObject(selectedObjects[0], false);
+            if (intersects.length > 0) {
+                const hit = intersects[0];
+
+                // Store World Normal of the face
+                // Note: face.normal is local. We need it relative to object rotation.
+                // However, for the math, we actually want the vector relative to the object's LOCAL orientation
+                // so we can rotate the whole object later.
+
+                // Let's store the normal in World Space as it currently exists:
+                const worldNormal = hit.face.normal.clone().applyQuaternion(hit.object.quaternion).normalize();
+
+                // Store the point clicked relative to the center of the object (Local offset unrotated)
+                // We calculate this by taking world point, converting to local, but keeping scaling in mind?
+                // Simpler: vector from center to world hit point, then un-rotate it.
+                const localPoint = hit.point.clone().sub(hit.object.position).applyQuaternion(hit.object.quaternion.clone().invert());
+
+                alignSourceInfo = {
+                    normal: worldNormal, // Direction facing out
+                    localPoint: localPoint // Offset from center
+                };
+
+                // Create Ghost
+                const original = selectedObjects[0];
+                alignGhost = original.clone();
+                alignGhost.material = new THREE.MeshBasicMaterial({
+                    color: 0x0d6efd,
+                    transparent: true,
+                    opacity: 0.5,
+                    wireframe: true
+                });
+                alignGhost.userData = { isGhost: true };
+                scene.add(alignGhost);
+
+                // Hide real object temporarily
+                original.visible = false;
+
+                // Next Step
+                alignState = 'pick-target';
+                const status = document.getElementById("auto-save-status");
+                status.innerText = "Step 2: Click anywhere to place";
+            }
+            return true; // Stop other click events
+        }
+
+        if (alignState === 'pick-target') {
+            if (alignGhost && alignGhost.visible) {
+                // APPLY TRANSFORM
+                const obj = selectedObjects[0];
+                obj.position.copy(alignGhost.position);
+                obj.quaternion.copy(alignGhost.quaternion);
+                obj.visible = true;
+                obj.updateMatrixWorld();
+
+                // Cleanup
+                scene.remove(alignGhost);
+                alignGhost = null;
+                alignState = 'none';
+                alignSourceInfo = null;
+                document.body.style.cursor = 'default';
+
+                // Reset UI
+                document.querySelectorAll(".btn-tool").forEach(b => b.classList.remove("active-tool"));
+                window.setMode('translate'); // Go back to translate
+
+                const status = document.getElementById("auto-save-status");
+                status.innerText = "Aligned";
+                setTimeout(() => status.style.opacity = 0, 1000);
+
+                updateTinkerLabels();
+                updatePropertiesPanel();
+                saveState();
+            }
+            return true;
+        }
+
+        return false;
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // --- UTILS ---
+    function prepareCSG(geometry) {
+        if (!geometry) return null;
+        const geo = geometry.clone();
+        if (geo.attributes.color) geo.deleteAttribute('color');
+        if (!geo.attributes.normal) geo.computeVertexNormals();
+        if (!geo.attributes.uv) {
+            const count = geo.attributes.position.count;
+            geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(count * 2), 2));
+        }
+        return geo;
+    }
+
+    // Binary <-> Base64 helpers
+    function uint8ToBase64(u8Arr) {
+        const CHUNK_SIZE = 0x8000;
+        let index = 0;
+        let length = u8Arr.length;
+        let result = '';
+        while (index < length) {
+            const slice = u8Arr.subarray(index, Math.min(index + CHUNK_SIZE, length));
+            result += String.fromCharCode.apply(null, slice);
+            index += CHUNK_SIZE;
+        }
+        return btoa(result);
+    }
+
+    function base64ToUint8(b64) {
+        const binStr = atob(b64);
+        const len = binStr.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binStr.charCodeAt(i);
+        }
+        return bytes;
+    }
+
+    // --- INIT ---
+    async function init3D() {
+        // Init ZSTD
+        try {
+            await initZstd('https://unpkg.com/@bokuweb/zstd-wasm@0.0.27/dist/web/zstd.wasm');
+            zstdReady = true;
+            console.log("Zstd Compression Ready");
+        } catch(e) {
+            console.warn("Zstd failed to load, saving will be uncompressed", e);
+        }
+
+        const canvas = document.getElementById("designer-canvas");
+        const container = document.getElementById("designer-area");
+
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xd0d0d0);
+
+        // 1. IMPROVED LIGHTING SETUP
+        // Hemisphere light creates a soft gradient (Sky vs Ground) filling the shadows
+        ambientLight = new THREE.HemisphereLight(0xffffff, 0x444444, appSettings.ambient);
+        scene.add(ambientLight);
+
+        // Main Directional Light (The Sun)
+        dirLight = new THREE.DirectionalLight(0xffffff, appSettings.direct);
+        dirLight.position.set(50, 100, 50);
+        dirLight.castShadow = true;
+
+        // Optimize Shadow Map (Cleaner edges)
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.bias = -0.0001;
+        scene.add(dirLight);
+
+        // 2. RENDERER UPGRADE
+        ren = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+        ren.setPixelRatio(window.devicePixelRatio);
+        ren.setSize(window.innerWidth, window.innerHeight);
+
+        // Enable PCFSoftShadowMap for smoother shadow edges
+        ren.shadowMap.enabled = true;
+        ren.shadowMap.type = THREE.PCFSoftShadowMap;
+
+        cam = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 5000);
+        cam.position.set(60, -60, 60);
+        cam.up.set(0, 0, 1);
+        cam.lookAt(0, 0, 0);
+
+        ren = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+        ren.setPixelRatio(window.devicePixelRatio);
+        ren.setSize(window.innerWidth, window.innerHeight);
+
+        labelRen = new CSS2DRenderer();
+        labelRen.setSize(window.innerWidth, window.innerHeight);
+        labelRen.domElement.style.position = 'absolute';
+        labelRen.domElement.style.top = '0px';
+        labelRen.domElement.className = 'label-overlay';
+        container.appendChild(labelRen.domElement);
+
+        ctrl = new OrbitControls(cam, ren.domElement);
+        ctrl.enableDamping = true;
+
+        tCtrl = new TransformControls(cam, ren.domElement);
+        tCtrl.addEventListener("dragging-changed", e => { ctrl.enabled = !e.value });
+        tCtrl.addEventListener("change", () => {
+            updateTinkerLabels();
+            updateLiftConePos();
+            updateRotationFeedback();
+            updatePropertiesPanel();
+        });
+        tCtrl.addEventListener("mouseUp", () => {
+            saveState();
+        });
+        scene.add(tCtrl);
+        // 3. GRID REFERENCE
+        gridHelper = new THREE.GridHelper(200, 20);
+        gridHelper.rotateX(Math.PI / 2);
+        gridHelper.material.opacity = 0.4;
+        gridHelper.material.transparent = true;
+        scene.add(gridHelper);
+
+
+
+        ray = new THREE.Raycaster();
+        createLiftCone(); createRotationLabel(); createRuler();
+
+        schematicGroup = new THREE.Group(); scene.add(schematicGroup);
+        faceMarkerGroup = new THREE.Group(); scene.add(faceMarkerGroup);
+
+        ren.domElement.addEventListener("pointerdown", onPointerDown);
+        ren.domElement.addEventListener("pointermove", onPointerMove);
+        ren.domElement.addEventListener("pointerup", onPointerUp);
+        window.addEventListener('resize', onWindowResize);
+
+        window.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); window.undo(); }
+            if ((e.ctrlKey || e.metaKey) && e.key === 'y') { e.preventDefault(); window.redo(); }
+        });
+
+        document.querySelectorAll('.float-panel').forEach(panel => {
+            panel.addEventListener('pointerdown', e => e.stopPropagation());
+            panel.addEventListener('mousedown', e => e.stopPropagation());
+            panel.addEventListener('touchstart', e => e.stopPropagation());
+        });
+
+        function dLoop() { requestAnimationFrame(dLoop); ctrl.update(); ren.render(scene, cam); labelRen.render(scene, cam); }
+        dLoop();
+
+        buildColorPicker();
+        window.setMode("translate");
+
+        // Load data safely
+        loadFromStorage();
+    }
+
+    window.updateSettings = (key, value) => {
+        // 1. Update State
+        if (key === 'ambient' || key === 'direct') value = parseFloat(value);
+        appSettings[key] = value;
+
+        // 2. Apply to Scene
+        if (key === 'ambient' && ambientLight) ambientLight.intensity = value;
+        if (key === 'direct' && dirLight) dirLight.intensity = value;
+
+        if (key === 'grid' && gridHelper) gridHelper.visible = value;
+
+        if (key === 'shadows' && dirLight) {
+            dirLight.castShadow = value;
+            // Re-compile materials to reflect shadow change
+            scene.traverse(o => { if(o.material) o.material.needsUpdate = true; });
+        }
+
+        if (key === 'wireframe') {
+            scene.traverse(child => {
+                if (child.isMesh && !child.userData.isRuler && child !== liftCone && child.parent !== faceMarkerGroup) {
+                    if (child.material) child.material.wireframe = value;
+                }
+            });
+        }
+
+        // 3. Save to LocalStorage
+        localStorage.setItem('3d_app_settings', JSON.stringify(appSettings));
+    };
+
+window.updateStorageUI = () => {
+        // 1. Calculate Total Usage
+        let total = 0;
+        for (let x in localStorage) {
+            // JS stores strings as UTF-16, but localStorage limits are based on character count (usually 5M chars)
+            if (localStorage.hasOwnProperty(x)) {
+                total += localStorage[x].length;
+            }
+        }
+
+        // 2. Constants (Approx 5MB Limit)
+        const max = 5 * 1024 * 1024;
+        const pct = (total / max) * 100;
+
+        // 3. Formatting
+        const usedKB = (total / 1024).toFixed(2);
+        const usedMB = (total / (1024 * 1024)).toFixed(2);
+        const displayTxt = total > 1024 * 1024 ? `${usedMB} MB` : `${usedKB} KB`;
+
+        // 4. Update DOM
+        const bar = document.getElementById('storage-bar');
+        const txt = document.getElementById('storage-text');
+
+        if(bar && txt) {
+            bar.style.width = `${pct}%`;
+            txt.innerText = `${displayTxt} Used`;
+
+            // Color Coding based on usage
+            bar.className = 'progress-bar'; // Reset
+            if(pct < 50) bar.classList.add('bg-success');       // Green
+            else if(pct < 80) bar.classList.add('bg-warning');  // Yellow
+            else bar.classList.add('bg-danger');                // Red
+        }
+    };
+
+    function loadSettings() {
+        const saved = localStorage.getItem('3d_app_settings');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                appSettings = { ...appSettings, ...parsed }; // Merge with defaults
+            } catch (e) { console.warn("Settings corrupted"); }
+        }
+
+        // Apply UI values
+        document.getElementById('set-ambient').value = appSettings.ambient;
+        document.getElementById('set-direct').value = appSettings.direct;
+        document.getElementById('set-shadows').checked = appSettings.shadows;
+        document.getElementById('set-grid').checked = appSettings.grid;
+        document.getElementById('set-wireframe').checked = appSettings.wireframe;
+
+        // Apply to Scene
+        if(ambientLight) ambientLight.intensity = appSettings.ambient;
+        if(dirLight) {
+            dirLight.intensity = appSettings.direct;
+            dirLight.castShadow = appSettings.shadows;
+        }
+        if(gridHelper) gridHelper.visible = appSettings.grid;
+
+        // Defer wireframe slightly to ensure objects are loaded
+        setTimeout(() => {
+            window.updateSettings('wireframe', appSettings.wireframe);
+        }, 100);
+    }
+
+    window.resetSettings = () => {
+        appSettings = { ambient: 0.8, direct: 1.0, shadows: true, grid: true, wireframe: false };
+        localStorage.removeItem('3d_app_settings');
+        loadSettings(); // Reloads UI and Scene
+    };
+    function onWindowResize() {
+        cam.aspect = window.innerWidth / window.innerHeight;
+        cam.updateProjectionMatrix();
+        ren.setSize(window.innerWidth, window.innerHeight);
+        if(labelRen) labelRen.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    // --- DIMENSION LABELS ---
+    function addDimensionLines(start, end, offset, color = 0x000000) {
+        // Material for the faint extension lines
+        const extMaterial = new THREE.LineBasicMaterial({ color: 0x888888, linewidth: 1, opacity: 0.4, transparent: true });
+        // Material for the main dimension line
+        const connMaterial = new THREE.LineBasicMaterial({ color: color, linewidth: 2, depthTest: false, depthWrite: false });
+
+        // Calculate start/end points with the offset applied
+        const offS = start.clone().add(offset);
+        const offE = end.clone().add(offset);
+
+        // Draw Extension Lines (From object to measurement point)
+        schematicGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([start, offS]), extMaterial));
+        schematicGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([end, offE]), extMaterial));
+
+        // Draw Connector Line (The main line between measurements)
+        const connLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([offS, offE]), connMaterial);
+        connLine.renderOrder = 999;
+        schematicGroup.add(connLine);
+
+        // Return the midpoint (where the text label goes)
+        return offS.clone().lerp(offE, 0.5);
+    }
+
+    function createInputLabel(pos, value, type, callback) {
+        const div = document.createElement('div');
+        div.className = 'tinker-label-container';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = `tinker-input ${type === 'size' ? 'dim-size' : 'dim-pos'}`;
+        const displayVal = Math.round(value * 10) / 10;
+        input.value = displayVal;
+        input.setAttribute('value', displayVal);
+        input.addEventListener('pointerdown', e => e.stopPropagation());
+        input.addEventListener('mousedown', e => e.stopPropagation());
+        input.addEventListener('keydown', e => { if(e.key === 'Enter') input.blur(); });
+        input.addEventListener('change', () => {
+            const val = parseFloat(input.value);
+            if(!isNaN(val)) { callback(val); saveState(); }
+        });
+        div.appendChild(input);
+        const label = new CSS2DObject(div);
+        label.position.copy(pos);
+        scene.add(label);
+        activeLabels.push(label);
+        return label;
+    }
+
+    function updateTinkerLabels() {
+        // 1. Cleanup Old Labels
+        activeLabels.forEach(l => scene.remove(l));
+        activeLabels.length = 0;
+        while(schematicGroup.children.length > 0){ schematicGroup.remove(schematicGroup.children[0]); }
+
+        // 2. Validate Selection
+        if(selectedObjects.length !== 1 || isFaceLoftMode) return;
+        const obj = selectedObjects[0];
+        if(obj.userData.isRuler) return; // Don't measure the ruler itself
+
+        const box = new THREE.Box3().setFromObject(obj);
+        const size = box.getSize(new THREE.Vector3());
+
+        // ============================================
+        // PART A: OBJECT SIZE (Always On - Gray/Black)
+        // ============================================
+
+        // Width (X Size) - Back side
+        const sizeXPos = addDimensionLines(
+            new THREE.Vector3(box.min.x, box.max.y, box.min.z), // Start
+            new THREE.Vector3(box.max.x, box.max.y, box.min.z), // End
+            new THREE.Vector3(0, 5, 0), // Offset slightly back
+            0x444444
+        );
+        createInputLabel(sizeXPos, size.x, 'size', (v) => resizeObject(obj, 'x', v));
+
+        // Length (Y Size) - Left side
+        const sizeYPos = addDimensionLines(
+            new THREE.Vector3(box.min.x, box.min.y, box.min.z),
+            new THREE.Vector3(box.min.x, box.max.y, box.min.z),
+            new THREE.Vector3(-5, 0, 0), // Offset slightly left
+            0x444444
+        );
+        createInputLabel(sizeYPos, size.y, 'size', (v) => resizeObject(obj, 'y', v));
+
+        // Height (Z Size) - Right side, close to object
+        const sizeZPos = addDimensionLines(
+            new THREE.Vector3(box.max.x, box.min.y, box.min.z),
+            new THREE.Vector3(box.max.x, box.min.y, box.max.z),
+            new THREE.Vector3(10, 0, 0), // Offset right
+            0x444444
+        );
+        createInputLabel(sizeZPos, size.z, 'size', (v) => resizeObject(obj, 'z', v));
+
+
+        // ============================================
+        // PART B: RULER RELATIVE (Toggle - Blue)
+        // ============================================
+        if (showRuler && rulerGroup) {
+            const rPos = rulerGroup.position;
+
+            // 1. X DISTANCE (From Ruler Y-Axis to Object Left Edge)
+            // Measured at the front of the object (min.y)
+            const currentDistX = box.min.x - rPos.x;
+            const rulerEdgeX = new THREE.Vector3(rPos.x, box.min.y, 0);
+            const objectEdgeX = new THREE.Vector3(box.min.x, box.min.y, 0);
+
+            // Draw further out than the dimension lines (-25 offset)
+            const labelPosX = addDimensionLines(rulerEdgeX, objectEdgeX, new THREE.Vector3(0, -25, 0), 0x0d6efd);
+            createInputLabel(labelPosX, currentDistX, 'pos', (newVal) => {
+                const diff = newVal - currentDistX;
+                obj.position.x += diff;
+                obj.updateMatrixWorld();
+                updateTinkerLabels();
+                saveState();
+            });
+
+
+            // 2. Y DISTANCE (From Ruler X-Axis to Object Bottom Edge)
+            // Measured at the left of the object (min.x)
+            const currentDistY = box.min.y - rPos.y;
+            const rulerEdgeY = new THREE.Vector3(box.min.x, rPos.y, 0);
+            const objectEdgeY = new THREE.Vector3(box.min.x, box.min.y, 0);
+
+            const labelPosY = addDimensionLines(rulerEdgeY, objectEdgeY, new THREE.Vector3(-25, 0, 0), 0x0d6efd);
+            createInputLabel(labelPosY, currentDistY, 'pos', (newVal) => {
+                const diff = newVal - currentDistY;
+                obj.position.y += diff;
+                obj.updateMatrixWorld();
+                updateTinkerLabels();
+                saveState();
+            });
+
+
+            // 3. Z DISTANCE (LIFT) - Elevation from Ruler
+            const currentDistZ = box.min.z - rPos.z;
+
+            // Position: Front-Right corner, extending outwards
+            // Start: Ruler Z-Plane (Floor) at object location
+            const rulerFloorPt = new THREE.Vector3(box.max.x, box.min.y, rPos.z);
+            // End: Object Bottom
+            const objectBottomPt = new THREE.Vector3(box.max.x, box.min.y, box.min.z);
+
+            // Offset: Further right (25) than the Size-Z label (which is at 10)
+            // This stacks them: [Object] -> [Size Label] -> [Lift Label]
+            const labelPosZ = addDimensionLines(rulerFloorPt, objectBottomPt, new THREE.Vector3(25, 0, 0), 0x0d6efd);
+
+            createInputLabel(labelPosZ, currentDistZ, 'pos', (newVal) => {
+                const diff = newVal - currentDistZ;
+                obj.position.z += diff;
+                obj.updateMatrixWorld();
+                updateTinkerLabels();
+                updateLiftConePos(); // Sync the cone helper
+                saveState();
+            });
+        }
+    }
+
+    // Updated Resize to handle scale limits better prevents inverting shapes
+    function resizeObject(mesh, axis, targetSize) {
+        if(targetSize <= 0.1) return;
+
+        // Ensure matrix is up to date before measuring
+        mesh.updateMatrixWorld();
+
+        const box = new THREE.Box3().setFromObject(mesh);
+        const currentSize = box.getSize(new THREE.Vector3());
+
+        // Prevent division by zero
+        if(Math.abs(currentSize[axis]) < 0.01) return;
+
+        const scaleFactor = targetSize / currentSize[axis];
+
+        // Apply scale
+        mesh.scale[axis] *= scaleFactor;
+
+        mesh.updateMatrixWorld();
+        updateTinkerLabels();
+        updatePropertiesPanel();
+        saveState();
+    }
+
+    // --- INTERACTION ---
+    const onPointerDown = e => {
+        if (e.target.tagName === 'INPUT') return;
+        if (tCtrl.dragging || tCtrl.axis) return;
+
+        const rect = ren.domElement.getBoundingClientRect();
+        const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+        ray.setFromCamera(mouse, cam);
+
+        // 1. CHECK ALIGN TOOL FIRST
+        if (alignState !== 'none') {
+            if(handleAlignClick(ray)) return;
+        }
+
+        if (isFaceLoftMode) {
+            const intersects = ray.intersectObjects(scene.children.filter(o => o.isMesh && o !== liftCone && !o.userData.isRuler && o.visible), false);
+            if (intersects.length > 0) handleFaceSelection(intersects[0]);
+            return;
+        }
+
+        if (liftCone.visible) { const coneHit = ray.intersectObject(liftCone); if (coneHit.length > 0) { isLifting = true; ctrl.enabled = false; liftStartMouseY = e.clientY; liftStartObjZ = selectedObjects[0].position.z; liftCone.material.color.setHex(0xffff00); return; } }
+
+        const intersects = ray.intersectObjects(scene.children, true);
+        const validHits = intersects.filter(hit => {
+            const o = hit.object; let p = o.parent; while(p) { if(p === schematicGroup || p === faceMarkerGroup) return false; p = p.parent; }
+            return (o.isMesh || o.isLine) && o !== liftCone && o !== schematicGroup && o !== faceMarkerGroup;
+        });
+
+        if (validHits.length > 0) {
+            let hitObj = validHits[0].object; let parent = hitObj.parent;
+            if(parent && parent.userData && parent.userData.isRuler) selectObject(parent);
+            else if (hitObj.userData.name) selectObject(hitObj, e.shiftKey);
+        } else selectObject(null);
+    };
+
+    function handleFaceSelection(hit) {
+        const mesh = hit.object;
+        const hitNormal = hit.face.normal.clone();
+        const existingIdx = selectedFacesData.findIndex(f => f.meshUuid === mesh.uuid && f.normal.dot(hitNormal) > 0.99);
+
+        if (existingIdx > -1) {
+            selectedFacesData.splice(existingIdx, 1);
+            const marker = faceMarkerGroup.children.find(m => m.userData.meshUuid === mesh.uuid && m.userData.normal.dot(hitNormal) > 0.99);
+            if (marker) faceMarkerGroup.remove(marker);
+        } else {
+            const surfaceData = getConnectedFlatSurface(mesh, hit.faceIndex, hit.face.normal);
+            const worldPoints = [];
+            const posAttr = mesh.geometry.attributes.position;
+            const uniqueIndices = [...new Set(surfaceData.indices)];
+            uniqueIndices.forEach(idx => {
+                const vec = new THREE.Vector3().fromBufferAttribute(posAttr, idx);
+                vec.applyMatrix4(mesh.matrixWorld);
+                worldPoints.push(vec);
+            });
+            selectedFacesData.push({ meshUuid: mesh.uuid, normal: hitNormal, points: worldPoints });
+            const markerGeo = new THREE.BufferGeometry();
+            const markerPositions = [];
+            for(let i = 0; i < surfaceData.indices.length; i++) {
+                const idx = surfaceData.indices[i];
+                markerPositions.push(posAttr.getX(idx), posAttr.getY(idx), posAttr.getZ(idx));
+            }
+            markerGeo.setAttribute('position', new THREE.Float32BufferAttribute(markerPositions, 3));
+            const markerMat = new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide, transparent: true, opacity: 0.5, depthTest: false });
+            const markerMesh = new THREE.Mesh(markerGeo, markerMat);
+            markerMesh.position.copy(mesh.position);
+            markerMesh.rotation.copy(mesh.rotation);
+            markerMesh.scale.copy(mesh.scale);
+            markerMesh.userData = { meshUuid: mesh.uuid, normal: hitNormal };
+            faceMarkerGroup.add(markerMesh);
+        }
+    }
+
+function getConnectedFlatSurface(mesh, startFaceIndex, targetNormal) {
+        const geo = mesh.geometry;
+        const posAttr = geo.attributes.position;
+        const count = posAttr.count;
+
+        // 1. Helper: Lower precision key to bridge CSG gaps
+        // Using *10 instead of *100 allows vertices within ~0.1 to match
+        const getVertKey = (idx) => {
+            const x = posAttr.getX(idx);
+            const y = posAttr.getY(idx);
+            const z = posAttr.getZ(idx);
+            return `${Math.round(x*10)},${Math.round(y*10)},${Math.round(z*10)}`;
+        };
+
+        const _vA = new THREE.Vector3(), _vB = new THREE.Vector3(), _vC = new THREE.Vector3();
+        const _cb = new THREE.Vector3(), _ab = new THREE.Vector3();
+
+        const getFaceNormal = (faceIdx, target) => {
+            const a = faceIdx * 3;
+            const b = faceIdx * 3 + 1;
+            const c = faceIdx * 3 + 2;
+            _vA.fromBufferAttribute(posAttr, a);
+            _vB.fromBufferAttribute(posAttr, b);
+            _vC.fromBufferAttribute(posAttr, c);
+            _cb.subVectors(_vC, _vB);
+            _ab.subVectors(_vA, _vB);
+            _cb.cross(_ab).normalize();
+            target.copy(_cb);
+        };
+
+        // 2. Build Adjacency Graph
+        const vertToFaces = {};
+        const totalFaces = count / 3;
+
+        for (let f = 0; f < totalFaces; f++) {
+            for (let v = 0; v < 3; v++) {
+                const key = getVertKey(f * 3 + v);
+                if (!vertToFaces[key]) vertToFaces[key] = [];
+                vertToFaces[key].push(f);
+            }
+        }
+
+        // 3. FLOOD FILL
+        const selectedFaces = new Set();
+        const queue = [startFaceIndex];
+        selectedFaces.add(startFaceIndex);
+
+        const tempNormal = new THREE.Vector3();
+
+        while (queue.length > 0) {
+            const currentFace = queue.pop();
+
+            // Check all 3 vertices to find neighbors
+            for (let v = 0; v < 3; v++) {
+                const key = getVertKey(currentFace * 3 + v);
+                const neighbors = vertToFaces[key];
+
+                if (neighbors) {
+                    for (let n of neighbors) {
+                        if (selectedFaces.has(n)) continue;
+
+                        // STRICT Normal Check: prevents jumping to side walls
+                        getFaceNormal(n, tempNormal);
+                        if (tempNormal.dot(targetNormal) > 0.999) { // Increased to 0.999 for safety
+
+                            // RELAXED Connectivity Check:
+                            // Just 1 shared vertex is enough if the normal is identical.
+                            // This fixes the "Ring" issue.
+                            let sharedVerts = 0;
+                            for(let k=0; k<3; k++) {
+                                const kKey = getVertKey(currentFace * 3 + k);
+                                for(let j=0; j<3; j++) {
+                                    if(kKey === getVertKey(n * 3 + j)) sharedVerts++;
+                                }
+                            }
+
+                            if(sharedVerts >= 1) {
+                                selectedFaces.add(n);
+                                queue.push(n);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        const indices = [];
+        selectedFaces.forEach(f => {
+            indices.push(f * 3, f * 3 + 1, f * 3 + 2);
+        });
+
+        return { indices };
+    }
+
+const onPointerMove = e => {
+        // 1. UPDATE GHOST IF IN ALIGN MODE
+        if (alignState !== 'none') {
+            const rect = ren.domElement.getBoundingClientRect();
+            const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+            ray.setFromCamera(mouse, cam);
+            handleAlignHover(ray, mouse);
+            return; // Skip normal highlight logic
+        }
+
+        // ... Existing Lift Logic ...
+        if (isLifting && selectedObjects.length === 1) {
+            const deltaY = liftStartMouseY - e.clientY;
+            selectedObjects[0].position.z = liftStartObjZ + (deltaY * 0.2);
+            updateLiftConePos();
+            updateTinkerLabels();
+            updatePropertiesPanel();
+        }
+    };
+    const onPointerUp = e => { if (isLifting) { isLifting = false; ctrl.enabled = true; liftCone.material.color.setHex(0x222222); saveState(); } };
+
+    window.setMode = mode => { if(tCtrl) tCtrl.setMode(mode); document.querySelectorAll(".btn-tool").forEach(b => b.classList.remove("active-tool")); const btn = document.querySelector(`button[data-mode="${mode}"]`); if(btn) btn.classList.add("active-tool"); };
+
+// --- GEOMETRY GENERATOR (FIXED AXIS) ---
+
+    window.dAdd = type => {
+        let geo, params = {};
+        const nameCount = scene.children.filter(e => e.userData && e.userData.name).length + 1;
+        let baseName = "Shape";
+        const defaultChamfer = 0;
+
+        switch (type) {
+            case "cube":
+                geo = new RoundedBoxGeometry(20, 20, 20, 4, defaultChamfer);
+                baseName = "Cube";
+                params = { type: 'box', w: 20, h: 20, d: 20, r: defaultChamfer };
+                break;
+
+            case "cyl":
+                baseName = "Cylinder";
+                // Standard Cylinder is Y-up. We rotate it to Z-up.
+                geo = new THREE.CylinderGeometry(10, 10, 20, 32);
+                geo.rotateX(Math.PI/2);
+                params = { type: 'cylinder', rt: 10, rb: 10, h: 20, s: 32, chamfer: defaultChamfer };
+                break;
+
+            case "cone":
+                baseName = "Cone";
+                geo = new THREE.CylinderGeometry(0, 10, 20, 64);
+                geo.rotateX(Math.PI/2);
+                params = { type: 'cone', rt: 0, rb: 10, h: 20, s: 64, chamfer: defaultChamfer };
+                break;
+
+            case "wedge":
+                baseName = "Wedge";
+                geo = new THREE.CylinderGeometry(10, 10, 20, 3);
+                geo.rotateZ(Math.PI / 6);
+                geo.rotateX(Math.PI / 2); // Rotate Upright (Z-up)
+                params = { type: 'wedge', rt: 10, rb: 10, h: 20, s: 3, chamfer: defaultChamfer };
+                break;
+
+            case "sph":
+                geo = new THREE.SphereGeometry(10, 32, 32);
+                baseName = "Sphere";
+                params = { type: 'sphere', r: 10, wSeg: 32, hSeg: 32 };
+                break;
+
+            case "torus":
+                geo = new THREE.TorusGeometry(10, 3, 16, 32);
+                baseName = "Torus";
+                params = { type: 'torus', r: 10, t: 3, rSeg: 16, tSeg: 32 };
+                break;
+        }
+
+        // Note: We no longer rotate the MESH. We rotated the GEOMETRY above.
+        // This keeps Scale X=Width, Scale Y=Depth, Scale Z=Height consistent.
+        buildAndAddMesh(geo, `${baseName} ${nameCount}`, params);
+    };
+
+    function generateExtrudedGeo(p) {
+        const shape = new THREE.Shape();
+        const bevel = p.chamfer || 0;
+
+        // LOGIC: Adjust radius so adding chamfer doesn't make object wider
+        // We subtract the bevel size from the base radius.
+
+        if (p.type === 'cylinder' || p.type === 'cone') {
+            if (Math.abs(p.rt - p.rb) > 0.1) {
+                // Tapered: Fallback to Standard (Z-up)
+                const g = new THREE.CylinderGeometry(p.rt, p.rb, p.h, p.s);
+                g.rotateX(Math.PI/2);
+                return g;
+            } else {
+                // Straight: Extrude (Naturally Z-up)
+                const r = Math.max(0.1, p.rb - bevel); // Subtract bevel
+                shape.absarc(0, 0, r, 0, Math.PI * 2, false);
+            }
+        }
+        else if (p.type === 'wedge') {
+            if (Math.abs(p.rt - p.rb) > 0.1) {
+                const g = new THREE.CylinderGeometry(p.rt, p.rb, p.h, p.s);
+                g.rotateZ(Math.PI / 6);
+                g.rotateX(Math.PI / 2);
+                return g;
+            }
+            const r = Math.max(0.1, p.rb - bevel);
+            const step = (Math.PI * 2) / 3;
+            // Draw triangle
+            shape.moveTo(r * Math.cos(0), r * Math.sin(0));
+            shape.lineTo(r * Math.cos(step), r * Math.sin(step));
+            shape.lineTo(r * Math.cos(step*2), r * Math.sin(step*2));
+            shape.lineTo(r * Math.cos(0), r * Math.sin(0));
+        }
+
+        const extrudeSettings = {
+            depth: p.h - (bevel * 2), // Subtract bevel from height
+            bevelEnabled: bevel > 0,
+            bevelThickness: bevel,
+            bevelSize: bevel,
+            bevelSegments: 4,
+            curveSegments: p.s
+        };
+
+        const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+        geo.center();
+
+        // ExtrudeGeometry is created in XY and extruded Z. It is ALREADY Z-up.
+        // We do NOT need to rotate it.
+
+        return geo;
+    }
+
+    function regenerateGeometry(mesh) {
+        const p = mesh.userData.geoParams;
+        if (!p) return;
+
+        let newGeo;
+
+        if (p.type === 'box') {
+            newGeo = new RoundedBoxGeometry(p.w, p.h, p.d, 4, p.r || 0);
+        }
+        else if (p.type === 'cylinder' || p.type === 'cone') {
+            newGeo = generateExtrudedGeo(p);
+        }
+        else if (p.type === 'wedge') {
+            newGeo = generateExtrudedGeo(p);
+        }
+        else if (p.type === 'torus') {
+            newGeo = new THREE.TorusGeometry(p.r, p.t, p.rSeg, p.tSeg);
+        }
+        else if (p.type === 'sphere') {
+            newGeo = new THREE.SphereGeometry(p.r, p.wSeg, p.wSeg);
+        }
+
+        if (newGeo) {
+            newGeo.computeBoundingBox();
+            if(p.type !== 'box') newGeo.center();
+            mesh.geometry.dispose();
+            mesh.geometry = newGeo;
+            updateTinkerLabels();
+        }
+    }
+
+    // Function for Merged Objects (Fake Chamfer via Normals)
+    window.updateSmoothness = (val) => {
+        if(selectedObjects.length !== 1) return;
+        const obj = selectedObjects[0];
+
+        // Only for merged objects or non-parametric meshes
+        if(obj.userData.geoParams) {
+            // Parametric: Update the 'r' or 'chamfer' param
+            obj.userData.geoParams.r = val; // For Box
+            obj.userData.geoParams.chamfer = val; // For Extrusions
+            regenerateGeometry(obj);
+        } else {
+            // Merged: Smooth Shading Logic
+            const geo = obj.geometry;
+
+            if (val > 0) {
+                // Smooth: Merge vertices to allow normal smoothing
+                if (!geo.userData.merged) {
+                    const mergedGeo = mergeVertices(geo, 0.01);
+                    obj.geometry.dispose();
+                    obj.geometry = mergedGeo;
+                    obj.geometry.userData.merged = true;
+                }
+                obj.geometry.computeVertexNormals();
+                obj.material.flatShading = false;
+            } else {
+                // Sharp: Use flat shading
+                obj.material.flatShading = true;
+            }
+            obj.material.needsUpdate = true;
+        }
+        saveState();
+    };
+
+function buildAndAddMesh(geometry, name, geoParams = null) {
+    if (!geometry.attributes.uv) {
+        const count = geometry.attributes.position.count;
+        geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(count * 2), 2));
+    }
+
+    geometry.computeBoundingBox();
+    geometry.center();
+
+    const material = new THREE.MeshStandardMaterial({
+        color: 0x0d6efd, roughness: 0.4, metalness: 0.2, wireframe: appSettings.wireframe
+    });
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.position.set(0, 0, 10);
+
+    mesh.userData = { isHole: false, name: name, geoParams: geoParams };
+
+    scene.add(mesh);
+    selectObject(mesh);
+    updateObjectList();
+    saveState();
+
+    return mesh; // Return reference so we can rotate it in dAdd
+}
+function updateParametricUI(obj) {
+        const container = document.getElementById("shape-params");
+        container.innerHTML = ""; // Clear previous
+
+        if (!obj.userData.geoParams) {
+            container.style.display = "none";
+            return;
+        }
+
+        container.style.display = "block";
+        const p = obj.userData.geoParams;
+
+        // Helper to create slider
+        const addSlider = (label, key, min, max, step) => {
+            const div = document.createElement("div");
+            div.className = "d-flex justify-content-between align-items-center mb-1";
+            div.innerHTML = `
+                <span class="small text-muted">${label}</span>
+                <input type="range" class="form-range w-50" min="${min}" max="${max}" step="${step}" value="${p[key]}">
+                <span class="small fw-bold" style="width:25px; text-align:right;">${p[key]}</span>
+            `;
+            const range = div.querySelector("input");
+            const valSpan = div.querySelectorAll("span")[1];
+
+            range.oninput = (e) => {
+                valSpan.innerText = e.target.value;
+                p[key] = parseFloat(e.target.value);
+                regenerateGeometry(obj);
+            };
+            // Save state on release
+            range.onchange = () => saveState();
+            container.appendChild(div);
+        };
+
+        // 1. CONE / PYRAMID CONTROLS
+        if (p.type === 'cone') {
+            container.innerHTML += `<div class="small fw-bold mb-1"><i class="bi bi-cone-striped"></i> Shape Settings</div>`;
+            addSlider("Sides", "s", 3, 64, 1);     // 3=Pyramid, 64=Cone
+            addSlider("Top Width", "rt", 0, 20, 1);// 0=Pointy, >0=Truncated
+            addSlider("Base Width", "rb", 1, 30, 1);
+        }
+
+        // 2. CYLINDER / WEDGE CONTROLS
+        else if (p.type === 'cylinder') {
+            container.innerHTML += `<div class="small fw-bold mb-1"><i class="bi bi-database"></i> Shape Settings</div>`;
+            addSlider("Sides", "s", 3, 64, 1); // 3=Wedge, 32=Cylinder
+            addSlider("Top Width", "rt", 1, 30, 1);
+            addSlider("Bot Width", "rb", 1, 30, 1);
+        }
+
+        // 3. TORUS CONTROLS
+        else if (p.type === 'torus') {
+            container.innerHTML += `<div class="small fw-bold mb-1"><i class="bi bi-circle-half"></i> Torus Settings</div>`;
+            addSlider("Radius", "r", 1, 50, 0.5);
+            addSlider("Tube", "t", 0.1, 10, 0.1);
+            addSlider("Resolution", "tSeg", 3, 64, 1);
+        }
+
+        // 4. SPHERE CONTROLS
+        else if (p.type === 'sphere') {
+             container.innerHTML += `<div class="small fw-bold mb-1"><i class="bi bi-circle"></i> Sphere Settings</div>`;
+             addSlider("Detail", "wSeg", 4, 64, 1); // Only scaling one param for simplicity
+        }
+
+        else {
+             container.style.display = "none";
+        }
+    }
+
+    window.dRot = () => { if (selectedObjects.length!==1) return; const o=selectedObjects[0]; o.rotation.set(document.getElementById("opt-rot-x").value*(Math.PI/180), document.getElementById("opt-rot-y").value*(Math.PI/180), document.getElementById("opt-rot-z").value*(Math.PI/180)); updateTinkerLabels(); saveState(); };
+window.dSz = () => {
+    if (selectedObjects.length !== 1) return;
+
+    const obj = selectedObjects[0];
+
+    // 1. Capture ALL values immediately (before the UI gets updated/reset)
+    const vX = parseFloat(document.getElementById("opt-sz-x").value);
+    const vY = parseFloat(document.getElementById("opt-sz-y").value);
+    const vZ = parseFloat(document.getElementById("opt-sz-z").value);
+
+    // 2. Apply them using the CAPTURED values
+    // Even if resizeObject resets the text box, we already have the value stored in vY/vZ
+    if(!isNaN(vX)) resizeObject(obj, 'x', vX);
+    if(!isNaN(vY)) resizeObject(obj, 'y', vY);
+    if(!isNaN(vZ)) resizeObject(obj, 'z', vZ);
+};
+    window.dDrop = function() { if (selectedObjects.length === 0) return alert("Select object."); selectedObjects.forEach(obj => { const box = new THREE.Box3().setFromObject(obj); obj.position.z -= box.min.z; }); updateTinkerLabels(); updateLiftConePos(); saveState(); };
+
+    function selectObject(obj, multi = false) {
+        if (!multi) {
+            selectedObjects.forEach(o => { if(o.material) o.material.emissive.setHex(0); });
+            selectedObjects = [];
+            document.querySelectorAll(".object-list-item").forEach(el => el.classList.remove("selected"));
+        }
+        if (obj) {
+            if (selectedObjects.includes(obj)) {
+                if (multi) { selectedObjects = selectedObjects.filter(o => o !== obj); if(obj.material) obj.material.emissive.setHex(0); }
+            } else {
+                selectedObjects.push(obj);
+                if(obj.material && !obj.userData.isRuler) obj.material.emissive.setHex(MESH_HIGHLIGHT_COLOR);
+                if(obj.userData.name) { const el = document.getElementById(obj.uuid); if(el) el.classList.add("selected"); }
+            }
+        }
+        if (selectedObjects.length === 1) {
+            tCtrl.attach(selectedObjects[0]);
+            if(selectedObjects[0].userData.isRuler) tCtrl.setMode('translate');
+            updateLiftConePos(); updateTinkerLabels();
+        } else {
+            tCtrl.detach(); updateLiftConePos();
+            activeLabels.forEach(l => scene.remove(l)); activeLabels.length = 0;
+            while(schematicGroup.children.length > 0){ schematicGroup.remove(schematicGroup.children[0]); }
+        }
+        updatePropertiesPanel();
+        updateObjectList();
+    }
+
+const updatePropertiesPanel = () => {
+        const panel = document.getElementById("prop-panel");
+        // DEFINITION FIXED: Defined at top of function scope
+        const container = document.getElementById("shape-params");
+
+        if (selectedObjects.length === 1 && !selectedObjects[0].userData.isRuler) {
+            panel.style.display = "block";
+            const n = selectedObjects[0];
+
+            // Name & Type
+            document.getElementById("opt-obj-name").value = n.userData.name;
+            document.getElementById("opt-d-type").value = n.userData.isHole ? "hole" : "solid";
+            if(n.material) updateColorPicker(n.material.color);
+
+            // 1. Parametric Sliders (Radius, Segments, etc.)
+            // This function clears 'container.innerHTML', so we call it first
+            updateParametricUI(n);
+
+            // 2. Add Chamfer / Smoothness Slider
+            const isParametric = !!n.userData.geoParams;
+
+            // Check if valid for Chamfer (Box, Straight Extrusion, or Merged)
+            const isBox = isParametric && n.userData.geoParams.type === 'box';
+            const isStraightExtrusion = isParametric &&
+                (n.userData.geoParams.type === 'cylinder' || n.userData.geoParams.type === 'wedge') &&
+                Math.abs(n.userData.geoParams.rt - n.userData.geoParams.rb) < 0.1;
+            const isMerged = !isParametric;
+
+            if (isBox || isStraightExtrusion || isMerged) {
+
+                // Get Current Value
+                let currentVal = 0;
+                if (isParametric) {
+                    currentVal = n.userData.geoParams.r || n.userData.geoParams.chamfer || 0;
+                } else {
+                    // 0 = Sharp (Flat), 1 = Smooth
+                    currentVal = n.material.flatShading ? 0 : 1;
+                }
+
+                const maxVal = isParametric ? 5 : 1; // 5mm max for geo, 1 for bool switch
+                const step = isParametric ? 0.1 : 1;
+                const label = isParametric ? "Edge Rounding" : "Smooth Edges";
+
+                const div = document.createElement("div");
+                div.className = "d-flex justify-content-between align-items-center mb-1 mt-2 border-top pt-2";
+                div.innerHTML = `
+                    <span class="small fw-bold">${label}</span>
+                    <input type="range" class="form-range w-50" min="0" max="${maxVal}" step="${step}" value="${currentVal}">
+                `;
+
+                // Bind Event
+                div.querySelector("input").oninput = (e) => window.updateSmoothness(parseFloat(e.target.value));
+
+                // Append to container
+                container.appendChild(div);
+                container.style.display = "block";
+            }
+
+            // 3. Update Transform Inputs
+            const box = new THREE.Box3().setFromObject(n);
+            const size = box.getSize(new THREE.Vector3());
+
+            document.getElementById("opt-sz-x").value = Math.round(size.x);
+            document.getElementById("opt-sz-y").value = Math.round(size.y);
+            document.getElementById("opt-sz-z").value = Math.round(size.z);
+
+            const r = n.rotation;
+            document.getElementById("opt-rot-x").value = Math.round(r.x * (180/Math.PI));
+            document.getElementById("opt-rot-y").value = Math.round(r.y * (180/Math.PI));
+            document.getElementById("opt-rot-z").value = Math.round(r.z * (180/Math.PI));
+
+        } else {
+            panel.style.display = "none";
+        }
+    };
+
+    window.updateObjectName = e => { if(selectedObjects.length===1) { selectedObjects[0].userData.name = e; updateObjectList(); saveState(); } };
+    window.dUpdMat = e => { const t = e==="hole"; selectedObjects.forEach(n => { n.userData.isHole = t; n.material.transparent = t; n.material.opacity = t ? 0.5 : 1; }); saveState(); };
+    const buildColorPicker = () => { const e = ["#0d6efd", "#6c757d", "#198754", "#dc3545", "#ffc107", "#0dcaf0", "#212529", "#f8f9fa"]; document.getElementById("color-picker").innerHTML = e.map(c => `<div class="color-option" style="background:${c}" data-color="${c}" onclick="window.setObjectColor('${c}')"></div>`).join(''); };
+    window.setObjectColor = c => { const col = new THREE.Color(c); selectedObjects.forEach(o => o.material.color = col); updateColorPicker(col); saveState(); };
+    const updateColorPicker = e => { const t = e.getHexString().toLowerCase(); document.querySelectorAll(".color-option").forEach(el => el.classList.toggle("selected", el.dataset.color.includes(t))); };
+
+    window.selectObjectFromList = uuid => { const t = scene.getObjectByProperty("uuid", uuid); if(t) selectObject(t); };
+    window.toggleMergeStatus = uuid => { const t = scene.getObjectByProperty("uuid", uuid); if(t) { t.userData.markForMerge = !t.userData.markForMerge; updateMergeButton(); } };
+    const updateObjectList = () => {
+        const list = document.getElementById("object-list"); list.innerHTML = "";
+        scene.children.filter(e => e.userData.name).forEach(t => {
+            const li = document.createElement("li"); li.className = `object-list-item ${selectedObjects.includes(t)?'selected':''}`; li.onclick = () => window.selectObjectFromList(t.uuid);
+            li.innerHTML = `<input type="checkbox" class="form-check-input me-2" ${t.userData.markForMerge?'checked':''} onclick="event.stopPropagation(); window.toggleMergeStatus('${t.uuid}')"> <span>${t.userData.name}</span>`;
+            list.appendChild(li);
+        });
+        updateMergeButton();
+    };
+    const updateMergeButton = () => { document.getElementById("merge-btn").innerText = `Merge (${scene.children.filter(e => e.userData.markForMerge).length})`; };
+    window.dDel = () => { selectedObjects.forEach(e => scene.remove(e)); selectObject(null); updateObjectList(); saveState(); };
+    window.dDelAll = () => { scene.children.filter(e => e.isMesh && !e.userData.isRuler && e !== liftCone).forEach(e => scene.remove(e)); selectObject(null); updateObjectList(); saveState(); };
+
+    window.dDuplicate = () => {
+        let targets = selectedObjects.length > 0 ? selectedObjects : scene.children.filter(e => e.userData.markForMerge && e.isMesh);
+        if(!targets.length) return alert("Select object(s).");
+        const newSel = [];
+        targets.forEach(obj => {
+            const clone = obj.clone();
+            if(clone.material) clone.material = obj.material.clone();
+            clone.material.emissive.setHex(0);
+            clone.position.add(new THREE.Vector3(10, 0, 0));
+            clone.userData = JSON.parse(JSON.stringify(obj.userData));
+            clone.userData.name = obj.userData.name + " (Copy)";
+            clone.userData.markForMerge = false;
+            scene.add(clone); newSel.push(clone);
+        });
+        selectObject(null); newSel.forEach(o=>selectObject(o, true)); saveState();
+    };
+
+    window.dMerge = () => {
+        const marked = selectedObjects.length > 1 ? selectedObjects : scene.children.filter(e => e.userData.markForMerge && e.isMesh && !e.userData.isRuler);
+        if (marked.length < 2) return alert("Check 2+ boxes or Select 2+ objects.");
+        const solids = marked.filter(e => !e.userData.isHole); if(!solids.length) return alert("Need 1 solid.");
+        const ev = new Evaluator();
+        const brush = mesh => {
+            const b = new Brush(prepareCSG(mesh.geometry));
+            b.position.copy(mesh.position); b.rotation.copy(mesh.rotation); b.scale.copy(mesh.scale);
+            b.updateMatrixWorld(); return b;
+        };
+        let res = brush(solids[0]);
+        for(let i=1; i<solids.length; i++) res = ev.evaluate(res, brush(solids[i]), ADDITION);
+        marked.filter(e => e.userData.isHole).forEach(h => res = ev.evaluate(res, brush(h), SUBTRACTION));
+        const geo = res.geometry; geo.computeBoundingBox(); const c = geo.boundingBox.getCenter(new THREE.Vector3()); geo.translate(-c.x, -c.y, -c.z);
+        const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0x0d6efd })); mesh.position.copy(c); mesh.userData = { name: "Merged Part", isHole: false };
+        marked.forEach(e => scene.remove(e)); scene.add(mesh); selectObject(mesh); saveState();
+    };
+
+window.dShell = () => {
+        if (selectedObjects.length !== 1) return alert("Select exactly 1 object.");
+
+        const obj = selectedObjects[0];
+
+        // 1. Get LOCAL Geometry Bounds
+        // We measure the raw geometry to ensure rotation doesn't confuse the math
+        if (!obj.geometry.boundingBox) obj.geometry.computeBoundingBox();
+        const gBox = obj.geometry.boundingBox;
+
+        // 2. Calculate True Local Dimensions (Geometry Size * Current Scale)
+        const dimX = (gBox.max.x - gBox.min.x) * obj.scale.x;
+        const dimY = (gBox.max.y - gBox.min.y) * obj.scale.y;
+        const dimZ = (gBox.max.z - gBox.min.z) * obj.scale.z;
+
+        const minDim = Math.min(dimX, dimY);
+
+        // 3. User Input
+        const input = prompt(`Object Base: ${Math.round(dimX)}x${Math.round(dimY)}mm.\nWall Thickness (mm):`, "2");
+        if (input === null) return;
+        const mm = parseFloat(input);
+
+        // Safety Checks
+        if (isNaN(mm) || mm <= 0) return alert("Invalid thickness.");
+        if (mm * 2 >= minDim) return alert(`Too thick! Max thickness is ${(minDim/2) - 0.1}mm`);
+
+        const isTube = confirm("Make it a Tube (Open Ends)?\n\nOK = Yes (Tube)\nCancel = No (Hollow Inside)");
+
+        // 4. Calculate Shrink Ratios (TargetSize / CurrentSize)
+        const ratX = (dimX - (mm * 2)) / dimX;
+        const ratY = (dimY - (mm * 2)) / dimY;
+
+        // 5. Z-Axis Logic (The Fix)
+        let ratZ;
+        if (isTube) {
+            // TUBE MODE:
+            // Instead of stretching by 20% (which ruins cones/pyramids),
+            // we add just 1mm extra height (0.5mm sticking out top/bottom).
+            // This ensures it cuts open the ends without destroying the side wall slope.
+            ratZ = (dimZ + 1.0) / dimZ;
+        } else {
+            // HOLLOW MODE:
+            // Shrink Z to keep the top and bottom closed
+            ratZ = (dimZ - (mm * 2)) / dimZ;
+        }
+
+        // 6. Prepare CSG
+        const ev = new Evaluator();
+
+        // Outer Brush
+        const bOut = new Brush(prepareCSG(obj.geometry));
+        bOut.position.copy(obj.position);
+        bOut.rotation.copy(obj.rotation);
+        bOut.scale.copy(obj.scale);
+        bOut.updateMatrixWorld();
+
+        // Inner Brush
+        const bIn = new Brush(prepareCSG(obj.geometry));
+        bIn.position.copy(obj.position);
+        bIn.rotation.copy(obj.rotation);
+
+        // Apply calculated scales
+        bIn.scale.set(
+            obj.scale.x * ratX,
+            obj.scale.y * ratY,
+            obj.scale.z * ratZ
+        );
+        bIn.updateMatrixWorld();
+
+        // 7. Center Fix
+        // Ensure the inner shape cuts exactly from the volumetric center
+        const boxOut = new THREE.Box3().setFromObject(bOut);
+        const boxIn = new THREE.Box3().setFromObject(bIn);
+        const centerOut = boxOut.getCenter(new THREE.Vector3());
+        const centerIn = boxIn.getCenter(new THREE.Vector3());
+
+        const shift = new THREE.Vector3().subVectors(centerOut, centerIn);
+        bIn.position.add(shift);
+        bIn.updateMatrixWorld();
+
+        // 8. Boolean Subtract
+        let result = ev.evaluate(bOut, bIn, SUBTRACTION);
+
+        // 9. Build Result
+        const newMesh = new THREE.Mesh(
+            result.geometry,
+            obj.material.clone()
+        );
+
+        newMesh.position.set(0,0,0);
+        newMesh.rotation.set(0,0,0);
+        newMesh.scale.set(1,1,1);
+
+        newMesh.castShadow = true;
+        newMesh.receiveShadow = true;
+
+        newMesh.userData = {
+            ...obj.userData,
+            name: obj.userData.name + (isTube ? " (Tube)" : " (Shell)"),
+            geoParams: null // Shape is no longer parametric
+        };
+
+        scene.remove(obj);
+        scene.add(newMesh);
+        selectObject(newMesh);
+        saveState();
+    };
+
+// --- UPDATED LOFT FUNCTION ---
+    window.dLoft = () => {
+        // 1. STANDARD LOFT (Between 2+ whole objects)
+        if (selectedObjects.length >= 2) {
+            const points = [];
+            selectedObjects.forEach(obj => {
+                obj.updateMatrixWorld();
+                const posAttr = obj.geometry.attributes.position;
+                for(let i=0; i < posAttr.count; i++){
+                    const vec = new THREE.Vector3().fromBufferAttribute(posAttr, i).applyMatrix4(obj.matrixWorld);
+                    points.push(vec);
+                }
+            });
+
+            if(points.length < 4) return alert("Not enough points to generate a solid.");
+
+            // Calculate Center to normalize coordinates (helps accuracy)
+            const centerBox = new THREE.Box3().setFromPoints(points);
+            const center = centerBox.getCenter(new THREE.Vector3());
+            const localPoints = points.map(p => p.clone().sub(center));
+
+            // Generate Hull
+            let geo = new ConvexGeometry(localPoints);
+
+            // --- CRITICAL FIX FOR TUBE/SHELL ---
+            // 1. Merge vertices to make it watertight (CSG requires this)
+            geo = mergeVertices(geo, 0.001);
+            // 2. Recompute normals for smooth shading and correct inside/outside detection
+            geo.computeVertexNormals();
+            // ------------------------------------
+
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x0d6efd,
+                roughness: 0.4,
+                metalness: 0.2,
+                wireframe: appSettings.wireframe
+            });
+
+            const mesh = new THREE.Mesh(geo, material);
+            mesh.position.copy(center);
+            mesh.userData = { isHole: false, name: "Loft Object" };
+
+            // Ensure shadow capability
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+
+            scene.add(mesh);
+            selectObject(mesh);
+            updateObjectList();
+            saveState();
+            return;
+        }
+
+        // 2. FACE LOFT MODE (Specific faces)
+        if (!isFaceLoftMode) {
+            // Enter Face Selection Mode
+            isFaceLoftMode = true;
+            selectObject(null);
+            document.body.style.cursor = "crosshair";
+
+            // Highlight button
+            const btn = document.querySelector('button[onclick="window.dLoft()"]');
+            if(btn) btn.classList.add('active-tool');
+
+            // Notification
+            const status = document.getElementById("auto-save-status");
+            status.innerText = "Select 2 Faces, then click Loft again";
+            status.style.opacity = 1;
+
+        } else {
+            // Execute Loft
+            if (selectedFacesData.length < 2) {
+                alert("Please select at least 2 faces to connect.");
+                return;
+            }
+
+            let allPoints = [];
+            selectedFacesData.forEach(data => allPoints.push(...data.points));
+
+            try {
+                // Center calculations
+                const centerBox = new THREE.Box3().setFromPoints(allPoints);
+                const center = centerBox.getCenter(new THREE.Vector3());
+                const localPoints = allPoints.map(p => p.clone().sub(center));
+
+                let geo = new ConvexGeometry(localPoints);
+
+                // --- CRITICAL FIX FOR TUBE/SHELL ---
+                // ConvexGeometry creates flat shading with split vertices.
+                // We must merge them to allow the Shell algorithm to work.
+                geo.deleteAttribute('normal'); // Remove old flat normals
+                geo.deleteAttribute('uv');     // Remove bad UVs
+
+                geo = mergeVertices(geo, 0.001); // Weld vertices
+                geo.computeVertexNormals();      // Smooth normals
+                // ------------------------------------
+
+                // Add basic UVs so textures don't crash
+                if (!geo.attributes.uv) {
+                    const count = geo.attributes.position.count;
+                    geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(count * 2), 2));
+                }
+
+                const material = new THREE.MeshStandardMaterial({
+                    color: 0x0d6efd,
+                    roughness: 0.4,
+                    metalness: 0.2,
+                    wireframe: appSettings.wireframe
+                });
+
+                const mesh = new THREE.Mesh(geo, material);
+                mesh.position.copy(center);
+                mesh.userData = { isHole: false, name: "Face Loft" };
+
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+
+                scene.add(mesh);
+                selectObject(mesh);
+                updateObjectList();
+
+            } catch (e) {
+                console.error(e);
+                alert("Could not generate geometry. Try faces that face each other.");
+            }
+
+            // Cleanup Mode
+            isFaceLoftMode = false;
+            selectedFacesData = [];
+            while(faceMarkerGroup.children.length > 0){
+                faceMarkerGroup.remove(faceMarkerGroup.children[0]);
+            }
+            document.body.style.cursor = "default";
+            const btn = document.querySelector('button[onclick="window.dLoft()"]');
+            if(btn) btn.classList.remove('active-tool');
+
+            const status = document.getElementById("auto-save-status");
+            status.innerText = "Saved";
+            status.style.opacity = 0;
+
+            saveState();
+        }
+    };
+
+    window.dImportFile = function(input) {
+        if (!input.files || !input.files[0]) return;
+        const file = input.files[0];
+        const ext = file.name.split('.').pop().toLowerCase();
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const contents = e.target.result;
+            try {
+                if(ext === 'stl') { buildAndAddMesh(new STLLoader().parse(contents), file.name); }
+                else if (ext === 'obj') { const objGroup = new OBJLoader().parse(contents); objGroup.traverse(child => { if(child.isMesh) buildAndAddMesh(child.geometry, file.name); }); }
+                else if (ext === 'gltf' || ext === 'glb') { new GLTFLoader().parse(contents, '', (gltf) => { gltf.scene.traverse(child => { if(child.isMesh) buildAndAddMesh(child.geometry, file.name); }); }); }
+                else if (ext === 'usdz') { new USDZLoader().parse(contents).then(group => { group.traverse(child => { if(child.isMesh) buildAndAddMesh(child.geometry, file.name); }); }); }
+            } catch (err) { console.error(err); alert("Import failed: " + err.message); }
+            input.value = '';
+        };
+        if(ext === 'obj') reader.readAsText(file); else reader.readAsArrayBuffer(file);
+    };
+
+    window.triggerExport = () => window.downloadExport(document.getElementById("export-format").value);
+
+    window.downloadExport = async fmt => {
+        const l = selectedObjects.length ? selectedObjects : scene.children.filter(c => c.isMesh && !c.userData.isRuler && c !== liftCone && c.parent !== faceMarkerGroup);
+        if(!l.length) return alert("Nothing to export");
+        const g = new THREE.Group(); l.forEach(o => g.add(o.clone()));
+        const name = (document.getElementById("d-name").value || "Design") + "." + fmt;
+        const saveData = (b,n) => { const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=n; a.click(); };
+        if(fmt==='stl') saveData(new Blob([new STLExporter().parse(g, {binary:true})]), name);
+        if(fmt==='obj') saveData(new Blob([new OBJExporter().parse(g)]), name);
+        if(fmt==='gltf') new GLTFExporter().parse(g, r=>saveData(new Blob([JSON.stringify(r)]), name));
+        if(fmt==='glb') new GLTFExporter().parse(g, r=>saveData(new Blob([r]), name), {binary:true});
+        if(fmt==='usdz') { const e = new USDZExporter(); const u = await e.parse(g); saveData(new Blob([u], { type: 'model/vnd.usdz+zip' }), name); }
+    };
+
+    function createRuler() {
+        if(rulerGroup) scene.remove(rulerGroup);
+        rulerGroup = new THREE.Group();
+        rulerGroup.userData = { isRuler: true };
+
+        // The L-Shape axes
+        const len = 100;
+        const matMain = new THREE.LineBasicMaterial({ color: 0x444444, linewidth: 2 });
+
+        // X Axis line
+        const xPts = [new THREE.Vector3(0,0,0), new THREE.Vector3(len,0,0)];
+        rulerGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(xPts), matMain));
+
+        // Y Axis line
+        const yPts = [new THREE.Vector3(0,0,0), new THREE.Vector3(0,len,0)];
+        rulerGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(yPts), matMain));
+
+        // Ticks
+        const matTick = new THREE.LineBasicMaterial({ color: 0x888888, transparent:true, opacity:0.5 });
+        const ticksPts = [];
+        for(let i=0; i<=len; i+=10) {
+            // X-Axis Ticks
+            ticksPts.push(new THREE.Vector3(i, 0, 0), new THREE.Vector3(i, -2, 0));
+            // Y-Axis Ticks
+            ticksPts.push(new THREE.Vector3(0, i, 0), new THREE.Vector3(-2, i, 0));
+        }
+        rulerGroup.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(ticksPts), matTick));
+
+        // Default Position (Bottom Left area)
+        rulerGroup.position.set(-50, -50, 0.1);
+        rulerGroup.visible = showRuler; // Sync with state
+        scene.add(rulerGroup);
+    }
+
+    function updateLiftConePos() { if(selectedObjects.length===1 && !selectedObjects[0].userData.isRuler) { const b=new THREE.Box3().setFromObject(selectedObjects[0]); liftCone.position.set((b.min.x+b.max.x)/2, (b.min.y+b.max.y)/2, b.max.z+15); liftCone.visible=true; } else liftCone.visible=false; }
+    function createLiftCone() { const g=new THREE.ConeGeometry(3,6,16); g.rotateX(Math.PI/2); liftCone=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:0x222222,transparent:true,opacity:0.8})); liftCone.visible=false; scene.add(liftCone); }
+    function createRotationLabel() { rotLabelDiv=document.createElement('div'); rotLabelDiv.className='rot-label'; rotLabelObj=new CSS2DObject(rotLabelDiv); scene.add(rotLabelObj); }
+    function updateRotationFeedback() { if(selectedObjects.length===1 && tCtrl.mode==='rotate' && tCtrl.dragging) { const r=selectedObjects[0].rotation; rotLabelDiv.innerText=`X:${Math.round(r.x*57.3)} Y:${Math.round(r.y*57.3)} Z:${Math.round(r.z*57.3)}`; rotLabelDiv.style.visibility='visible'; rotLabelObj.position.copy(selectedObjects[0].position); } else rotLabelDiv.style.visibility='hidden'; }
+
+    // --- UNDO / REDO / SAVE SYSTEM ---
+
+    function createSnapshot() {
+        const l=[];
+        scene.children.forEach(c=>{
+            if(c.isMesh && !c.userData.isRuler && c!==liftCone && c.userData.name !== "FaceMarker") l.push(c)
+        });
+        const d={ metadata:{type:'Save'}, scene:new THREE.Scene().toJSON() };
+        d.scene.object = { children: l.map(c=>c.toJSON()) };
+        const jsonStr = JSON.stringify(d);
+
+        const encoder = new TextEncoder();
+        const data = encoder.encode(jsonStr);
+
+        if(zstdReady) {
+            return compress(data, 10);
+        } else {
+            return data;
+        }
+    }
+
+    function saveState() {
+        if(!isUndoRedoAction) {
+            if (historyStep < historyStack.length - 1) {
+                historyStack = historyStack.slice(0, historyStep + 1);
+            }
+            const snapshot = createSnapshot();
+            historyStack.push(snapshot);
+            if(historyStack.length > MAX_HISTORY) { historyStack.shift(); } else { historyStep++; }
+        }
+
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(()=>{
+            const currentSnapshot = historyStack[historyStep];
+            if(!currentSnapshot) return;
+            const b64 = uint8ToBase64(currentSnapshot);
+            localStorage.setItem("3d_save", b64);
+            const el = document.getElementById("auto-save-status");
+            window.updateStorageUI();
+            el.style.opacity=1;
+            setTimeout(()=>el.style.opacity=0, 2000);
+        }, 1000);
+    }
+
+function loadSnapshot(compressedData) {
+        if(!compressedData) return;
+
+        let jsonStr;
+        if(zstdReady) {
+            try {
+                const decompressed = decompress(compressedData);
+                const decoder = new TextDecoder();
+                jsonStr = decoder.decode(decompressed);
+            } catch(e) {
+                try {
+                    const decoder = new TextDecoder();
+                    jsonStr = decoder.decode(compressedData);
+                    JSON.parse(jsonStr);
+                } catch(e2) {
+                    console.error("Decompression failed", e);
+                    return;
+                }
+            }
+        } else {
+            const decoder = new TextDecoder();
+            jsonStr = decoder.decode(compressedData);
+        }
+
+        let data;
+        try { data = JSON.parse(jsonStr); } catch(e){ return; }
+
+        // Clear Scene
+        selectObject(null);
+        scene.children.filter(c => c.isMesh && !c.userData.isRuler && c!==liftCone).forEach(c => scene.remove(c));
+
+        const loader = new THREE.ObjectLoader();
+
+        if(data.scene && data.scene.object && data.scene.object.children) {
+            data.scene.object.children.forEach(childData => {
+                const mesh = loader.parse(childData);
+                if(mesh.isMesh) {
+                    // Restore Material Transparency for holes
+                    mesh.material = new THREE.MeshStandardMaterial({
+                        color: mesh.material.color,
+                        roughness: 0.5, metalness: 0.1,
+                        transparent: mesh.userData.isHole,
+                        opacity: mesh.userData.isHole ? 0.5 : 1,
+                        wireframe: appSettings.wireframe
+                    });
+
+                    // --- CRITICAL FIX START ---
+                    // Force the geometry to rebuild from parameters immediately.
+                    // This fixes the "1mm Cube" issue by ignoring the failed geometry load
+                    // and creating a fresh RoundedBox/Cylinder based on the saved 'w=20' params.
+                    if (mesh.userData.geoParams) {
+                        regenerateGeometry(mesh);
+                    }
+                    // --- CRITICAL FIX END ---
+
+                    scene.add(mesh);
+                }
+            });
+        }
+        updateObjectList();
+    }
+
+    // --- FIX: Robust Load Logic ---
+    function loadFromStorage() {
+        const rawData = localStorage.getItem("3d_save");
+        if (!rawData) {
+            // First time run
+            window.dAdd('cube');
+            return;
+        }
+
+        try {
+            // 1. Try treating it as the NEW format (Base64 -> Binary -> Zstd)
+            // base64ToUint8 throws immediately if string has invalid chars (like old JSON)
+            const u8 = base64ToUint8(rawData);
+            historyStack.push(u8);
+            historyStep = 0;
+            loadSnapshot(u8);
+        } catch (e) {
+            console.warn("Could not load as Zstd/Base64. Trying legacy JSON...", e);
+
+            // 2. Fallback: Treat as OLD format (Plain JSON string)
+            try {
+                const legacyData = JSON.parse(rawData);
+                // Convert to new format immediately so Undo stack works
+                const jsonStr = JSON.stringify(legacyData);
+                const encoder = new TextEncoder();
+                const bytes = encoder.encode(jsonStr);
+
+                // Compress if Zstd is ready, else use raw bytes
+                const compressed = zstdReady ? compress(bytes, 10) : bytes;
+
+                historyStack.push(compressed);
+                historyStep = 0;
+
+                // Load using the new binary data we just created
+                loadSnapshot(compressed);
+
+            } catch (jsonErr) {
+                console.error("Total load failure. Clearing storage.", jsonErr);
+                localStorage.removeItem("3d_save");
+                window.dAdd('cube');
+            }
+        }
+    }
+
+    window.undo = () => {
+        if(historyStep > 0) {
+            isUndoRedoAction = true;
+            historyStep--;
+            loadSnapshot(historyStack[historyStep]);
+            isUndoRedoAction = false;
+            saveState();
+        }
+    };
+
+    window.redo = () => {
+        if(historyStep < historyStack.length - 1) {
+            isUndoRedoAction = true;
+            historyStep++;
+            loadSnapshot(historyStack[historyStep]);
+            isUndoRedoAction = false;
+            saveState();
+        }
+    };
+    window.toggleRuler = () => {
+        showRuler = !showRuler;
+
+        // Toggle Visuals
+        if(rulerGroup) rulerGroup.visible = showRuler;
+
+        // Toggle UI Button State
+        const btn = document.getElementById('btn-ruler');
+        if(btn) {
+            if(showRuler) {
+                btn.classList.remove('btn-outline-dark');
+                btn.classList.add('btn-primary');
+            } else {
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-outline-dark');
+            }
+        }
+
+        // Update labels immediately
+        updateTinkerLabels();
+    };
+
+    // Initialize
+    init3D();
+
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

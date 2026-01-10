@@ -11,8 +11,23 @@
 
 <style>
     body, html { margin: 0; padding: 0; overflow: hidden; height: 100%; background: #e0e0e0; font-family: 'Segoe UI', sans-serif; }
-
-    /* Full Screen Editor */
+    /* FPS Counter Styling */
+    #fps-display {
+        position: absolute;
+        top: 10px;
+        left: 80px; /* Offset to not cover the toolbar */
+        background: rgba(0, 0, 0, 0.7);
+        color: #00ff00;
+        font-family: monospace;
+        font-size: 14px;
+        font-weight: bold;
+        padding: 4px 8px;
+        border-radius: 4px;
+        pointer-events: none; /* Let clicks pass through */
+        z-index: 1000;
+        display: none; /* Hidden by default */
+    }
+        /* Full Screen Editor */
     #designer-area {
         position: absolute; top: 0; left: 0;
         width: 100vw; height: 100vh;
@@ -98,7 +113,7 @@
 
 <div id="designer-area">
     <canvas id="designer-canvas"></canvas>
-
+<div id="fps-display">FPS: 0</div>
     <!-- Auto Save Indicator -->
     <div id="auto-save-status" style="position:absolute; bottom:20px; left:50%; transform:translateX(-50%); color:white; background:rgba(0,0,0,0.6); padding:4px 12px; border-radius:20px; opacity:0; pointer-events:none; transition: opacity 0.5s; font-size: 0.8rem;">Saved</div>
 
@@ -131,6 +146,10 @@
         <div style="border-left:1px solid #ccc; margin:0 5px; height:20px;"></div>
         <button id="btn-ruler" class="btn btn-sm btn-outline-dark border-0" onclick="window.toggleRuler()" title="Toggle Ruler (M)">
             <i class="bi bi-ruler"></i>
+        </button>
+        <!-- NEW: Ruler Mode Toggle -->
+        <button id="btn-ruler-mode" class="btn btn-sm btn-outline-dark border-0" onclick="window.toggleRulerMode()" title="Mode: Endpoint">
+            <i class="bi bi-arrows-collapse"></i>
         </button>
         <div style="border-left:1px solid #ccc; margin:0 5px; height:20px;"></div>
     </div>
@@ -280,8 +299,23 @@
                 <label class="form-check-label small">Wireframe Mode</label>
             </div>
         </div>
+        <!-- Performance Settings -->
+        <div class="mb-3">
+            <label class="small fw-bold text-muted">Performance</label>
+            <div class="d-flex justify-content-between align-items-center mt-2">
+                <span class="small">Frame Rate Limit</span>
+                <select id="set-fps" class="form-select form-select-sm w-50" onchange="window.updateSettings('fps', this.value)">
+                    <option value="30">30 FPS (Save Battery)</option>
+                    <option value="60">60 FPS (Standard)</option>
+                    <option value="unlocked">Unlocked (Max)</option>
+                </select>
+            </div>
+        </div>
 
-
+        <div class="form-check form-switch mt-2">
+            <input class="form-check-input" type="checkbox" id="set-show-fps" onchange="window.updateSettings('showFps', this.checked)">
+            <label class="form-check-label small">Show FPS Counter</label>
+        </div>
 
         <!-- NEW: Storage Meter -->
         <div class="mb-3 border-top pt-3">
@@ -349,6 +383,12 @@ import * as THREE from "three";
     const MAX_HISTORY = 30;
     let isUndoRedoAction = false;
 
+    // --- OPTIMIZATION GLOBALS ---
+    let fpsInterval, now, then, elapsed;
+    let isFpsLocked = false;
+    let fpsFrames = 0;
+    let fpsLastTime = 0;
+
     let isFaceLoftMode = false;
     let selectedFacesData = [];
     let faceMarkerGroup;
@@ -356,11 +396,13 @@ import * as THREE from "three";
 
     let ambientLight, dirLight, gridHelper; // References to update them
     let appSettings = {
-        ambient: 0.8,    // Higher default = lighter shadows
+        ambient: 0.8,
         direct: 1.0,
         shadows: true,
         grid: true,
-        wireframe: false
+        wireframe: false,
+        fps: 'unlocked', // Default to unlocked
+        showFps: false
     };
 
     window.startAlignTool = () => {
@@ -643,7 +685,17 @@ import * as THREE from "three";
 
         ctrl = new OrbitControls(cam, ren.domElement);
         ctrl.enableDamping = true;
+            // --- OPTIMIZATION: ADAPTIVE RESOLUTION ---
+    // When user drags scene, drop pixel ratio to 1 (Low res)
+    // When user stops, restore device pixel ratio (High res / Retina)
+        ctrl.addEventListener('start', () => {
+            ren.setPixelRatio(1);
+        });
 
+        ctrl.addEventListener('end', () => {
+            ren.setPixelRatio(window.devicePixelRatio);
+        });
+          // --- OPTIMIZATION: ADAPTIVE RESOLUTION DONE---
         tCtrl = new TransformControls(cam, ren.domElement);
         tCtrl.addEventListener("dragging-changed", e => { ctrl.enabled = !e.value });
         tCtrl.addEventListener("change", () => {
@@ -687,7 +739,68 @@ import * as THREE from "three";
             panel.addEventListener('touchstart', e => e.stopPropagation());
         });
 
-        function dLoop() { requestAnimationFrame(dLoop); ctrl.update(); ren.render(scene, cam); labelRen.render(scene, cam); }
+        // Initialize time for optimization
+        then = window.performance.now();
+        fpsLastTime = then; // Initialize counter time
+
+// --- OPTIMIZATION GLOBALS ---
+    let frameId;
+    let isInteracting = false;
+    let needsRender = true; // Flag to request a frame
+
+    // Call this whenever you change something (move object, change color, add shape)
+    window.requestRender = () => { needsRender = true; };
+
+    // Hook into controls to wake up renderer
+    ctrl.addEventListener('change', () => { needsRender = true; });
+    tCtrl.addEventListener('change', () => { needsRender = true; });
+
+    // Hook into UI interactions
+    document.addEventListener('pointerdown', () => { isInteracting = true; needsRender = true; });
+    document.addEventListener('pointerup', () => { isInteracting = false; });
+
+    function dLoop(newTime) {
+        requestAnimationFrame(dLoop);
+
+        // Always update controls for damping
+        ctrl.update();
+
+        // LOGIC:
+        // 1. If FPS is locked and too fast, skip.
+        // 2. IF nothing has changed AND controls are still, skip render (Save Battery).
+
+        if (isFpsLocked) {
+            now = newTime;
+            elapsed = now - then;
+            if (elapsed < fpsInterval) return;
+            then = now - (elapsed % fpsInterval);
+        }
+
+        // Only render if something changed or we are interacting
+        // We also check 'ctrl.getAzimuthalAngle' indirectly via change listener above
+        if (needsRender || isInteracting) {
+            ren.render(scene, cam);
+            labelRen.render(scene, cam);
+
+            // FPS Counter Logic
+            if (appSettings.showFps) {
+                fpsFrames++;
+                if (newTime >= fpsLastTime + 1000) {
+                    const delta = newTime - fpsLastTime;
+                    const fps = Math.round((fpsFrames * 1000) / delta);
+                    const div = document.getElementById('fps-display');
+                    if (div) div.innerText = `FPS: ${fps}`;
+                    fpsLastTime = newTime;
+                    fpsFrames = 0;
+                }
+            }
+
+            // If we are not interacting, we can eventually set needsRender to false
+            // But because of damping (inertia), we keep it true slightly longer
+            // For simple implementation, we assume we need to render if controls change.
+            needsRender = false;
+        }
+    }
         dLoop();
 
         buildColorPicker();
@@ -697,34 +810,51 @@ import * as THREE from "three";
         loadFromStorage();
     }
 
-    window.updateSettings = (key, value) => {
-        // 1. Update State
-        if (key === 'ambient' || key === 'direct') value = parseFloat(value);
-        appSettings[key] = value;
+window.updateSettings = (key, value) => {
+    // 1. Update State
+    if (key === 'ambient' || key === 'direct') value = parseFloat(value);
+    appSettings[key] = value;
 
-        // 2. Apply to Scene
-        if (key === 'ambient' && ambientLight) ambientLight.intensity = value;
-        if (key === 'direct' && dirLight) dirLight.intensity = value;
+    // 2. Apply to Scene
+    if (key === 'ambient' && ambientLight) ambientLight.intensity = value;
+    if (key === 'direct' && dirLight) dirLight.intensity = value;
+    if (key === 'grid' && gridHelper) gridHelper.visible = value;
 
-        if (key === 'grid' && gridHelper) gridHelper.visible = value;
-
-        if (key === 'shadows' && dirLight) {
-            dirLight.castShadow = value;
-            // Re-compile materials to reflect shadow change
-            scene.traverse(o => { if(o.material) o.material.needsUpdate = true; });
+    // 3. Apply FPS Settings
+    if (key === 'fps') {
+        if (value === 'unlocked') {
+            isFpsLocked = false;
+        } else {
+            isFpsLocked = true;
+            fpsInterval = 1000 / parseInt(value);
+            then = window.performance.now();
         }
+    }
+    if (key === 'showFps') {
+        const div = document.getElementById('fps-display');
+        if (div) div.style.display = value ? 'block' : 'none';
 
-        if (key === 'wireframe') {
-            scene.traverse(child => {
-                if (child.isMesh && !child.userData.isRuler && child !== liftCone && child.parent !== faceMarkerGroup) {
-                    if (child.material) child.material.wireframe = value;
-                }
-            });
-        }
+        // Reset counter to avoid immediate jump
+        fpsFrames = 0;
+        fpsLastTime = performance.now();
+    }
 
-        // 3. Save to LocalStorage
-        localStorage.setItem('3d_app_settings', JSON.stringify(appSettings));
-    };
+    if (key === 'shadows' && dirLight) {
+        dirLight.castShadow = value;
+        scene.traverse(o => { if(o.material) o.material.needsUpdate = true; });
+    }
+
+    if (key === 'wireframe') {
+        scene.traverse(child => {
+            if (child.isMesh && !child.userData.isRuler && child !== liftCone && child.parent !== faceMarkerGroup) {
+                if (child.material) child.material.wireframe = value;
+            }
+        });
+    }
+
+    // 4. Save to LocalStorage
+    localStorage.setItem('3d_app_settings', JSON.stringify(appSettings));
+};
 
 window.updateStorageUI = () => {
         // 1. Calculate Total Usage
@@ -766,7 +896,7 @@ window.updateStorageUI = () => {
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
-                appSettings = { ...appSettings, ...parsed }; // Merge with defaults
+                appSettings = { ...appSettings, ...parsed };
             } catch (e) { console.warn("Settings corrupted"); }
         }
 
@@ -777,6 +907,13 @@ window.updateStorageUI = () => {
         document.getElementById('set-grid').checked = appSettings.grid;
         document.getElementById('set-wireframe').checked = appSettings.wireframe;
 
+        // Apply FPS UI
+        const fpsSelect = document.getElementById('set-fps');
+        if(fpsSelect) fpsSelect.value = appSettings.fps;
+        // Apply UI for FPS Toggle
+        const fpsToggle = document.getElementById('set-show-fps');
+        if(fpsToggle) fpsToggle.checked = appSettings.showFps;
+
         // Apply to Scene
         if(ambientLight) ambientLight.intensity = appSettings.ambient;
         if(dirLight) {
@@ -785,7 +922,10 @@ window.updateStorageUI = () => {
         }
         if(gridHelper) gridHelper.visible = appSettings.grid;
 
-        // Defer wireframe slightly to ensure objects are loaded
+        // Trigger FPS setup
+        window.updateSettings('fps', appSettings.fps);
+        // Trigger update to set visibility
+        window.updateSettings('showFps', appSettings.showFps);
         setTimeout(() => {
             window.updateSettings('wireframe', appSettings.wireframe);
         }, 100);
@@ -851,7 +991,7 @@ window.updateStorageUI = () => {
         return label;
     }
 
-    function updateTinkerLabels() {
+function updateTinkerLabels() {
         // 1. Cleanup Old Labels
         activeLabels.forEach(l => scene.remove(l));
         activeLabels.length = 0;
@@ -860,39 +1000,38 @@ window.updateStorageUI = () => {
         // 2. Validate Selection
         if(selectedObjects.length !== 1 || isFaceLoftMode) return;
         const obj = selectedObjects[0];
-        if(obj.userData.isRuler) return; // Don't measure the ruler itself
+        if(obj.userData.isRuler) return;
 
         const box = new THREE.Box3().setFromObject(obj);
         const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3()); // NEW: Get Center
 
         // ============================================
         // PART A: OBJECT SIZE (Always On - Gray/Black)
         // ============================================
+        // (This remains unchanged - measures total size)
 
-        // Width (X Size) - Back side
+        // Width (X Size)
         const sizeXPos = addDimensionLines(
-            new THREE.Vector3(box.min.x, box.max.y, box.min.z), // Start
-            new THREE.Vector3(box.max.x, box.max.y, box.min.z), // End
-            new THREE.Vector3(0, 5, 0), // Offset slightly back
-            0x444444
+            new THREE.Vector3(box.min.x, box.max.y, box.min.z),
+            new THREE.Vector3(box.max.x, box.max.y, box.min.z),
+            new THREE.Vector3(0, 5, 0), 0x444444
         );
         createInputLabel(sizeXPos, size.x, 'size', (v) => resizeObject(obj, 'x', v));
 
-        // Length (Y Size) - Left side
+        // Length (Y Size)
         const sizeYPos = addDimensionLines(
             new THREE.Vector3(box.min.x, box.min.y, box.min.z),
             new THREE.Vector3(box.min.x, box.max.y, box.min.z),
-            new THREE.Vector3(-5, 0, 0), // Offset slightly left
-            0x444444
+            new THREE.Vector3(-5, 0, 0), 0x444444
         );
         createInputLabel(sizeYPos, size.y, 'size', (v) => resizeObject(obj, 'y', v));
 
-        // Height (Z Size) - Right side, close to object
+        // Height (Z Size)
         const sizeZPos = addDimensionLines(
             new THREE.Vector3(box.max.x, box.min.y, box.min.z),
             new THREE.Vector3(box.max.x, box.min.y, box.max.z),
-            new THREE.Vector3(10, 0, 0), // Offset right
-            0x444444
+            new THREE.Vector3(10, 0, 0), 0x444444
         );
         createInputLabel(sizeZPos, size.z, 'size', (v) => resizeObject(obj, 'z', v));
 
@@ -903,59 +1042,74 @@ window.updateStorageUI = () => {
         if (showRuler && rulerGroup) {
             const rPos = rulerGroup.position;
 
-            // 1. X DISTANCE (From Ruler Y-Axis to Object Left Edge)
-            // Measured at the front of the object (min.y)
-            const currentDistX = box.min.x - rPos.x;
-            const rulerEdgeX = new THREE.Vector3(rPos.x, box.min.y, 0);
-            const objectEdgeX = new THREE.Vector3(box.min.x, box.min.y, 0);
+            // --- 1. X DISTANCE ---
+            let valX, startPtX, endPtX;
 
-            // Draw further out than the dimension lines (-25 offset)
-            const labelPosX = addDimensionLines(rulerEdgeX, objectEdgeX, new THREE.Vector3(0, -25, 0), 0x0d6efd);
-            createInputLabel(labelPosX, currentDistX, 'pos', (newVal) => {
-                const diff = newVal - currentDistX;
+            if (rulerMode === 'midpoint') {
+                // Measure to Center X
+                valX = center.x - rPos.x;
+                startPtX = new THREE.Vector3(rPos.x, box.min.y, 0);
+                endPtX = new THREE.Vector3(center.x, box.min.y, 0); // To Center
+            } else {
+                // Measure to Left Edge (Min X)
+                valX = box.min.x - rPos.x;
+                startPtX = new THREE.Vector3(rPos.x, box.min.y, 0);
+                endPtX = new THREE.Vector3(box.min.x, box.min.y, 0); // To Edge
+            }
+
+            const labelPosX = addDimensionLines(startPtX, endPtX, new THREE.Vector3(0, -25, 0), 0x0d6efd);
+            createInputLabel(labelPosX, valX, 'pos', (newVal) => {
+                const diff = newVal - valX;
                 obj.position.x += diff;
                 obj.updateMatrixWorld();
                 updateTinkerLabels();
                 saveState();
+                window.requestRender();
             });
 
 
-            // 2. Y DISTANCE (From Ruler X-Axis to Object Bottom Edge)
-            // Measured at the left of the object (min.x)
-            const currentDistY = box.min.y - rPos.y;
-            const rulerEdgeY = new THREE.Vector3(box.min.x, rPos.y, 0);
-            const objectEdgeY = new THREE.Vector3(box.min.x, box.min.y, 0);
+            // --- 2. Y DISTANCE ---
+            let valY, startPtY, endPtY;
 
-            const labelPosY = addDimensionLines(rulerEdgeY, objectEdgeY, new THREE.Vector3(-25, 0, 0), 0x0d6efd);
-            createInputLabel(labelPosY, currentDistY, 'pos', (newVal) => {
-                const diff = newVal - currentDistY;
+            if (rulerMode === 'midpoint') {
+                // Measure to Center Y
+                valY = center.y - rPos.y;
+                startPtY = new THREE.Vector3(box.min.x, rPos.y, 0);
+                endPtY = new THREE.Vector3(box.min.x, center.y, 0); // To Center
+            } else {
+                // Measure to Bottom Edge (Min Y)
+                valY = box.min.y - rPos.y;
+                startPtY = new THREE.Vector3(box.min.x, rPos.y, 0);
+                endPtY = new THREE.Vector3(box.min.x, box.min.y, 0); // To Edge
+            }
+
+            const labelPosY = addDimensionLines(startPtY, endPtY, new THREE.Vector3(-25, 0, 0), 0x0d6efd);
+            createInputLabel(labelPosY, valY, 'pos', (newVal) => {
+                const diff = newVal - valY;
                 obj.position.y += diff;
                 obj.updateMatrixWorld();
                 updateTinkerLabels();
                 saveState();
+                window.requestRender();
             });
 
 
-            // 3. Z DISTANCE (LIFT) - Elevation from Ruler
+            // --- 3. Z DISTANCE (LIFT) ---
+            // Note: Usually "Lift" is always measured from the bottom, even in midpoint mode.
+            // But we keep the line visually consistent.
             const currentDistZ = box.min.z - rPos.z;
-
-            // Position: Front-Right corner, extending outwards
-            // Start: Ruler Z-Plane (Floor) at object location
             const rulerFloorPt = new THREE.Vector3(box.max.x, box.min.y, rPos.z);
-            // End: Object Bottom
             const objectBottomPt = new THREE.Vector3(box.max.x, box.min.y, box.min.z);
 
-            // Offset: Further right (25) than the Size-Z label (which is at 10)
-            // This stacks them: [Object] -> [Size Label] -> [Lift Label]
             const labelPosZ = addDimensionLines(rulerFloorPt, objectBottomPt, new THREE.Vector3(25, 0, 0), 0x0d6efd);
-
             createInputLabel(labelPosZ, currentDistZ, 'pos', (newVal) => {
                 const diff = newVal - currentDistZ;
                 obj.position.z += diff;
                 obj.updateMatrixWorld();
                 updateTinkerLabels();
-                updateLiftConePos(); // Sync the cone helper
+                updateLiftConePos();
                 saveState();
+                window.requestRender();
             });
         }
     }
@@ -1310,6 +1464,7 @@ const onPointerMove = e => {
             mesh.geometry.dispose();
             mesh.geometry = newGeo;
             updateTinkerLabels();
+            window.requestRender();
         }
     }
 
@@ -1344,6 +1499,7 @@ const onPointerMove = e => {
             }
             obj.material.needsUpdate = true;
         }
+        window.requestRender();
         saveState();
     };
 
@@ -1584,9 +1740,50 @@ const updatePropertiesPanel = () => {
         updateMergeButton();
     };
     const updateMergeButton = () => { document.getElementById("merge-btn").innerText = `Merge (${scene.children.filter(e => e.userData.markForMerge).length})`; };
-    window.dDel = () => { selectedObjects.forEach(e => scene.remove(e)); selectObject(null); updateObjectList(); saveState(); };
-    window.dDelAll = () => { scene.children.filter(e => e.isMesh && !e.userData.isRuler && e !== liftCone).forEach(e => scene.remove(e)); selectObject(null); updateObjectList(); saveState(); };
+function cleanObject(obj) {
+        if (!obj) return;
 
+        // Dispose Geometry
+        if (obj.geometry) obj.geometry.dispose();
+
+        // Dispose Material
+        if (obj.material) {
+            // Handle array of materials
+            if (Array.isArray(obj.material)) {
+                obj.material.forEach(m => m.dispose());
+            } else {
+                obj.material.dispose();
+            }
+        }
+
+        // Recursively clean children
+        if (obj.children) {
+            obj.children.forEach(c => cleanObject(c));
+        }
+    }
+
+    window.dDel = () => {
+        selectedObjects.forEach(e => {
+            scene.remove(e);
+            cleanObject(e); // <--- CLEAN GPU MEMORY
+        });
+        selectObject(null);
+        updateObjectList();
+        saveState();
+        window.requestRender(); // Request frame update
+    };
+
+    window.dDelAll = () => {
+        const toRemove = scene.children.filter(e => e.isMesh && !e.userData.isRuler && e !== liftCone);
+        toRemove.forEach(e => {
+            scene.remove(e);
+            cleanObject(e); // <--- CLEAN GPU MEMORY
+        });
+        selectObject(null);
+        updateObjectList();
+        saveState();
+        window.requestRender();
+    };
     window.dDuplicate = () => {
         let targets = selectedObjects.length > 0 ? selectedObjects : scene.children.filter(e => e.userData.markForMerge && e.isMesh);
         if(!targets.length) return alert("Select object(s).");
@@ -1730,6 +1927,28 @@ window.dShell = () => {
         saveState();
     };
 
+window.toggleRulerMode = () => {
+    // Toggle State
+    rulerMode = (rulerMode === 'endpoint') ? 'midpoint' : 'endpoint';
+
+    // Update UI Button
+    const btn = document.getElementById('btn-ruler-mode');
+    const icon = btn.querySelector('i');
+
+    if(rulerMode === 'midpoint') {
+        btn.title = "Mode: Midpoint";
+        icon.className = "bi bi-align-center"; // Bootstrap icon for center
+        btn.classList.add("text-primary");
+    } else {
+        btn.title = "Mode: Endpoint";
+        icon.className = "bi bi-arrows-collapse"; // Bootstrap icon for edges
+        btn.classList.remove("text-primary");
+    }
+
+    // Refresh View
+    updateTinkerLabels();
+    window.requestRender();
+};
 // --- UPDATED LOFT FUNCTION ---
     window.dLoft = () => {
         // 1. STANDARD LOFT (Between 2+ whole objects)
@@ -1968,6 +2187,7 @@ window.dShell = () => {
     }
 
     function saveState() {
+        window.requestRender();
         if(!isUndoRedoAction) {
             if (historyStep < historyStack.length - 1) {
                 historyStack = historyStack.slice(0, historyStep + 1);
@@ -2050,6 +2270,7 @@ function loadSnapshot(compressedData) {
             });
         }
         updateObjectList();
+        window.requestRender();
     }
 
     // --- FIX: Robust Load Logic ---

@@ -90,6 +90,75 @@
     .color-picker { display:flex; flex-wrap:wrap; gap:4px; margin-top: 5px; }
     .color-option { width:20px; height:20px; border-radius:3px; cursor:pointer; border:1px solid rgba(0,0,0,0.1); }
     .color-option.selected { border:2px solid #000; transform:scale(1.2); }
+
+/* --- MOBILE & LANDSCAPE OPTIMIZATIONS --- */
+    @media (max-width: 950px) {
+        /* General Scaling for Touch */
+        .btn-tool { width: 40px; height: 40px; } /* Larger touch targets */
+
+        /* 1. TOP HEADER: Allow horizontal scroll if buttons overflow */
+        .float-header {
+            top: 10px;
+            width: 90%;
+            max-width: 100%;
+            overflow-x: auto;
+            white-space: nowrap;
+            justify-content: flex-start;
+            padding: 5px 10px;
+            /* Hide Scrollbar */
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .float-header::-webkit-scrollbar { display: none; }
+
+        /* 2. LEFT TOOLBAR: Scrollable & Collapsible */
+        .float-toolbar {
+            top: 60px; /* Push down below header */
+            left: 10px;
+            bottom: 10px; /* Stretch to bottom */
+            height: auto;
+            max-height: calc(100vh - 80px);
+            overflow-y: auto; /* Enable Scroll */
+            -webkit-overflow-scrolling: touch;
+            transition: transform 0.3s ease;
+        }
+
+        /* 3. PROPERTIES PANEL: Scale Down & Reposition */
+        .float-props {
+            top: 60px;
+            right: 10px;
+            width: 200px; /* Slimmer */
+            font-size: 0.8rem;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .float-props input, .float-props select { font-size: 0.8rem; }
+        .float-props .row { --bs-gutter-x: 0.5rem; } /* Tighten grid */
+
+        /* 4. OBJECT LIST: Minimize Logic */
+        .float-list {
+            bottom: 10px;
+            right: 10px;
+            width: 180px; /* Slimmer */
+            max-height: 40vh; /* Don't cover too much vertical space */
+            transition: height 0.3s ease;
+        }
+        /* When minimized class is added */
+        .float-list.minimized {
+            height: 40px;
+            overflow: hidden;
+        }
+        .float-list.minimized #object-list,
+        .float-list.minimized .btn-group {
+            display: none;
+        }
+
+        /* iPhone Safe Areas (Notch/Home Bar) */
+        body {
+            padding-left: env(safe-area-inset-left);
+            padding-right: env(safe-area-inset-right);
+        }
+    }
 </style>
 
 <!-- 2. IMPORT MAP -->
@@ -154,8 +223,12 @@
         <div style="border-left:1px solid #ccc; margin:0 5px; height:20px;"></div>
     </div>
 
-    <!-- Toolbar (Left) -->
-    <div class="float-panel float-toolbar">
+<!-- Toolbar (Left) -->
+    <div class="float-panel float-toolbar" id="main-toolbar">
+        <!-- New Mobile Toggle Icon -->
+        <div class="d-md-none mb-2" onclick="window.toggleToolbar()" style="cursor:pointer">
+            <i class="bi bi-three-dots-vertical"></i>
+        </div>
         <div class="small fw-bold text-muted" style="font-size:0.6rem">ADD</div>
         <button class="btn btn-light border btn-tool" onclick="window.dAdd('cube')" title="Cube"><i class="bi bi-box"></i></button>
         <button class="btn btn-light border btn-tool" onclick="window.dAdd('cyl')" title="Cylinder"><i class="bi bi-database"></i></button>
@@ -187,16 +260,22 @@
     </div>
 
     <!-- Object List (Bottom Right) -->
-    <div class="float-panel float-list">
-        <div class="d-flex justify-content-between align-items-center mb-2 border-bottom pb-1">
-            <span class="fw-bold small"><i class="bi bi-list-ul"></i> Scene Objects</span>
+        <div class="float-panel float-list" id="panel-list">
+            <div class="d-flex justify-content-between align-items-center mb-2 border-bottom pb-1"
+                onclick="window.togglePanel('panel-list')" style="cursor:pointer">
+                <span class="fw-bold small"><i class="bi bi-list-ul"></i> Objects</span>
+                <i class="bi bi-chevron-down small" id="icon-panel-list"></i>
+            </div>
+
+            <!-- Content Container -->
+            <div id="content-list" class="d-flex flex-column" style="height:100%">
+                <ul id="object-list" class="mb-2" style="overflow-y:auto; list-style:none; padding:0; flex:1;"></ul>
+                <div class="btn-group w-100">
+                    <button class="btn btn-sm btn-warning" id="merge-btn" onclick="window.dMerge()">Merge (0)</button>
+                    <button class="btn btn-sm btn-danger" onclick="window.dDel()">Delete</button>
+                </div>
+            </div>
         </div>
-        <ul id="object-list" class="mb-2" style="overflow-y:auto; list-style:none; padding:0; flex:1;"></ul>
-        <div class="btn-group w-100">
-            <button class="btn btn-sm btn-warning" id="merge-btn" onclick="window.dMerge()">Merge (0)</button>
-            <button class="btn btn-sm btn-danger" onclick="window.dDel()">Delete</button>
-        </div>
-    </div>
 
     <!-- Properties (Top Right) -->
     <div class="float-panel float-props" id="prop-panel">
@@ -393,7 +472,7 @@ import * as THREE from "three";
     let selectedFacesData = [];
     let faceMarkerGroup;
     let showRuler = true; // Default off
-
+    let toolbarExpanded = true;
     let ambientLight, dirLight, gridHelper; // References to update them
     let appSettings = {
         ambient: 0.8,
@@ -425,6 +504,36 @@ import * as THREE from "three";
         document.querySelector('button[onclick="window.startAlignTool()"]').classList.add("active-tool");
     };
 
+// --- MOBILE UI LOGIC ---
+    window.togglePanel = (id) => {
+        const el = document.getElementById(id);
+        el.classList.toggle('minimized');
+
+        // Flip Icon
+        const icon = document.getElementById('icon-' + id);
+        if(icon) {
+            if(el.classList.contains('minimized')) {
+                icon.classList.remove('bi-chevron-down');
+                icon.classList.add('bi-chevron-up');
+            } else {
+                icon.classList.remove('bi-chevron-up');
+                icon.classList.add('bi-chevron-down');
+            }
+        }
+    };
+
+
+    window.toggleToolbar = () => {
+        toolbarExpanded = !toolbarExpanded;
+        const bar = document.getElementById('main-toolbar');
+        if(toolbarExpanded) {
+            bar.style.height = 'auto';
+            bar.style.overflowY = 'auto';
+        } else {
+            bar.style.height = '50px'; // Just enough to show the dots
+            bar.style.overflowY = 'hidden';
+        }
+    };
     function handleAlignHover(ray, mouse) {
         // STEP 2: MOVING THE GHOST
         if (alignState === 'pick-target' && alignGhost) {

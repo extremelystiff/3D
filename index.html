@@ -2094,37 +2094,103 @@ window.toggleRulerMode = () => {
     };
 
     window.dImportFile = function(input) {
-        if (!input.files || !input.files[0]) return;
-        const file = input.files[0];
-        const ext = file.name.split('.').pop().toLowerCase();
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const contents = e.target.result;
-            try {
-                if(ext === 'stl') { buildAndAddMesh(new STLLoader().parse(contents), file.name); }
-                else if (ext === 'obj') { const objGroup = new OBJLoader().parse(contents); objGroup.traverse(child => { if(child.isMesh) buildAndAddMesh(child.geometry, file.name); }); }
-                else if (ext === 'gltf' || ext === 'glb') { new GLTFLoader().parse(contents, '', (gltf) => { gltf.scene.traverse(child => { if(child.isMesh) buildAndAddMesh(child.geometry, file.name); }); }); }
-                else if (ext === 'usdz') { new USDZLoader().parse(contents).then(group => { group.traverse(child => { if(child.isMesh) buildAndAddMesh(child.geometry, file.name); }); }); }
-            } catch (err) { console.error(err); alert("Import failed: " + err.message); }
-            input.value = '';
+            if (!input.files || !input.files[0]) return;
+            const file = input.files[0];
+            const ext = file.name.split('.').pop().toLowerCase();
+            const reader = new FileReader();
+
+            // HELPER: Checks if geometry is "Microscopic" (AR Scale) and fixes it
+            const checkAndFixScale = (geometry) => {
+                geometry.computeBoundingBox();
+                const size = new THREE.Vector3();
+                geometry.boundingBox.getSize(size);
+                const maxDim = Math.max(size.x, size.y, size.z);
+
+                // THRESHOLD: If object < 2.0 units, it's likely Meters (0.001 scale)
+                // We scale it x1000 to bring it back to Millimeters
+                if (maxDim < 2.0 && maxDim > 0.0001) {
+                    console.log("Detected AR Scale (Meters). Converting to mm (x1000).");
+                    geometry.scale(1000, 1000, 1000);
+                }
+                return geometry;
+            };
+
+            reader.onload = function(e) {
+                const contents = e.target.result;
+                try {
+                    if(ext === 'stl') {
+                        const geo = new STLLoader().parse(contents);
+                        buildAndAddMesh(checkAndFixScale(geo), file.name);
+                    }
+                    else if (ext === 'obj') {
+                        const objGroup = new OBJLoader().parse(contents);
+                        objGroup.traverse(child => {
+                            if(child.isMesh) buildAndAddMesh(checkAndFixScale(child.geometry), file.name);
+                        });
+                    }
+                    else if (ext === 'gltf' || ext === 'glb') {
+                        new GLTFLoader().parse(contents, '', (gltf) => {
+                            gltf.scene.traverse(child => {
+                                if(child.isMesh) buildAndAddMesh(checkAndFixScale(child.geometry), file.name);
+                            });
+                        });
+                    }
+                    // --- FIXED USDZ SECTION ---
+                    else if (ext === 'usdz') {
+                        // USDZLoader.parse returns the group immediately (Sync), not a Promise
+                        const group = new USDZLoader().parse(contents);
+                        group.traverse(child => {
+                            if(child.isMesh) buildAndAddMesh(checkAndFixScale(child.geometry), file.name);
+                        });
+                    }
+                } catch (err) { console.error(err); alert("Import failed: " + err.message); }
+                input.value = '';
+            };
+
+            if(ext === 'obj') reader.readAsText(file); else reader.readAsArrayBuffer(file);
         };
-        if(ext === 'obj') reader.readAsText(file); else reader.readAsArrayBuffer(file);
-    };
 
     window.triggerExport = () => window.downloadExport(document.getElementById("export-format").value);
 
     window.downloadExport = async fmt => {
-        const l = selectedObjects.length ? selectedObjects : scene.children.filter(c => c.isMesh && !c.userData.isRuler && c !== liftCone && c.parent !== faceMarkerGroup);
-        if(!l.length) return alert("Nothing to export");
-        const g = new THREE.Group(); l.forEach(o => g.add(o.clone()));
-        const name = (document.getElementById("d-name").value || "Design") + "." + fmt;
-        const saveData = (b,n) => { const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=n; a.click(); };
-        if(fmt==='stl') saveData(new Blob([new STLExporter().parse(g, {binary:true})]), name);
-        if(fmt==='obj') saveData(new Blob([new OBJExporter().parse(g)]), name);
-        if(fmt==='gltf') new GLTFExporter().parse(g, r=>saveData(new Blob([JSON.stringify(r)]), name));
-        if(fmt==='glb') new GLTFExporter().parse(g, r=>saveData(new Blob([r]), name), {binary:true});
-        if(fmt==='usdz') { const e = new USDZExporter(); const u = await e.parse(g); saveData(new Blob([u], { type: 'model/vnd.usdz+zip' }), name); }
-    };
+            // 1. Collect Objects
+            const l = selectedObjects.length ? selectedObjects : scene.children.filter(c => c.isMesh && !c.userData.isRuler && c !== liftCone && c.parent !== faceMarkerGroup);
+            if(!l.length) return alert("Nothing to export");
+
+            const g = new THREE.Group();
+            l.forEach(o => g.add(o.clone()));
+
+            // --- AR SCALE LOGIC ---
+            // Scale GLB and USDZ to Meters (0.001).
+            // Keep STL, OBJ, and standard GLTF in Millimeters (1.0).
+            if (fmt === 'usdz' || fmt === 'glb') {
+                g.scale.set(0.001, 0.001, 0.001);
+                g.updateMatrixWorld(true);
+            }
+            // ----------------------
+
+            const name = (document.getElementById("d-name").value || "Design") + "." + fmt;
+            const saveData = (b,n) => { const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=n; a.click(); };
+
+            if(fmt==='stl') saveData(new Blob([new STLExporter().parse(g, {binary:true})]), name);
+            if(fmt==='obj') saveData(new Blob([new OBJExporter().parse(g)]), name);
+
+            // GLTF (Text based JSON)
+            if(fmt==='gltf') new GLTFExporter().parse(g, r=>saveData(new Blob([JSON.stringify(r)]), name));
+
+            // GLB (Binary) - THE FIX IS HERE
+            // Note the 3rd argument is an error handler, 4th is options
+            if(fmt==='glb') {
+                new GLTFExporter().parse(
+                    g,
+                    r => saveData(new Blob([r]), name),
+                    (err) => console.error(err),
+                    { binary: true }
+                );
+            }
+
+            if(fmt==='usdz') { const e = new USDZExporter(); const u = await e.parse(g, { quickLookAR: true }); saveData(new Blob([u], { type: 'model/vnd.usdz+zip' }), name); }
+        };
 
     function createRuler() {
         if(rulerGroup) scene.remove(rulerGroup);

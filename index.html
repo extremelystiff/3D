@@ -174,7 +174,8 @@
         "three-mesh-bvh": "https://unpkg.com/three-mesh-bvh@0.7.3/build/index.module.js",
         "three-bvh-csg": "https://unpkg.com/three-bvh-csg@0.0.16/build/index.module.js",
         "zstd-wasm": "https://unpkg.com/@bokuweb/zstd-wasm@0.0.27/dist/web/index.web.js",
-        "three-rounded-box": "https://unpkg.com/three@0.160.0/examples/jsm/geometries/RoundedBoxGeometry.js"
+        "three-rounded-box": "https://unpkg.com/three@0.160.0/examples/jsm/geometries/RoundedBoxGeometry.js",
+        "three/addons/loaders/MTLLoader.js": "https://unpkg.com/three@0.160.0/examples/jsm/loaders/MTLLoader.js"
     }
 }
 </script>
@@ -260,7 +261,7 @@
         <div class="divider"></div>
 
         <button class="btn btn-primary border btn-tool" onclick="document.getElementById('file-upload').click()" title="Import File"><i class="bi bi-upload"></i></button>
-        <input type="file" id="file-upload" accept=".stl,.obj,.glb,.gltf,.usdz" style="display:none" onchange="window.dImportFile(this)">
+        <input type="file" id="file-upload" multiple accept=".stl,.obj,.mtl,.jpg,.png,.glb,.gltf,.usdz" style="display:none" onchange="window.dImportFile(this)">
     </div>
 
     <!-- Object List (Bottom Right) -->
@@ -446,6 +447,7 @@ import * as THREE from "three";
     import { STLLoader } from "three/addons/loaders/STLLoader.js";
     import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
     import { USDZLoader } from "three/addons/loaders/USDZLoader.js";
+    import { MTLLoader } from "three/addons/loaders/MTLLoader.js";
 
     import { SUBTRACTION, ADDITION, Brush, Evaluator } from "three-bvh-csg";
 
@@ -475,6 +477,7 @@ import * as THREE from "three";
     let historyStep = -1;
     const MAX_HISTORY = 30;
     let isUndoRedoAction = false;
+    let isStorageFull = false;
 
     // --- OPTIMIZATION GLOBALS ---
     let fpsInterval, now, then, elapsed;
@@ -990,38 +993,40 @@ window.updateSettings = (key, value) => {
 };
 
 window.updateStorageUI = () => {
-        // 1. Calculate Total Usage
+        const bar = document.getElementById('storage-bar');
+        const txt = document.getElementById('storage-text');
+        if(!bar || !txt) return;
+
+        // If explicitly flagged as full
+        if (isStorageFull) {
+            bar.style.width = "100%";
+            bar.className = 'progress-bar bg-danger';
+            txt.innerText = "STORAGE FULL (Limit Reached)";
+            return;
+        }
+
+        // Standard Calculation
         let total = 0;
         for (let x in localStorage) {
-            // JS stores strings as UTF-16, but localStorage limits are based on character count (usually 5M chars)
             if (localStorage.hasOwnProperty(x)) {
                 total += localStorage[x].length;
             }
         }
 
-        // 2. Constants (Approx 5MB Limit)
         const max = 5 * 1024 * 1024;
-        const pct = (total / max) * 100;
+        const pct = Math.min((total / max) * 100, 100);
 
-        // 3. Formatting
         const usedKB = (total / 1024).toFixed(2);
         const usedMB = (total / (1024 * 1024)).toFixed(2);
         const displayTxt = total > 1024 * 1024 ? `${usedMB} MB` : `${usedKB} KB`;
 
-        // 4. Update DOM
-        const bar = document.getElementById('storage-bar');
-        const txt = document.getElementById('storage-text');
+        bar.style.width = `${pct}%`;
+        txt.innerText = `${displayTxt} Used`;
 
-        if(bar && txt) {
-            bar.style.width = `${pct}%`;
-            txt.innerText = `${displayTxt} Used`;
-
-            // Color Coding based on usage
-            bar.className = 'progress-bar'; // Reset
-            if(pct < 50) bar.classList.add('bg-success');       // Green
-            else if(pct < 80) bar.classList.add('bg-warning');  // Yellow
-            else bar.classList.add('bg-danger');                // Red
-        }
+        bar.className = 'progress-bar';
+        if(pct < 50) bar.classList.add('bg-success');
+        else if(pct < 90) bar.classList.add('bg-warning');
+        else bar.classList.add('bg-danger');
     };
 
     function loadSettings() {
@@ -1636,33 +1641,58 @@ const onPointerMove = e => {
         saveState();
     };
 
-function buildAndAddMesh(geometry, name, geoParams = null) {
-    if (!geometry.attributes.uv) {
-        const count = geometry.attributes.position.count;
-        geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(count * 2), 2));
+function buildAndAddMesh(geometry, name, geoParams = null, incomingMaterial = null) {
+        // Ensure UVs exist (Critical for textures)
+        if (!geometry.attributes.uv) {
+            const count = geometry.attributes.position.count;
+            geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(count * 2), 2));
+        }
+
+        // Center the geometry for easier manipulation
+        geometry.computeBoundingBox();
+        geometry.center();
+
+        let material;
+
+        if (incomingMaterial) {
+            // 1. USE IMPORTED MATERIAL (TEXTURES)
+            // We clone it so if you import the same file twice, you can edit them independently
+            material = incomingMaterial.clone();
+
+            // Ensure wireframe toggle respects global settings
+            material.wireframe = appSettings.wireframe;
+
+            // Fix for some scanners exporting dark materials
+            if(material.map) material.map.colorSpace = THREE.SRGBColorSpace;
+
+            // Ensure we can see it (some imports come in with 0 opacity)
+            material.transparent = false;
+            material.opacity = 1.0;
+        } else {
+            // 2. DEFAULT BLUE MATERIAL
+            material = new THREE.MeshStandardMaterial({
+                color: 0x0d6efd,
+                roughness: 0.4,
+                metalness: 0.2,
+                wireframe: appSettings.wireframe
+            });
+        }
+
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.position.set(0, 0, 10);
+
+        mesh.userData = { isHole: false, name: name, geoParams: geoParams };
+
+        scene.add(mesh);
+        selectObject(mesh);
+        updateObjectList();
+        saveState();
+        window.requestRender();
+
+        return mesh;
     }
-
-    geometry.computeBoundingBox();
-    geometry.center();
-
-    const material = new THREE.MeshStandardMaterial({
-        color: 0x0d6efd, roughness: 0.4, metalness: 0.2, wireframe: appSettings.wireframe
-    });
-
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.position.set(0, 0, 10);
-
-    mesh.userData = { isHole: false, name: name, geoParams: geoParams };
-
-    scene.add(mesh);
-    selectObject(mesh);
-    updateObjectList();
-    saveState();
-
-    return mesh; // Return reference so we can rotate it in dAdd
-}
 function updateParametricUI(obj) {
         const container = document.getElementById("shape-params");
         container.innerHTML = ""; // Clear previous
@@ -1933,17 +1963,38 @@ const updatePropertiesPanel = () => {
         // 5. Force Render (Important for responsiveness)
         window.requestRender();
     };
-    window.toggleMergeStatus = uuid => { const t = scene.getObjectByProperty("uuid", uuid); if(t) { t.userData.markForMerge = !t.userData.markForMerge; updateMergeButton(); } };
+// --- LIST INTERACTION FUNCTIONS ---
+
+    // This function needs to be explicitly attached to 'window' so the HTML onclick can access it.
+    window.selectObjectFromList = (uuid) => {
+        const t = scene.getObjectByProperty("uuid", uuid);
+        if(t) window.selectObject(t); // Also ensure selectObject is called with window prefix
+    };
+
+    // This one you already have correctly prefixed
+    window.toggleMergeStatus = uuid => {
+        const t = scene.getObjectByProperty("uuid", uuid);
+        if(t) {
+            t.userData.markForMerge = !t.userData.markForMerge;
+            updateMergeButton();
+        }
+    };
+
     const updateObjectList = () => {
         const list = document.getElementById("object-list"); list.innerHTML = "";
         scene.children.filter(e => e.userData.name).forEach(t => {
-            const li = document.createElement("li"); li.className = `object-list-item ${selectedObjects.includes(t)?'selected':''}`; li.onclick = () => window.selectObjectFromList(t.uuid);
+            const li = document.createElement("li"); li.className = `object-list-item ${selectedObjects.includes(t)?'selected':''}`;
+            // This is where you call the window-prefixed function
+            li.onclick = () => window.selectObjectFromList(t.uuid);
             li.innerHTML = `<input type="checkbox" class="form-check-input me-2" ${t.userData.markForMerge?'checked':''} onclick="event.stopPropagation(); window.toggleMergeStatus('${t.uuid}')"> <span>${t.userData.name}</span>`;
             list.appendChild(li);
         });
         updateMergeButton();
     };
-    const updateMergeButton = () => { document.getElementById("merge-btn").innerText = `Merge (${scene.children.filter(e => e.userData.markForMerge).length})`; };
+
+    const updateMergeButton = () => {
+        document.getElementById("merge-btn").innerText = `Merge (${scene.children.filter(e => e.userData.markForMerge).length})`;
+    };
 function cleanObject(obj) {
         if (!obj) return;
 
@@ -2297,62 +2348,103 @@ window.toggleRulerMode = () => {
         }
     };
 
-    window.dImportFile = function(input) {
-            if (!input.files || !input.files[0]) return;
-            const file = input.files[0];
-            const ext = file.name.split('.').pop().toLowerCase();
-            const reader = new FileReader();
+window.dImportFile = function(input) {
+        if (!input.files || input.files.length === 0) return;
 
-            // HELPER: Checks if geometry is "Microscopic" (AR Scale) and fixes it
-            const checkAndFixScale = (geometry) => {
-                geometry.computeBoundingBox();
-                const size = new THREE.Vector3();
-                geometry.boundingBox.getSize(size);
-                const maxDim = Math.max(size.x, size.y, size.z);
+        const files = Array.from(input.files);
+        const fileMap = {};
 
-                // THRESHOLD: If object < 2.0 units, it's likely Meters (0.001 scale)
-                // We scale it x1000 to bring it back to Millimeters
-                if (maxDim < 2.0 && maxDim > 0.0001) {
-                    console.log("Detected AR Scale (Meters). Converting to mm (x1000).");
-                    geometry.scale(1000, 1000, 1000);
-                }
-                return geometry;
-            };
+        // 1. Create Blob URLs for every file and map them by name
+        files.forEach(f => {
+            fileMap[f.name] = URL.createObjectURL(f);
+        });
 
-            reader.onload = function(e) {
-                const contents = e.target.result;
-                try {
-                    if(ext === 'stl') {
-                        const geo = new STLLoader().parse(contents);
-                        buildAndAddMesh(checkAndFixScale(geo), file.name);
-                    }
-                    else if (ext === 'obj') {
-                        const objGroup = new OBJLoader().parse(contents);
-                        objGroup.traverse(child => {
-                            if(child.isMesh) buildAndAddMesh(checkAndFixScale(child.geometry), file.name);
-                        });
-                    }
-                    else if (ext === 'gltf' || ext === 'glb') {
-                        new GLTFLoader().parse(contents, '', (gltf) => {
-                            gltf.scene.traverse(child => {
-                                if(child.isMesh) buildAndAddMesh(checkAndFixScale(child.geometry), file.name);
-                            });
-                        });
-                    }
-                    // --- FIXED USDZ SECTION ---
-                    else if (ext === 'usdz') {
-                        // USDZLoader.parse returns the group immediately (Sync), not a Promise
-                        const group = new USDZLoader().parse(contents);
-                        group.traverse(child => {
-                            if(child.isMesh) buildAndAddMesh(checkAndFixScale(child.geometry), file.name);
-                        });
-                    }
-                } catch (err) { console.error(err); alert("Import failed: " + err.message); }
-                input.value = '';
-            };
+        // 2. Setup the Loading Manager to redirect network requests to our Blobs
+        const manager = new THREE.LoadingManager();
+        manager.setURLModifier((url) => {
+            // If Three.js asks for "folder/texture.jpg", we strip path and look for "texture.jpg" in our list
+            const fileName = url.replace(/^.*[\\\/]/, '');
+            return fileMap[fileName] || url;
+        });
 
-            if(ext === 'obj') reader.readAsText(file); else reader.readAsArrayBuffer(file);
+        // 3. Helper for Scaling (Same as before)
+        const checkAndFixScale = (geometry) => {
+            geometry.computeBoundingBox();
+            const size = new THREE.Vector3();
+            geometry.boundingBox.getSize(size);
+            const maxDim = Math.max(size.x, size.y, size.z);
+            if (maxDim < 2.0 && maxDim > 0.0001) {
+                console.log("Detected AR Scale. Fixing...");
+                geometry.scale(1000, 1000, 1000);
+            }
+            return geometry;
         };
+
+        // 4. Find the Main Model File
+        const mainFile = files.find(f => /\.(obj|stl|gltf|glb|usdz)$/i.test(f.name));
+        if (!mainFile) return alert("No model file (.obj, .stl, .glb) found in selection.");
+
+        const ext = mainFile.name.split('.').pop().toLowerCase();
+        const url = fileMap[mainFile.name]; // Get the blob URL for the main file
+
+        // 5. Load based on extension
+        if (ext === 'obj') {
+            // Check if there is a matching MTL file in the selection
+            const mtlFile = files.find(f => f.name.endsWith('.mtl'));
+
+            const loadObj = (materials = null) => {
+                const loader = new OBJLoader(manager);
+                if(materials) {
+                    loader.setMaterials(materials);
+                }
+                loader.load(url, (objGroup) => {
+                    objGroup.traverse(child => {
+                        if (child.isMesh) buildAndAddMesh(checkAndFixScale(child.geometry), mainFile.name, null, child.material);
+                    });
+                });
+            };
+
+            if (mtlFile) {
+                // Load MTL first, then OBJ
+                const mtlLoader = new MTLLoader(manager);
+                mtlLoader.load(fileMap[mtlFile.name], (materials) => {
+                    materials.preload();
+                    loadObj(materials);
+                });
+            } else {
+                // Just load OBJ
+                loadObj();
+            }
+        }
+        else if (ext === 'stl') {
+            new STLLoader(manager).load(url, (geo) => {
+                buildAndAddMesh(checkAndFixScale(geo), mainFile.name, null, null);
+            });
+        }
+        else if (ext === 'gltf' || ext === 'glb') {
+            new GLTFLoader(manager).load(url, (gltf) => {
+                gltf.scene.traverse(child => {
+                    if (child.isMesh) buildAndAddMesh(checkAndFixScale(child.geometry), mainFile.name, null, child.material);
+                });
+            });
+        }
+        else if (ext === 'usdz') {
+            // USDZ usually self-contained, logic remains similar but uses the Blob URL
+            // Note: USDZLoader doesn't fully support LoadingManager in all versions,
+            // but usually works fine for textures embedded in the archive.
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const group = new USDZLoader().parse(e.target.result);
+                group.traverse(child => {
+                    if (child.isMesh) buildAndAddMesh(checkAndFixScale(child.geometry), mainFile.name, null, child.material);
+                });
+            };
+            reader.readAsArrayBuffer(mainFile);
+        }
+
+        // Cleanup: Reset input so you can select the same file again
+        input.value = '';
+    };
 
     window.triggerExport = () => window.downloadExport(document.getElementById("export-format").value);
 
@@ -2456,8 +2548,19 @@ window.toggleRulerMode = () => {
         }
     }
 
-    function saveState() {
+function saveState() {
+        // 1. Always update view when state changes (Fixes UI lag)
         window.requestRender();
+
+        // 2. Stop immediately if we already know storage is full
+        if (isStorageFull) {
+            const status = document.getElementById("auto-save-status");
+            status.innerText = "Storage Full - Auto-save Disabled";
+            status.style.opacity = 1;
+            status.style.background = "rgba(255, 0, 0, 0.6)"; // Red alert
+            return;
+        }
+
         if(!isUndoRedoAction) {
             if (historyStep < historyStack.length - 1) {
                 historyStack = historyStack.slice(0, historyStep + 1);
@@ -2469,14 +2572,42 @@ window.toggleRulerMode = () => {
 
         clearTimeout(saveTimeout);
         saveTimeout = setTimeout(()=>{
+            // Double check flag inside timeout
+            if (isStorageFull) return;
+
             const currentSnapshot = historyStack[historyStep];
             if(!currentSnapshot) return;
+
             const b64 = uint8ToBase64(currentSnapshot);
-            localStorage.setItem("3d_save", b64);
-            const el = document.getElementById("auto-save-status");
-            window.updateStorageUI();
-            el.style.opacity=1;
-            setTimeout(()=>el.style.opacity=0, 2000);
+
+            try {
+                // TRY TO SAVE
+                localStorage.setItem("3d_save", b64);
+
+                // If successful:
+                const el = document.getElementById("auto-save-status");
+                el.innerText = "Saved";
+                el.style.background = "rgba(0,0,0,0.6)";
+                el.style.opacity = 1;
+                setTimeout(()=>el.style.opacity=0, 2000);
+                window.updateStorageUI();
+
+            } catch (e) {
+                // CATCH QUOTA ERROR
+                if (e.name === 'QuotaExceededError' || e.code === 22) {
+                    console.warn("Local Storage Full! Disabling Auto-save.");
+                    isStorageFull = true; // <--- Disable future attempts
+
+                    const el = document.getElementById("auto-save-status");
+                    el.innerText = "Scene too big to Auto-save";
+                    el.style.background = "rgba(220, 53, 69, 0.8)"; // Red
+                    el.style.opacity = 1;
+                    // Don't fade out immediately so user sees it
+                    setTimeout(()=>el.style.opacity=0, 5000);
+
+                    window.updateStorageUI(); // Update bar to show full
+                }
+            }
         }, 1000);
     }
 

@@ -131,6 +131,7 @@
             font-size: 0.8rem;
             max-height: 80vh;
             overflow-y: auto;
+            transition: height 0.3s ease;
         }
         .float-props input, .float-props select { font-size: 0.8rem; }
         .float-props .row { --bs-gutter-x: 0.5rem; } /* Tighten grid */
@@ -145,12 +146,15 @@
         }
         /* When minimized class is added */
         .float-list.minimized {
-            height: 40px;
-            overflow: hidden;
+            height: 40px !important; /* Header height only */
+            overflow: hidden !important;
         }
         .float-list.minimized #object-list,
         .float-list.minimized .btn-group {
             display: none;
+        }
+        .float-props.minimized #content-props {
+            display: none; /* Hide the innards */
         }
 
         /* iPhone Safe Areas (Notch/Home Bar) */
@@ -277,37 +281,47 @@
             </div>
         </div>
 
-    <!-- Properties (Top Right) -->
-    <div class="float-panel float-props" id="prop-panel">
-        <div class="d-flex justify-content-between border-bottom pb-1 mb-2">
+<!-- Properties (Top Right) -->
+    <div class="float-panel float-props" id="prop-panel" style="overflow-y: auto; max-height: 70vh;">
+        <!-- Header: Clicking this minimizes the panel but KEEPS selection -->
+        <div class="d-flex justify-content-between border-bottom pb-1 mb-2"
+             onclick="window.togglePanel('prop-panel')" style="cursor:pointer">
             <span class="fw-bold small">Properties</span>
-            <button class="btn-close btn-sm" onclick="window.selectObject(null)"></button>
-        </div>
-        <div class="mb-2">
-            <input type="text" id="opt-obj-name" class="form-control form-control-sm mb-1" placeholder="Name" onchange="window.updateObjectName(this.value)">
-            <div class="d-flex justify-content-between align-items-center">
-                 <select id="opt-d-type" class="form-select form-select-sm w-50" onchange="window.dUpdMat(this.value)">
-                    <option value="solid">Solid</option>
-                    <option value="hole">Hole (Sub)</option>
-                 </select>
-                 <div class="color-picker" id="color-picker"></div>
+            <div>
+                <!-- Toggle Icon -->
+                <i class="bi bi-chevron-down small me-2" id="icon-panel-props"></i>
+                <!-- Deselect (X) Button -->
+                <button class="btn-close btn-sm" onclick="event.stopPropagation(); window.selectObject(null)"></button>
             </div>
         </div>
-        <!-- DYNAMIC SHAPE PARAMETERS -->
-        <div id="shape-params" class="mb-2 pt-2 border-top" style="display:none; background:#f8f9fa; padding:5px; border-radius:4px;">
-            <!-- Inputs will be injected here by JS -->
-        </div>
-        <div class="row g-1 mb-2">
-            <label class="small text-muted col-12 mb-0">Size (mm)</label>
-            <div class="col-4"><input type="number" id="opt-sz-x" class="form-control form-control-sm" placeholder="W" onchange="window.dSz()"></div>
-            <div class="col-4"><input type="number" id="opt-sz-y" class="form-control form-control-sm" placeholder="L" onchange="window.dSz()"></div>
-            <div class="col-4"><input type="number" id="opt-sz-z" class="form-control form-control-sm" placeholder="H" onchange="window.dSz()"></div>
-        </div>
-        <div class="row g-1">
-            <label class="small text-muted col-12 mb-0">Rotation (Deg)</label>
-            <div class="col-4"><input type="number" id="opt-rot-x" class="form-control form-control-sm" placeholder="X" onchange="window.dRot()"></div>
-            <div class="col-4"><input type="number" id="opt-rot-y" class="form-control form-control-sm" placeholder="Y" onchange="window.dRot()"></div>
-            <div class="col-4"><input type="number" id="opt-rot-z" class="form-control form-control-sm" placeholder="Z" onchange="window.dRot()"></div>
+
+        <!-- Inner Content (Hidden when minimized) -->
+        <div id="content-props">
+            <div class="mb-2">
+                <input type="text" id="opt-obj-name" class="form-control form-control-sm mb-1" placeholder="Name" onchange="window.updateObjectName(this.value)">
+                <div class="d-flex justify-content-between align-items-center">
+                     <select id="opt-d-type" class="form-select form-select-sm w-50" onchange="window.dUpdMat(this.value)">
+                        <option value="solid">Solid</option>
+                        <option value="hole">Hole (Sub)</option>
+                     </select>
+                     <div class="color-picker" id="color-picker"></div>
+                </div>
+            </div>
+            <!-- DYNAMIC SHAPE PARAMETERS -->
+            <div id="shape-params" class="mb-2 pt-2 border-top" style="display:none; background:#f8f9fa; padding:5px; border-radius:4px;"></div>
+
+            <div class="row g-1 mb-2">
+                <label class="small text-muted col-12 mb-0">Size (mm)</label>
+                <div class="col-4"><input type="number" id="opt-sz-x" class="form-control form-control-sm" placeholder="W" onchange="window.dSz()"></div>
+                <div class="col-4"><input type="number" id="opt-sz-y" class="form-control form-control-sm" placeholder="L" onchange="window.dSz()"></div>
+                <div class="col-4"><input type="number" id="opt-sz-z" class="form-control form-control-sm" placeholder="H" onchange="window.dSz()"></div>
+            </div>
+            <div class="row g-1">
+                <label class="small text-muted col-12 mb-0">Rotation (Deg)</label>
+                <div class="col-4"><input type="number" id="opt-rot-x" class="form-control form-control-sm" placeholder="X" onchange="window.dRot()"></div>
+                <div class="col-4"><input type="number" id="opt-rot-y" class="form-control form-control-sm" placeholder="Y" onchange="window.dRot()"></div>
+                <div class="col-4"><input type="number" id="opt-rot-z" class="form-control form-control-sm" placeholder="Z" onchange="window.dRot()"></div>
+            </div>
         </div>
     </div>
 
@@ -506,21 +520,31 @@ import * as THREE from "three";
 
 // --- MOBILE UI LOGIC ---
     window.togglePanel = (id) => {
-        const el = document.getElementById(id);
-        el.classList.toggle('minimized');
+            // 1. Toggle class
+            const el = document.getElementById(id);
+            el.classList.toggle('minimized');
 
-        // Flip Icon
-        const icon = document.getElementById('icon-' + id);
-        if(icon) {
-            if(el.classList.contains('minimized')) {
-                icon.classList.remove('bi-chevron-down');
-                icon.classList.add('bi-chevron-up');
-            } else {
-                icon.classList.remove('bi-chevron-up');
-                icon.classList.add('bi-chevron-down');
+            // 2. Handle Icon Flipping
+            // We look for an icon with ID "icon-" + panelID
+            // e.g. "icon-panel-list" or "icon-panel-props"
+            const icon = document.getElementById('icon-' + id);
+
+            // Note: For properties panel, the ID is 'prop-panel', so icon is 'icon-panel-props'
+            // Let's normalize it.
+            let targetIcon = icon;
+            if(id === 'prop-panel') targetIcon = document.getElementById('icon-panel-props');
+            if(id === 'panel-list') targetIcon = document.getElementById('icon-panel-list');
+
+            if(targetIcon) {
+                if(el.classList.contains('minimized')) {
+                    targetIcon.classList.remove('bi-chevron-down');
+                    targetIcon.classList.add('bi-chevron-up');
+                } else {
+                    targetIcon.classList.remove('bi-chevron-up');
+                    targetIcon.classList.add('bi-chevron-down');
+                }
             }
-        }
-    };
+        };
 
 
     window.toggleToolbar = () => {
@@ -1728,32 +1752,40 @@ window.dSz = () => {
     window.dDrop = function() { if (selectedObjects.length === 0) return alert("Select object."); selectedObjects.forEach(obj => { const box = new THREE.Box3().setFromObject(obj); obj.position.z -= box.min.z; }); updateTinkerLabels(); updateLiftConePos(); saveState(); };
 
     function selectObject(obj, multi = false) {
-        if (!multi) {
-            selectedObjects.forEach(o => { if(o.material) o.material.emissive.setHex(0); });
-            selectedObjects = [];
-            document.querySelectorAll(".object-list-item").forEach(el => el.classList.remove("selected"));
-        }
-        if (obj) {
-            if (selectedObjects.includes(obj)) {
-                if (multi) { selectedObjects = selectedObjects.filter(o => o !== obj); if(obj.material) obj.material.emissive.setHex(0); }
-            } else {
-                selectedObjects.push(obj);
-                if(obj.material && !obj.userData.isRuler) obj.material.emissive.setHex(MESH_HIGHLIGHT_COLOR);
-                if(obj.userData.name) { const el = document.getElementById(obj.uuid); if(el) el.classList.add("selected"); }
+            if (!multi) {
+                selectedObjects.forEach(o => { if(o.material) o.material.emissive.setHex(0); });
+                selectedObjects = [];
+                document.querySelectorAll(".object-list-item").forEach(el => el.classList.remove("selected"));
             }
+            if (obj) {
+                if (selectedObjects.includes(obj)) {
+                    if (multi) { selectedObjects = selectedObjects.filter(o => o !== obj); if(obj.material) obj.material.emissive.setHex(0); }
+                } else {
+                    selectedObjects.push(obj);
+                    if(obj.material && !obj.userData.isRuler) obj.material.emissive.setHex(MESH_HIGHLIGHT_COLOR);
+                    if(obj.userData.name) { const el = document.getElementById(obj.uuid); if(el) el.classList.add("selected"); }
+                }
+            }
+
+            // Handle Gizmo
+            if (selectedObjects.length === 1) {
+                tCtrl.attach(selectedObjects[0]);
+                if(selectedObjects[0].userData.isRuler) tCtrl.setMode('translate');
+                updateLiftConePos(); updateTinkerLabels();
+            } else {
+                tCtrl.detach();
+                updateLiftConePos();
+                activeLabels.forEach(l => scene.remove(l)); activeLabels.length = 0;
+                while(schematicGroup.children.length > 0){ schematicGroup.remove(schematicGroup.children[0]); }
+            }
+
+            updatePropertiesPanel();
+            updateObjectList();
+
+            // --- CRITICAL UPDATE ---
+            // Force a re-render so the gizmo disappears immediately
+            window.requestRender();
         }
-        if (selectedObjects.length === 1) {
-            tCtrl.attach(selectedObjects[0]);
-            if(selectedObjects[0].userData.isRuler) tCtrl.setMode('translate');
-            updateLiftConePos(); updateTinkerLabels();
-        } else {
-            tCtrl.detach(); updateLiftConePos();
-            activeLabels.forEach(l => scene.remove(l)); activeLabels.length = 0;
-            while(schematicGroup.children.length > 0){ schematicGroup.remove(schematicGroup.children[0]); }
-        }
-        updatePropertiesPanel();
-        updateObjectList();
-    }
 
 const updatePropertiesPanel = () => {
         const panel = document.getElementById("prop-panel");
@@ -1762,6 +1794,17 @@ const updatePropertiesPanel = () => {
 
         if (selectedObjects.length === 1 && !selectedObjects[0].userData.isRuler) {
             panel.style.display = "block";
+            // --- NEW: Auto-Expand on Selection ---
+            // If the panel was minimized, open it so user sees they selected something.
+            // But if they are just dragging the object (and this function runs on drag),
+            // we don't want it flickering.
+            // Since this runs on selection, we can just remove 'minimized'.
+            if (!tCtrl.dragging) {
+                 panel.classList.remove('minimized');
+                 const icon = document.getElementById('icon-panel-props');
+                 if(icon) { icon.classList.remove('bi-chevron-up'); icon.classList.add('bi-chevron-down'); }
+            }
+            // -------------------------------------
             const n = selectedObjects[0];
 
             // Name & Type
@@ -1837,7 +1880,59 @@ const updatePropertiesPanel = () => {
     window.setObjectColor = c => { const col = new THREE.Color(c); selectedObjects.forEach(o => o.material.color = col); updateColorPicker(col); saveState(); };
     const updateColorPicker = e => { const t = e.getHexString().toLowerCase(); document.querySelectorAll(".color-option").forEach(el => el.classList.toggle("selected", el.dataset.color.includes(t))); };
 
-    window.selectObjectFromList = uuid => { const t = scene.getObjectByProperty("uuid", uuid); if(t) selectObject(t); };
+
+    window.selectObject = (obj, multi = false) => {
+        // 1. Clear previous selection if not multi-select
+        if (!multi) {
+            selectedObjects.forEach(o => { if(o.material) o.material.emissive.setHex(0); });
+            selectedObjects = [];
+            document.querySelectorAll(".object-list-item").forEach(el => el.classList.remove("selected"));
+        }
+
+        // 2. Add new object to selection
+        if (obj) {
+            if (selectedObjects.includes(obj)) {
+                if (multi) {
+                    // Toggle off if already selected
+                    selectedObjects = selectedObjects.filter(o => o !== obj);
+                    if(obj.material) obj.material.emissive.setHex(0);
+                }
+            } else {
+                selectedObjects.push(obj);
+                // Highlight
+                if(obj.material && !obj.userData.isRuler) obj.material.emissive.setHex(MESH_HIGHLIGHT_COLOR);
+                // Highlight in list
+                if(obj.userData.name) {
+                    const el = document.getElementById(obj.uuid);
+                    if(el) el.classList.add("selected");
+                }
+            }
+        }
+
+        // 3. Attach/Detach Gizmo (TransformControls)
+        if (selectedObjects.length === 1) {
+            tCtrl.attach(selectedObjects[0]);
+            // If selecting the ruler, default to move mode
+            if(selectedObjects[0].userData.isRuler) tCtrl.setMode('translate');
+
+            updateLiftConePos();
+            updateTinkerLabels();
+        } else {
+            tCtrl.detach();
+            updateLiftConePos();
+            // Clear dimensions labels
+            activeLabels.forEach(l => scene.remove(l));
+            activeLabels.length = 0;
+            while(schematicGroup.children.length > 0){ schematicGroup.remove(schematicGroup.children[0]); }
+        }
+
+        // 4. Update UI
+        updatePropertiesPanel();
+        updateObjectList();
+
+        // 5. Force Render (Important for responsiveness)
+        window.requestRender();
+    };
     window.toggleMergeStatus = uuid => { const t = scene.getObjectByProperty("uuid", uuid); if(t) { t.userData.markForMerge = !t.userData.markForMerge; updateMergeButton(); } };
     const updateObjectList = () => {
         const list = document.getElementById("object-list"); list.innerHTML = "";

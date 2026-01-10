@@ -641,7 +641,7 @@ import * as THREE from "three";
         }
     }
 
-    function handleAlignClick(ray) {
+function handleAlignClick(ray) {
         if (alignState === 'pick-source') {
             // User clicking their own object to pick the face
             const intersects = ray.intersectObject(selectedObjects[0], false);
@@ -649,21 +649,14 @@ import * as THREE from "three";
                 const hit = intersects[0];
 
                 // Store World Normal of the face
-                // Note: face.normal is local. We need it relative to object rotation.
-                // However, for the math, we actually want the vector relative to the object's LOCAL orientation
-                // so we can rotate the whole object later.
-
-                // Let's store the normal in World Space as it currently exists:
                 const worldNormal = hit.face.normal.clone().applyQuaternion(hit.object.quaternion).normalize();
 
-                // Store the point clicked relative to the center of the object (Local offset unrotated)
-                // We calculate this by taking world point, converting to local, but keeping scaling in mind?
-                // Simpler: vector from center to world hit point, then un-rotate it.
+                // Store the point clicked relative to the center
                 const localPoint = hit.point.clone().sub(hit.object.position).applyQuaternion(hit.object.quaternion.clone().invert());
 
                 alignSourceInfo = {
-                    normal: worldNormal, // Direction facing out
-                    localPoint: localPoint // Offset from center
+                    normal: worldNormal,
+                    localPoint: localPoint
                 };
 
                 // Create Ghost
@@ -690,6 +683,12 @@ import * as THREE from "three";
         }
 
         if (alignState === 'pick-target') {
+            // --- CRITICAL FIX FOR MOBILE ---
+            // On touch, we didn't "hover" first, so the ghost doesn't know where to go.
+            // We FORCE the calculation right now using the click ray.
+            handleAlignHover(ray, null);
+            // -------------------------------
+
             if (alignGhost && alignGhost.visible) {
                 // APPLY TRANSFORM
                 const obj = selectedObjects[0];
@@ -707,7 +706,7 @@ import * as THREE from "three";
 
                 // Reset UI
                 document.querySelectorAll(".btn-tool").forEach(b => b.classList.remove("active-tool"));
-                window.setMode('translate'); // Go back to translate
+                window.setMode('translate');
 
                 const status = document.getElementById("auto-save-status");
                 status.innerText = "Aligned";
@@ -716,6 +715,7 @@ import * as THREE from "three";
                 updateTinkerLabels();
                 updatePropertiesPanel();
                 saveState();
+                window.requestRender();
             }
             return true;
         }

@@ -156,6 +156,23 @@
         .float-props.minimized #content-props {
             display: none; /* Hide the innards */
         }
+        /* --- PREVENT IPHONE TEXT SELECTION --- */
+        #auto-save-status,
+        #fps-display,
+        .float-header,
+        .float-list,
+        .float-props,
+        .float-toolbar {
+            -webkit-touch-callout: none !important; /* Disable magnifying glass */
+            -webkit-user-select: none !important;   /* Disable text selection */
+            user-select: none !important;
+        }
+
+        /* Re-enable for inputs only */
+        input {
+            -webkit-user-select: text !important;
+            user-select: text !important;
+        }
 
         /* iPhone Safe Areas (Notch/Home Bar) */
         body {
@@ -463,6 +480,8 @@ import * as THREE from "three";
     let schematicGroup;
     const activeLabels = [];
     const MESH_HIGHLIGHT_COLOR = 0xff0000;
+    let isInteracting = false;
+    let needsRender = true;
 
     // --- ALIGN / SNAP FACE TOOL ---
     let alignState = 'none'; // 'none', 'pick-source', 'pick-target'
@@ -484,6 +503,7 @@ import * as THREE from "three";
     let isFpsLocked = false;
     let fpsFrames = 0;
     let fpsLastTime = 0;
+    let frameId;
 
     let isFaceLoftMode = false;
     let selectedFacesData = [];
@@ -880,9 +900,7 @@ import * as THREE from "three";
         fpsLastTime = then; // Initialize counter time
 
 // --- OPTIMIZATION GLOBALS ---
-    let frameId;
-    let isInteracting = false;
-    let needsRender = true; // Flag to request a frame
+
 
     // Call this whenever you change something (move object, change color, add shape)
     window.requestRender = () => { needsRender = true; };
@@ -1277,7 +1295,58 @@ function updateTinkerLabels() {
     }
 
     // --- INTERACTION ---
+// --- IMPROVED INTERACTION LOGIC ---
+
+    // 1. Variables to track "Click vs Drag"
+    let pointerStartX = 0;
+    let pointerStartY = 0;
+
+    // 2. UPDATED POINTER DOWN
     const onPointerDown = e => {
+        // Just record position, don't trigger logic yet
+        pointerStartX = e.clientX;
+        pointerStartY = e.clientY;
+
+        // Handle Lift Tool (Exceptions)
+        if (liftCone.visible) {
+            const rect = ren.domElement.getBoundingClientRect();
+            const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+            ray.setFromCamera(mouse, cam);
+            const coneHit = ray.intersectObject(liftCone);
+            if (coneHit.length > 0) {
+                isLifting = true;
+                ctrl.enabled = false;
+                liftStartMouseY = e.clientY;
+                liftStartObjZ = selectedObjects[0].position.z;
+                liftCone.material.color.setHex(0xffff00);
+            }
+        }
+
+        // Mark interaction for render loop
+        isInteracting = true;
+        window.requestRender();
+    };
+
+    // 3. UPDATED POINTER UP (The Brains)
+    const onPointerUp = e => {
+        isInteracting = false; // Stop high-refresh rendering
+
+        // Check for Lift Tool
+        if (isLifting) {
+            isLifting = false;
+            ctrl.enabled = true;
+            liftCone.material.color.setHex(0x222222);
+            saveState();
+            return;
+        }
+
+        // --- CALCULATE DRAG DISTANCE ---
+        const dist = Math.sqrt(Math.pow(e.clientX - pointerStartX, 2) + Math.pow(e.clientY - pointerStartY, 2));
+
+        // If moved more than 5 pixels, it was a Camera Rotation/Zoom. Ignore click.
+        if (dist > 5) return;
+
+        // --- CLICK LOGIC BELOW ---
         if (e.target.tagName === 'INPUT') return;
         if (tCtrl.dragging || tCtrl.axis) return;
 
@@ -1285,30 +1354,35 @@ function updateTinkerLabels() {
         const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
         ray.setFromCamera(mouse, cam);
 
-        // 1. CHECK ALIGN TOOL FIRST
+        // A. ALIGN TOOL
         if (alignState !== 'none') {
             if(handleAlignClick(ray)) return;
         }
 
+        // B. LOFT FACE SELECTION
         if (isFaceLoftMode) {
             const intersects = ray.intersectObjects(scene.children.filter(o => o.isMesh && o !== liftCone && !o.userData.isRuler && o.visible), false);
             if (intersects.length > 0) handleFaceSelection(intersects[0]);
             return;
         }
 
-        if (liftCone.visible) { const coneHit = ray.intersectObject(liftCone); if (coneHit.length > 0) { isLifting = true; ctrl.enabled = false; liftStartMouseY = e.clientY; liftStartObjZ = selectedObjects[0].position.z; liftCone.material.color.setHex(0xffff00); return; } }
-
+        // C. STANDARD SELECTION
         const intersects = ray.intersectObjects(scene.children, true);
         const validHits = intersects.filter(hit => {
-            const o = hit.object; let p = o.parent; while(p) { if(p === schematicGroup || p === faceMarkerGroup) return false; p = p.parent; }
+            const o = hit.object;
+            let p = o.parent;
+            while(p) { if(p === schematicGroup || p === faceMarkerGroup) return false; p = p.parent; }
             return (o.isMesh || o.isLine) && o !== liftCone && o !== schematicGroup && o !== faceMarkerGroup;
         });
 
         if (validHits.length > 0) {
-            let hitObj = validHits[0].object; let parent = hitObj.parent;
+            let hitObj = validHits[0].object;
+            let parent = hitObj.parent;
             if(parent && parent.userData && parent.userData.isRuler) selectObject(parent);
             else if (hitObj.userData.name) selectObject(hitObj, e.shiftKey);
-        } else selectObject(null);
+        } else {
+            selectObject(null);
+        }
     };
 
     function handleFaceSelection(hit) {
@@ -1443,13 +1517,18 @@ function getConnectedFlatSurface(mesh, startFaceIndex, targetNormal) {
     }
 
 const onPointerMove = e => {
+        // Mark interaction so render loop runs smooth
+        isInteracting = true;
+        window.requestRender();
+
         // 1. UPDATE GHOST IF IN ALIGN MODE
-        if (alignState !== 'none') {
+        // Only update if NOT clicking/dragging (prevents ghost flying while rotating camera)
+        if (alignState !== 'none' && e.buttons === 0) {
             const rect = ren.domElement.getBoundingClientRect();
             const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
             ray.setFromCamera(mouse, cam);
             handleAlignHover(ray, mouse);
-            return; // Skip normal highlight logic
+            return;
         }
 
         // ... Existing Lift Logic ...
@@ -1461,7 +1540,7 @@ const onPointerMove = e => {
             updatePropertiesPanel();
         }
     };
-    const onPointerUp = e => { if (isLifting) { isLifting = false; ctrl.enabled = true; liftCone.material.color.setHex(0x222222); saveState(); } };
+
 
     window.setMode = mode => { if(tCtrl) tCtrl.setMode(mode); document.querySelectorAll(".btn-tool").forEach(b => b.classList.remove("active-tool")); const btn = document.querySelector(`button[data-mode="${mode}"]`); if(btn) btn.classList.add("active-tool"); };
 

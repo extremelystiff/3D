@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-<title>3D Creator - Zstd & Undo (Fixed)</title>
+<title>3D Creator - Project History & Unmerge</title>
 
 <!-- 1. CSS STYLES -->
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -55,9 +55,52 @@
     /* Top Header */
     .float-header { top: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; padding: 8px 15px; align-items: center;}
 
-    /* Object List (Bottom Right) */
-    .float-list { bottom: 20px; right: 20px; width: 220px; max-height: 300px; display: flex; flex-direction: column; }
 
+    /* Object List (Bottom Right) - Fixed Layout */
+    .float-list {
+        bottom: 20px;
+        right: 20px;
+        width: 220px;
+
+        /* Constraint: Never grow taller than 40% of screen */
+        max-height: 40vh;
+        height: auto;
+
+        display: flex;
+        flex-direction: column;
+        overflow: hidden; /* Prevent outer scroll */
+    }
+
+    /* The Header (Objects label) */
+    .float-list > .panel-header {
+        flex-shrink: 0; /* Never squash header */
+    }
+
+    /* The Wrapper for List + Buttons */
+    #content-list {
+        display: flex;
+        flex-direction: column;
+        flex: 1;          /* Take up all remaining height */
+        min-height: 0;    /* Critical Fix for Flexbox scrolling */
+        padding-top: 5px;
+    }
+
+    /* The Scrollable List */
+    #object-list {
+        flex: 1;          /* Grow to fill space between header and buttons */
+        overflow-y: auto; /* Scroll ONLY this area */
+        margin-bottom: 10px; /* Space above buttons */
+        border-bottom: 1px solid #ddd;
+        list-style: none;
+        padding: 0;
+    }
+
+    /* The Buttons */
+    #content-list .btn-group {
+        flex-shrink: 0;   /* Never squash buttons */
+        width: 100%;
+        margin-bottom: 5px;
+    }
     /* Properties (Top Right) */
     .float-props { top: 20px; right: 20px; width: 240px; display: none; }
 
@@ -282,22 +325,27 @@
     </div>
 
     <!-- Object List (Bottom Right) -->
-        <div class="float-panel float-list" id="panel-list">
-            <div class="d-flex justify-content-between align-items-center mb-2 border-bottom pb-1"
-                onclick="window.togglePanel('panel-list')" style="cursor:pointer">
-                <span class="fw-bold small"><i class="bi bi-list-ul"></i> Objects</span>
-                <i class="bi bi-chevron-down small" id="icon-panel-list"></i>
-            </div>
+    <div class="float-panel float-list" id="panel-list">
+        <!-- Header: Added class 'panel-header' for CSS targeting -->
+        <div class="d-flex justify-content-between align-items-center mb-1 border-bottom pb-1 panel-header"
+            onclick="window.togglePanel('panel-list')" style="cursor:pointer">
+            <span class="fw-bold small"><i class="bi bi-list-ul"></i> Objects</span>
+            <i class="bi bi-chevron-down small" id="icon-panel-list"></i>
+        </div>
 
-            <!-- Content Container -->
-            <div id="content-list" class="d-flex flex-column" style="height:100%">
-                <ul id="object-list" class="mb-2" style="overflow-y:auto; list-style:none; padding:0; flex:1;"></ul>
-                <div class="btn-group w-100">
-                    <button class="btn btn-sm btn-warning" id="merge-btn" onclick="window.dMerge()">Merge (0)</button>
-                    <button class="btn btn-sm btn-danger" onclick="window.dDel()">Delete</button>
-                </div>
+        <!-- Content Container -->
+        <div id="content-list">
+            <!-- The List -->
+            <ul id="object-list"></ul>
+
+            <!-- The Buttons -->
+            <div class="btn-group">
+                <button class="btn btn-sm btn-warning" id="merge-btn" onclick="window.dMerge()">Merge (0)</button>
+                <button class="btn btn-sm btn-outline-dark" id="unmerge-btn" onclick="window.dUnmerge()" style="display:none;">Unmerge</button>
+                <button class="btn btn-sm btn-danger" onclick="window.dDel()">Delete</button>
             </div>
         </div>
+    </div>
 
 <!-- Properties (Top Right) -->
     <div class="float-panel float-props" id="prop-panel" style="overflow-y: auto; max-height: 70vh;">
@@ -356,6 +404,8 @@
         <div class="mb-3">
             <label class="small fw-bold">Format</label>
             <select id="export-format" class="form-select form-select-sm">
+                <!-- NEW PROJECT OPTION -->
+                <option value="json" style="font-weight:bold; color:#0d6efd;">★ Project (Editable, With History)</option>
                 <option value="stl">STL (3D Printing)</option>
                 <option value="obj">OBJ (Standard)</option>
                 <option value="gltf">GLTF (Web/Unity)</option>
@@ -367,6 +417,12 @@
             <button class="btn btn-primary" onclick="window.triggerExport()">
                 <i class="bi bi-download"></i> Download File
             </button>
+            <div class="divider my-1"></div>
+             <!-- NEW IMPORT PROJECT BUTTON -->
+            <button class="btn btn-sm btn-secondary" onclick="document.getElementById('project-upload').click()">
+                <i class="bi bi-folder2-open"></i> Open Project File
+            </button>
+            <input type="file" id="project-upload" accept=".json,.tinker" style="display:none" onchange="window.loadProjectFile(this)">
         </div>
     </div>
     <!-- Settings Panel -->
@@ -1517,12 +1573,11 @@ function getConnectedFlatSurface(mesh, startFaceIndex, targetNormal) {
     }
 
 const onPointerMove = e => {
-        // Mark interaction so render loop runs smooth
-        isInteracting = true;
+        // BUG FIX: Don't set isInteracting = true here.
+        // We only want a single frame update for hovering, not a continuous loop.
         window.requestRender();
 
         // 1. UPDATE GHOST IF IN ALIGN MODE
-        // Only update if NOT clicking/dragging (prevents ghost flying while rotating camera)
         if (alignState !== 'none' && e.buttons === 0) {
             const rect = ren.domElement.getBoundingClientRect();
             const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
@@ -2069,6 +2124,14 @@ const updatePropertiesPanel = () => {
             list.appendChild(li);
         });
         updateMergeButton();
+
+        // Toggle Unmerge Button
+        const unmergeBtn = document.getElementById('unmerge-btn');
+        if (selectedObjects.length === 1 && selectedObjects[0].userData.mergeHistory) {
+            unmergeBtn.style.display = 'inline-block';
+        } else {
+            unmergeBtn.style.display = 'none';
+        }
     };
 
     const updateMergeButton = () => {
@@ -2130,15 +2193,22 @@ function cleanObject(obj) {
             clone.userData = JSON.parse(JSON.stringify(obj.userData));
             clone.userData.name = obj.userData.name + " (Copy)";
             clone.userData.markForMerge = false;
+            // Clear history on copy to avoid giant files? No, keep it so copies are editable
+            // clone.userData.mergeHistory = undefined;
             scene.add(clone); newSel.push(clone);
         });
         selectObject(null); newSel.forEach(o=>selectObject(o, true)); saveState();
     };
 
+    // --- REVISED MERGE LOGIC WITH HISTORY ---
     window.dMerge = () => {
         const marked = selectedObjects.length > 1 ? selectedObjects : scene.children.filter(e => e.userData.markForMerge && e.isMesh && !e.userData.isRuler);
         if (marked.length < 2) return alert("Check 2+ boxes or Select 2+ objects.");
         const solids = marked.filter(e => !e.userData.isHole); if(!solids.length) return alert("Need 1 solid.");
+
+        // 1. Serialize Ingredients before processing (Save History)
+        const historyData = marked.map(obj => obj.toJSON());
+
         const ev = new Evaluator();
         const brush = mesh => {
             const b = new Brush(prepareCSG(mesh.geometry));
@@ -2148,9 +2218,72 @@ function cleanObject(obj) {
         let res = brush(solids[0]);
         for(let i=1; i<solids.length; i++) res = ev.evaluate(res, brush(solids[i]), ADDITION);
         marked.filter(e => e.userData.isHole).forEach(h => res = ev.evaluate(res, brush(h), SUBTRACTION));
+
         const geo = res.geometry; geo.computeBoundingBox(); const c = geo.boundingBox.getCenter(new THREE.Vector3()); geo.translate(-c.x, -c.y, -c.z);
-        const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0x0d6efd })); mesh.position.copy(c); mesh.userData = { name: "Merged Part", isHole: false };
-        marked.forEach(e => scene.remove(e)); scene.add(mesh); selectObject(mesh); saveState();
+
+        const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0x0d6efd }));
+        mesh.position.copy(c);
+
+        // 2. Store Ingredients in UserData
+        mesh.userData = {
+            name: "Merged Part",
+            isHole: false,
+            mergeHistory: historyData // <--- HERE IS THE MAGIC
+        };
+
+        // Remove old objects
+        marked.forEach(e => scene.remove(e));
+        scene.add(mesh);
+        selectObject(mesh);
+        saveState();
+    };
+
+    // --- NEW UNMERGE LOGIC ---
+    window.dUnmerge = () => {
+        if(selectedObjects.length !== 1) return;
+        const obj = selectedObjects[0];
+
+        if(!obj.userData.mergeHistory) return alert("This object has no merge history.");
+
+        const loader = new THREE.ObjectLoader();
+        const newObjects = [];
+
+        // Restore objects from history
+        obj.userData.mergeHistory.forEach(jsonData => {
+            const restoredMesh = loader.parse(jsonData);
+
+            // Re-apply standard material fix for holes
+            if(restoredMesh.userData.isHole) {
+                restoredMesh.material = new THREE.MeshStandardMaterial({
+                    color: restoredMesh.material.color,
+                    roughness: 0.5, metalness: 0.1,
+                    transparent: true, opacity: 0.5,
+                    wireframe: appSettings.wireframe
+                });
+            } else {
+                 restoredMesh.material = new THREE.MeshStandardMaterial({
+                    color: restoredMesh.material.color,
+                    roughness: 0.4, metalness: 0.2,
+                    wireframe: appSettings.wireframe
+                });
+            }
+
+            // Fix Parametric Params if they exist
+            if(restoredMesh.userData.geoParams) {
+                regenerateGeometry(restoredMesh);
+            }
+
+            scene.add(restoredMesh);
+            newObjects.push(restoredMesh);
+        });
+
+        // Remove the merged blob
+        scene.remove(obj);
+        cleanObject(obj);
+
+        selectObject(null);
+        newObjects.forEach(o => selectObject(o, true));
+        saveState();
     };
 
 window.dShell = () => {
@@ -2528,6 +2661,18 @@ window.dImportFile = function(input) {
     window.triggerExport = () => window.downloadExport(document.getElementById("export-format").value);
 
     window.downloadExport = async fmt => {
+            // 0. Project File Export
+            if (fmt === 'json') {
+                const rawData = createSnapshot(); // This is the compressed state
+                // We download it as a raw file
+                const blob = new Blob([rawData], { type: "application/octet-stream" });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = (document.getElementById("d-name").value || "Project") + ".tinker";
+                a.click();
+                return;
+            }
+
             // 1. Collect Objects
             const l = selectedObjects.length ? selectedObjects : scene.children.filter(c => c.isMesh && !c.userData.isRuler && c !== liftCone && c.parent !== faceMarkerGroup);
             if(!l.length) return alert("Nothing to export");
@@ -2566,6 +2711,30 @@ window.dImportFile = function(input) {
 
             if(fmt==='usdz') { const e = new USDZExporter(); const u = await e.parse(g, { quickLookAR: true }); saveData(new Blob([u], { type: 'model/vnd.usdz+zip' }), name); }
         };
+
+    // --- NEW: PROJECT LOADING ---
+    window.loadProjectFile = function(input) {
+        if (!input.files || input.files.length === 0) return;
+        const file = input.files[0];
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const buffer = new Uint8Array(e.target.result);
+            try {
+                loadSnapshot(buffer);
+                // Reset history stack
+                historyStack = [buffer];
+                historyStep = 0;
+                saveState();
+                alert("Project Loaded Successfully!");
+            } catch (err) {
+                console.error(err);
+                alert("Failed to load project file.");
+            }
+        };
+        reader.readAsArrayBuffer(file);
+        input.value = '';
+    };
 
     function createRuler() {
         if(rulerGroup) scene.remove(rulerGroup);

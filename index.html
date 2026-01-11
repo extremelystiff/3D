@@ -235,6 +235,8 @@
         "three-bvh-csg": "https://unpkg.com/three-bvh-csg@0.0.16/build/index.module.js",
         "zstd-wasm": "https://unpkg.com/@bokuweb/zstd-wasm@0.0.27/dist/web/index.web.js",
         "three-rounded-box": "https://unpkg.com/three@0.160.0/examples/jsm/geometries/RoundedBoxGeometry.js",
+        "three/addons/loaders/FontLoader.js": "https://unpkg.com/three@0.160.0/examples/jsm/loaders/FontLoader.js",
+        "three/addons/geometries/TextGeometry.js": "https://unpkg.com/three@0.160.0/examples/jsm/geometries/TextGeometry.js",
         "three/addons/loaders/MTLLoader.js": "https://unpkg.com/three@0.160.0/examples/jsm/loaders/MTLLoader.js"
     }
 }
@@ -302,7 +304,7 @@
         <button class="btn btn-light border btn-tool" onclick="window.dAdd('cone')" title="Cone / Pyramid"><i class="bi bi-cone-striped"></i></button>
         <button class="btn btn-light border btn-tool" onclick="window.dAdd('torus')" title="Torus (Donut)"><i class="bi bi-circle-half"></i></button>
         <button class="btn btn-light border btn-tool" onclick="window.dAdd('wedge')" title="Wedge / Ramp"><i class="bi bi-caret-up-fill"></i></button>
-
+        <button class="btn btn-light border btn-tool" onclick="window.dStartText()" title="3D Text"><i class="bi bi-type"></i></button>
         <div class="divider"></div>
 
         <div class="small fw-bold text-muted" style="font-size:0.6rem">EDIT</div>
@@ -522,6 +524,9 @@ import * as THREE from "three";
     import { USDZLoader } from "three/addons/loaders/USDZLoader.js";
     import { MTLLoader } from "three/addons/loaders/MTLLoader.js";
 
+    import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+    import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+
     import { SUBTRACTION, ADDITION, Brush, Evaluator } from "three-bvh-csg";
 
     // IMPORT ZSTD
@@ -553,6 +558,11 @@ import * as THREE from "three";
     const MAX_HISTORY = 30;
     let isUndoRedoAction = false;
     let isStorageFull = false;
+    // --- TEXT GLOBALS ---
+    let loadedFont = null;
+    let textPlaceMode = false;
+    let textGhost = null;
+
 
     // --- OPTIMIZATION GLOBALS ---
     let fpsInterval, now, then, elapsed;
@@ -576,6 +586,12 @@ import * as THREE from "three";
         fps: 'unlocked', // Default to unlocked
         showFps: false
     };
+    // Load font immediately on startup
+    const fLoader = new FontLoader();
+    fLoader.load('https://unpkg.com/three@0.160.0/examples/fonts/helvetiker_regular.typeface.json', (font) => {
+        loadedFont = font;
+        console.log("Font Loaded");
+    });
 
     window.startAlignTool = () => {
         if (selectedObjects.length !== 1) {
@@ -847,7 +863,15 @@ function handleAlignClick(ray) {
         } catch(e) {
             console.warn("Zstd failed to load, saving will be uncompressed", e);
         }
+        // --- NEW FONT LOADER LOGIC ---
+        const fLoader = new FontLoader();
+        fLoader.load('https://unpkg.com/three@0.160.0/examples/fonts/helvetiker_regular.typeface.json', (font) => {
+            loadedFont = font;
+            console.log("Font Loaded - Starting App");
 
+            // ONLY LOAD DATA AFTER FONT IS READY
+            loadFromStorage();
+        });
         const canvas = document.getElementById("designer-canvas");
         const container = document.getElementById("designer-area");
 
@@ -1402,6 +1426,23 @@ function updateTinkerLabels() {
         // If moved more than 5 pixels, it was a Camera Rotation/Zoom. Ignore click.
         if (dist > 5) return;
 
+        // --- NEW: CLICK TO PLACE TEXT ---
+        if (textPlaceMode) {
+             if (textGhost && textGhost.visible) {
+                // PASS THE CALCULATED BEND
+                const bend = textGhost.userData.geoParams ? textGhost.userData.geoParams.bend : 0;
+                createTextObject(textGhost.position, textGhost.quaternion, bend);
+             }
+
+             // Cleanup
+             textPlaceMode = false;
+             scene.remove(textGhost);
+             textGhost = null;
+             document.body.style.cursor = 'default';
+             const status = document.getElementById("auto-save-status");
+             status.style.opacity = 0;
+             return;
+        }
         // --- CLICK LOGIC BELOW ---
         if (e.target.tagName === 'INPUT') return;
         if (tCtrl.dragging || tCtrl.axis) return;
@@ -1572,10 +1613,301 @@ function getConnectedFlatSurface(mesh, startFaceIndex, targetNormal) {
         return { indices };
     }
 
+// 1. START PLACEMENT MODE
+    window.dStartText = () => {
+        if(!loadedFont) return alert("Font loading... try again in a second.");
+
+        // Deselect everything
+        selectObject(null);
+
+        // Enter Mode
+        textPlaceMode = true;
+        document.body.style.cursor = 'crosshair';
+
+        // Create Ghost
+        const geo = new TextGeometry('Text', { font: loadedFont, size: 10, height: 2, curveSegments: 4 });
+        geo.center();
+
+        // Create a parent wrapper to handle the offset easily
+        textGhost = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x0d6efd, transparent: true, opacity: 0.5, wireframe: true }));
+        textGhost.userData.isGhost = true;
+        scene.add(textGhost);
+
+        const status = document.getElementById("auto-save-status");
+        status.innerText = "Click on a surface to place text";
+        status.style.opacity = 1;
+    };
+
+    // 2. CREATE THE REAL TEXT
+function createTextObject(pos, quat, bendValue) { // Added bendValue param
+        const textString = "Text";
+
+        // Use the new helper to generate the initial geometry with the correct bend
+        const dummyMesh = {
+            userData: { geoParams: { type: 'text', text: textString, bend: bendValue || 0 } },
+            geometry: null
+        };
+
+        // We hijack the regenerate function to create our first geometry
+        // Use a temp geometry to start
+        dummyMesh.geometry = new TextGeometry(textString, { font: loadedFont, size: 10, height: 2, curveSegments: 4 });
+        regenerateText(dummyMesh); // This applies the bend math immediately
+
+        const mat = new THREE.MeshStandardMaterial({ color: 0x0d6efd });
+        const mesh = new THREE.Mesh(dummyMesh.geometry, mat);
+
+        mesh.position.copy(pos);
+        mesh.quaternion.copy(quat);
+
+        const nameCount = scene.children.filter(e => e.userData && e.userData.name && e.userData.name.startsWith("Text")).length + 1;
+        mesh.userData = {
+            name: `Text ${nameCount}`,
+            isHole: false,
+            geoParams: { type: 'text', text: textString, bend: bendValue || 0 }
+        };
+
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+
+        scene.add(mesh);
+        selectObject(mesh);
+        saveState();
+    }
+
+    // 3. REGENERATE TEXT (When typing or bending)
+function regenerateText(mesh) {
+        // SAFETY CHECK
+        if (!loadedFont) {
+            console.warn("Font not loaded yet, skipping regeneration");
+            return;
+        }
+        const p = mesh.userData.geoParams;
+        if(!p || p.type !== 'text') return;
+
+        // 1. Create Base Geometry
+        let geo = new TextGeometry(p.text, {
+            font: loadedFont,
+            size: 10,
+            height: 2, // This is the Z-thickness
+            curveSegments: 4
+        });
+
+        // Center X/Y but keep Z at 0 (back of text) for easier bending
+        geo.computeBoundingBox();
+        const centerOffset = - 0.5 * ( geo.boundingBox.max.x - geo.boundingBox.min.x );
+        const centerOffsetY = - 0.5 * ( geo.boundingBox.max.y - geo.boundingBox.min.y );
+        geo.translate( centerOffset, centerOffsetY, 0 );
+
+        // 2. APPLY BEND (The "Wrapping" Logic)
+        // We use 'curvature' (1/radius). 0 = Flat. 0.1 = Radius 10.
+        if (Math.abs(p.bend) > 0.001) {
+            const posAttribute = geo.attributes.position;
+            const vertex = new THREE.Vector3();
+
+            // Calculate Radius from Curvature
+            // p.bend is now "Curvature".
+            // If bend is 0.05, Radius is 20.
+            const radius = 1 / p.bend;
+
+            for ( let i = 0; i < posAttribute.count; i ++ ) {
+                vertex.fromBufferAttribute( posAttribute, i );
+
+                // The "Depth" of this vertex (0 to 2)
+                const zDepth = vertex.z;
+
+                // The effective radius for THIS vertex (Thickness preservation)
+                // We wrap around the cylinder. The back of text is at 'radius'.
+                // The front of text is at 'radius + zDepth'.
+                const effectiveR = radius + zDepth;
+
+                // Calculate angle based on X position
+                const angle = vertex.x / radius;
+
+                // New positions (Cylindrical coordinates)
+                // We subtract radius from Z at the end to bring the "back" of the text to Z=0
+                const nx = effectiveR * Math.sin(angle);
+                const nz = effectiveR * Math.cos(angle) - radius;
+
+                posAttribute.setXYZ( i, nx, vertex.y, nz );
+            }
+
+            geo.computeVertexNormals();
+        }
+
+        // 3. Update Mesh
+        mesh.geometry.dispose();
+        mesh.geometry = geo;
+
+        // IMPORTANT: Re-calculate bounds so the Selection Box / Gizmo matches the new curved shape
+        mesh.geometry.computeBoundingBox();
+
+        window.requestRender();
+    }
+
+
+window.reSnapText = () => {
+        if(selectedObjects.length !== 1) return;
+        const obj = selectedObjects[0];
+        if(!obj.userData.geoParams || obj.userData.geoParams.type !== 'text') return;
+
+        // 1. Setup Ray from Object Center, pointing "Inwards" (Local -Z)
+        const origin = obj.position.clone();
+        // The text's "back" is its local negative Z? Actually we oriented Z as Normal.
+        // So we cast ray in direction of -Z (into the surface)
+        const direction = new THREE.Vector3(0,0,-1).applyQuaternion(obj.quaternion).normalize();
+
+        // Start ray slightly "above" text to ensure we hit the surface
+        const startPt = origin.clone().sub(direction.clone().multiplyScalar(2)); // Back up 2 units
+
+        ray.set(startPt, direction);
+
+        // Filter out the text itself
+        const targets = scene.children.filter(o => o.isMesh && o !== obj && !o.userData.isGhost && !o.userData.isRuler && o !== liftCone);
+        const intersects = ray.intersectObjects(targets, false);
+
+        if(intersects.length > 0) {
+            const hit = intersects[0];
+            // Reuse the math from onPointerMove...
+            // Or simpler: Just calculate the curvature logic here.
+
+            // ... Copy/Paste the "UNIVERSAL CURVATURE DETECTION" block from onPointerMove here ...
+            // ... using 'hit' as the target ...
+
+            // Simplified Logic for Re-Snap:
+            const normal = hit.face.normal.clone().applyQuaternion(hit.object.quaternion).normalize();
+
+            // Re-Align Rotation (Optional, maybe user likes their rotation?)
+            // Let's just update the BEND for now to avoid flipping rotated text.
+
+            const rightVec = new THREE.Vector3(1,0,0).applyQuaternion(obj.quaternion).normalize();
+            const sampleDist = 5.0;
+            const leftOrigin = hit.point.clone().sub(rightVec.clone().multiplyScalar(sampleDist)).add(normal.clone().multiplyScalar(2));
+            const rightOrigin = hit.point.clone().add(rightVec.clone().multiplyScalar(sampleDist)).add(normal.clone().multiplyScalar(2));
+
+            const rayDown = new THREE.Raycaster();
+            const dir = normal.clone().negate();
+            rayDown.set(leftOrigin, dir);
+            const lHit = rayDown.intersectObject(hit.object, false);
+            rayDown.set(rightOrigin, dir);
+            const rHit = rayDown.intersectObject(hit.object, false);
+
+            if(lHit.length>0 && rHit.length>0) {
+                 const lNorm = lHit[0].face.normal.clone().applyQuaternion(hit.object.quaternion).normalize();
+                 const rNorm = rHit[0].face.normal.clone().applyQuaternion(hit.object.quaternion).normalize();
+                 const angle = lNorm.angleTo(rNorm);
+                 if (angle > 0.001) {
+                     const newBend = (angle / (sampleDist * 2)) * 1.0;
+                     obj.userData.geoParams.bend = newBend;
+                     regenerateText(obj);
+                     updatePropertiesPanel(); // Refresh slider
+                     saveState();
+                 }
+            }
+        } else {
+            alert("No surface found behind text to snap to.");
+        }
+    };
+
 const onPointerMove = e => {
         // BUG FIX: Don't set isInteracting = true here.
         // We only want a single frame update for hovering, not a continuous loop.
         window.requestRender();
+
+        // --- NEW: TEXT PLACEMENT GHOST ---
+// --- ADVANCED TEXT PLACEMENT ---
+        if (textPlaceMode && textGhost) {
+            const rect = ren.domElement.getBoundingClientRect();
+            const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+            ray.setFromCamera(mouse, cam);
+
+            // 1. Raycast Center
+            const targets = scene.children.filter(o => o.isMesh && !o.userData.isGhost && !o.userData.isRuler && o !== liftCone);
+            const intersects = ray.intersectObjects(targets, false);
+
+            if (intersects.length > 0) {
+                const hit = intersects[0];
+                const pt = hit.point;
+                const normal = hit.face.normal.clone().applyQuaternion(hit.object.quaternion).normalize();
+
+                // 2. STABLE ROTATION (No upside down flipping)
+                // We want the text's "Up" (Local Y) to align with Surface Normal (Z in our text logic?)
+                // Actually TextGeometry is created on XY plane.
+                // So Local Z = Surface Normal.
+
+                // Calculate a stable "Right" vector (Local X) that is parallel to the horizon
+                const worldUp = new THREE.Vector3(0, 0, 1);
+                let rightVec = new THREE.Vector3();
+
+                // If surface is floor/ceiling, define arbitrary right
+                if (Math.abs(normal.dot(worldUp)) > 0.99) {
+                    rightVec.set(1, 0, 0);
+                } else {
+                    // Cross WorldUp with Normal to get a horizon line
+                    rightVec.crossVectors(worldUp, normal).normalize();
+                    // If looking "backwards", flip it to keep text readable left-to-right
+                    // (Simple heuristic: assumes camera is somewhat upright)
+                }
+
+                // Create Basis Matrix
+                const upVec = new THREE.Vector3().crossVectors(normal, rightVec).normalize();
+                const basis = new THREE.Matrix4().makeBasis(rightVec, upVec, normal);
+                textGhost.quaternion.setFromRotationMatrix(basis);
+
+                // Position with nudge
+                textGhost.position.copy(pt).add(normal.clone().multiplyScalar(0.5));
+                textGhost.visible = true;
+
+                // 3. UNIVERSAL CURVATURE DETECTION (Tri-Ray Sample)
+                // We cast rays to the Left and Right of the hit point to measure surface angle
+                const sampleDist = 5.0; // Check 5mm to the side
+                const leftOrigin = pt.clone().sub(rightVec.clone().multiplyScalar(sampleDist)).add(normal.clone().multiplyScalar(2));
+                const rightOrigin = pt.clone().add(rightVec.clone().multiplyScalar(sampleDist)).add(normal.clone().multiplyScalar(2));
+
+                // Cast rays "Down" towards the surface (-Normal)
+                const rayDown = new THREE.Raycaster();
+                const dir = normal.clone().negate();
+
+                rayDown.set(leftOrigin, dir);
+                const leftHits = rayDown.intersectObject(hit.object, false);
+
+                rayDown.set(rightOrigin, dir);
+                const rightHits = rayDown.intersectObject(hit.object, false);
+
+                let autoBend = 0;
+
+                if (leftHits.length > 0 && rightHits.length > 0) {
+                    const lNorm = leftHits[0].face.normal.clone().applyQuaternion(hit.object.quaternion).normalize();
+                    const rNorm = rightHits[0].face.normal.clone().applyQuaternion(hit.object.quaternion).normalize();
+
+                    // Angle between normals
+                    let angle = lNorm.angleTo(rNorm);
+
+                    // Convex or Concave? Check dot product with center normal
+                    // Simple convex assumption for now (Curve wrap).
+                    // Calculation: Curvature = Angle / ArcLength (approx Distance)
+                    // Note: If normals point away, it's convex (+). If they point in, concave (-).
+                    // We assume convex for external placement.
+
+                    if (angle > 0.01) {
+                         // Curvature K = 1/R.
+                         // If we are placing on outside, we wrap positive.
+                         // Using a dampener because the math for text bending is sensitive
+                         autoBend = (angle / (sampleDist * 2)) * 1.0;
+                    }
+                }
+
+                // Apply
+                 if (!textGhost.userData.geoParams) textGhost.userData.geoParams = { type: 'text', text: 'Text', bend: 0 };
+                 if (Math.abs(textGhost.userData.geoParams.bend - autoBend) > 0.005) {
+                    textGhost.userData.geoParams.bend = autoBend;
+                    regenerateText(textGhost);
+                }
+
+            } else {
+                textGhost.visible = false;
+            }
+            return;
+        }
 
         // 1. UPDATE GHOST IF IN ALIGN MODE
         if (alignState !== 'none' && e.buttons === 0) {
@@ -1953,37 +2285,79 @@ window.dSz = () => {
 
 const updatePropertiesPanel = () => {
         const panel = document.getElementById("prop-panel");
-        // DEFINITION FIXED: Defined at top of function scope
         const container = document.getElementById("shape-params");
 
         if (selectedObjects.length === 1 && !selectedObjects[0].userData.isRuler) {
             panel.style.display = "block";
-            // --- NEW: Auto-Expand on Selection ---
-            // If the panel was minimized, open it so user sees they selected something.
-            // But if they are just dragging the object (and this function runs on drag),
-            // we don't want it flickering.
-            // Since this runs on selection, we can just remove 'minimized'.
+
+            // Auto-Expand Logic
             if (!tCtrl.dragging) {
                  panel.classList.remove('minimized');
                  const icon = document.getElementById('icon-panel-props');
                  if(icon) { icon.classList.remove('bi-chevron-up'); icon.classList.add('bi-chevron-down'); }
             }
-            // -------------------------------------
+
             const n = selectedObjects[0];
 
-            // Name & Type
+            // 1. Standard Properties (Name, Type, Color)
             document.getElementById("opt-obj-name").value = n.userData.name;
             document.getElementById("opt-d-type").value = n.userData.isHole ? "hole" : "solid";
             if(n.material) updateColorPicker(n.material.color);
 
-            // 1. Parametric Sliders (Radius, Segments, etc.)
-            // This function clears 'container.innerHTML', so we call it first
-            updateParametricUI(n);
+            // =========================================================
+            // 2. SHAPE SPECIFIC UI (Text vs Standard) - MODIFIED SECTION
+            // =========================================================
+if (n.userData.geoParams && n.userData.geoParams.type === 'text') {
+                container.innerHTML = "";
+                container.style.display = "block";
 
-            // 2. Add Chamfer / Smoothness Slider
+                container.innerHTML += `
+                    <div class="mb-2">
+                        <label class="small fw-bold">Text Content</label>
+                        <input type="text" class="form-control form-control-sm" value="${n.userData.geoParams.text}" id="prop-text-input">
+                    </div>`;
+
+                // Curvature Slider: Range -0.2 to 0.2 covers flat to Radius ~5
+                container.innerHTML += `
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="small text-muted">Bend (Auto)</span>
+                        <input type="range" class="form-range w-50" min="-0.2" max="0.2" step="0.005" value="${n.userData.geoParams.bend}" id="prop-text-bend">
+                    </div>`;
+                container.innerHTML += `
+                    <div class="d-grid gap-2 mt-2">
+                        <button class="btn btn-sm btn-outline-primary" onclick="window.reSnapText()">
+                            <i class="bi bi-arrow-repeat"></i> Auto-Wrap to Surface
+                        </button>
+                    </div>`;
+
+                setTimeout(() => {
+                    const txtIn = document.getElementById('prop-text-input');
+                    const bendIn = document.getElementById('prop-text-bend');
+
+                    if(txtIn) {
+                        txtIn.onchange = (e) => {
+                            n.userData.geoParams.text = e.target.value;
+                            regenerateText(n);
+                            saveState();
+                        };
+                    }
+                    if(bendIn) {
+                        bendIn.oninput = (e) => {
+                            n.userData.geoParams.bend = parseFloat(e.target.value);
+                            regenerateText(n);
+                        };
+                        bendIn.onchange = () => saveState();
+                    }
+                }, 0);
+            } else {
+                // B. IT IS NOT TEXT -> Use standard sliders (Cone, Cylinder, etc)
+                updateParametricUI(n);
+            }
+            // =========================================================
+
+
+            // 3. Add Chamfer / Smoothness Slider (Existing Logic)
             const isParametric = !!n.userData.geoParams;
-
-            // Check if valid for Chamfer (Box, Straight Extrusion, or Merged)
             const isBox = isParametric && n.userData.geoParams.type === 'box';
             const isStraightExtrusion = isParametric &&
                 (n.userData.geoParams.type === 'cylinder' || n.userData.geoParams.type === 'wedge') &&
@@ -1991,17 +2365,14 @@ const updatePropertiesPanel = () => {
             const isMerged = !isParametric;
 
             if (isBox || isStraightExtrusion || isMerged) {
-
-                // Get Current Value
                 let currentVal = 0;
                 if (isParametric) {
                     currentVal = n.userData.geoParams.r || n.userData.geoParams.chamfer || 0;
                 } else {
-                    // 0 = Sharp (Flat), 1 = Smooth
                     currentVal = n.material.flatShading ? 0 : 1;
                 }
 
-                const maxVal = isParametric ? 5 : 1; // 5mm max for geo, 1 for bool switch
+                const maxVal = isParametric ? 5 : 1;
                 const step = isParametric ? 0.1 : 1;
                 const label = isParametric ? "Edge Rounding" : "Smooth Edges";
 
@@ -2012,15 +2383,12 @@ const updatePropertiesPanel = () => {
                     <input type="range" class="form-range w-50" min="0" max="${maxVal}" step="${step}" value="${currentVal}">
                 `;
 
-                // Bind Event
                 div.querySelector("input").oninput = (e) => window.updateSmoothness(parseFloat(e.target.value));
-
-                // Append to container
                 container.appendChild(div);
                 container.style.display = "block";
             }
 
-            // 3. Update Transform Inputs
+            // 4. Update Transform Inputs
             const box = new THREE.Box3().setFromObject(n);
             const size = box.getSize(new THREE.Vector3());
 
@@ -2201,13 +2569,22 @@ function cleanObject(obj) {
     };
 
     // --- REVISED MERGE LOGIC WITH HISTORY ---
-    window.dMerge = () => {
+window.dMerge = () => {
         const marked = selectedObjects.length > 1 ? selectedObjects : scene.children.filter(e => e.userData.markForMerge && e.isMesh && !e.userData.isRuler);
         if (marked.length < 2) return alert("Check 2+ boxes or Select 2+ objects.");
-        const solids = marked.filter(e => !e.userData.isHole); if(!solids.length) return alert("Need 1 solid.");
+        const solids = marked.filter(e => !e.userData.isHole);
+        if (!solids.length) return alert("Need 1 solid.");
 
-        // 1. Serialize Ingredients before processing (Save History)
-        const historyData = marked.map(obj => obj.toJSON());
+        // 1. Serialize Ingredients (SAFE MODE)
+        // We must apply the same "Swap to Box" logic here, or unmerging will crash
+        const historyData = marked.map(obj => {
+            if (obj.userData.geoParams && obj.userData.geoParams.type === 'text') {
+                const clone = obj.clone();
+                clone.geometry = new THREE.BoxGeometry(1, 1, 1);
+                return clone.toJSON();
+            }
+            return obj.toJSON();
+        });
 
         const ev = new Evaluator();
         const brush = mesh => {
@@ -2216,7 +2593,7 @@ function cleanObject(obj) {
             b.updateMatrixWorld(); return b;
         };
         let res = brush(solids[0]);
-        for(let i=1; i<solids.length; i++) res = ev.evaluate(res, brush(solids[i]), ADDITION);
+        for (let i = 1; i < solids.length; i++) res = ev.evaluate(res, brush(solids[i]), ADDITION);
         marked.filter(e => e.userData.isHole).forEach(h => res = ev.evaluate(res, brush(h), SUBTRACTION));
 
         const geo = res.geometry; geo.computeBoundingBox(); const c = geo.boundingBox.getCenter(new THREE.Vector3()); geo.translate(-c.x, -c.y, -c.z);
@@ -2228,7 +2605,7 @@ function cleanObject(obj) {
         mesh.userData = {
             name: "Merged Part",
             isHole: false,
-            mergeHistory: historyData // <--- HERE IS THE MAGIC
+            mergeHistory: historyData
         };
 
         // Remove old objects
@@ -2239,45 +2616,41 @@ function cleanObject(obj) {
     };
 
     // --- NEW UNMERGE LOGIC ---
-    window.dUnmerge = () => {
-        if(selectedObjects.length !== 1) return;
+window.dUnmerge = () => {
+        if (selectedObjects.length !== 1) return;
         const obj = selectedObjects[0];
 
-        if(!obj.userData.mergeHistory) return alert("This object has no merge history.");
+        if (!obj.userData.mergeHistory) return alert("This object has no merge history.");
 
         const loader = new THREE.ObjectLoader();
         const newObjects = [];
 
-        // Restore objects from history
         obj.userData.mergeHistory.forEach(jsonData => {
             const restoredMesh = loader.parse(jsonData);
 
-            // Re-apply standard material fix for holes
-            if(restoredMesh.userData.isHole) {
-                restoredMesh.material = new THREE.MeshStandardMaterial({
-                    color: restoredMesh.material.color,
-                    roughness: 0.5, metalness: 0.1,
-                    transparent: true, opacity: 0.5,
-                    wireframe: appSettings.wireframe
-                });
-            } else {
-                 restoredMesh.material = new THREE.MeshStandardMaterial({
-                    color: restoredMesh.material.color,
-                    roughness: 0.4, metalness: 0.2,
-                    wireframe: appSettings.wireframe
-                });
-            }
+            // FIX: Ensure boolean value for transparency
+            const isHole = !!restoredMesh.userData.isHole;
 
-            // Fix Parametric Params if they exist
-            if(restoredMesh.userData.geoParams) {
-                regenerateGeometry(restoredMesh);
+            restoredMesh.material = new THREE.MeshStandardMaterial({
+                color: restoredMesh.material.color,
+                roughness: 0.4, metalness: 0.2,
+                transparent: isHole,
+                opacity: isHole ? 0.5 : 1.0,
+                wireframe: appSettings.wireframe
+            });
+
+            if (restoredMesh.userData.geoParams) {
+                if (restoredMesh.userData.geoParams.type === 'text') {
+                    regenerateText(restoredMesh);
+                } else {
+                    regenerateGeometry(restoredMesh);
+                }
             }
 
             scene.add(restoredMesh);
             newObjects.push(restoredMesh);
         });
 
-        // Remove the merged blob
         scene.remove(obj);
         cleanObject(obj);
 
@@ -2777,19 +3150,34 @@ window.dImportFile = function(input) {
 
     // --- UNDO / REDO / SAVE SYSTEM ---
 
-    function createSnapshot() {
-        const l=[];
-        scene.children.forEach(c=>{
-            if(c.isMesh && !c.userData.isRuler && c!==liftCone && c.userData.name !== "FaceMarker") l.push(c)
+function createSnapshot() {
+        const l = [];
+        scene.children.forEach(c => {
+            // FIX: Added !c.userData.isGhost so we don't save the placement tool
+            if (c.isMesh && !c.userData.isRuler && c !== liftCone && c.userData.name !== "FaceMarker" && !c.userData.isGhost) {
+                l.push(c);
+            }
         });
-        const d={ metadata:{type:'Save'}, scene:new THREE.Scene().toJSON() };
-        d.scene.object = { children: l.map(c=>c.toJSON()) };
+
+        const d = { metadata: { type: 'Save' }, scene: new THREE.Scene().toJSON() };
+
+        const childrenJSON = l.map(c => {
+            // Swap Text for Box during save to prevent crash
+            if (c.userData.geoParams && c.userData.geoParams.type === 'text') {
+                const clone = c.clone();
+                clone.geometry = new THREE.BoxGeometry(1, 1, 1);
+                return clone.toJSON();
+            }
+            return c.toJSON();
+        });
+
+        d.scene.object = { children: childrenJSON };
         const jsonStr = JSON.stringify(d);
 
         const encoder = new TextEncoder();
         const data = encoder.encode(jsonStr);
 
-        if(zstdReady) {
+        if (zstdReady) {
             return compress(data, 10);
         } else {
             return data;
@@ -2860,20 +3248,20 @@ function saveState() {
     }
 
 function loadSnapshot(compressedData) {
-        if(!compressedData) return;
+        if (!compressedData) return;
 
         let jsonStr;
-        if(zstdReady) {
+        if (zstdReady) {
             try {
                 const decompressed = decompress(compressedData);
                 const decoder = new TextDecoder();
                 jsonStr = decoder.decode(decompressed);
-            } catch(e) {
+            } catch (e) {
                 try {
                     const decoder = new TextDecoder();
                     jsonStr = decoder.decode(compressedData);
                     JSON.parse(jsonStr);
-                } catch(e2) {
+                } catch (e2) {
                     console.error("Decompression failed", e);
                     return;
                 }
@@ -2884,37 +3272,44 @@ function loadSnapshot(compressedData) {
         }
 
         let data;
-        try { data = JSON.parse(jsonStr); } catch(e){ return; }
+        try { data = JSON.parse(jsonStr); } catch (e) { return; }
 
-        // Clear Scene
         selectObject(null);
-        scene.children.filter(c => c.isMesh && !c.userData.isRuler && c!==liftCone).forEach(c => scene.remove(c));
+        scene.children.filter(c => c.isMesh && !c.userData.isRuler && c !== liftCone).forEach(c => scene.remove(c));
 
         const loader = new THREE.ObjectLoader();
 
-        if(data.scene && data.scene.object && data.scene.object.children) {
+        if (data.scene && data.scene.object && data.scene.object.children) {
             data.scene.object.children.forEach(childData => {
-                const mesh = loader.parse(childData);
-                if(mesh.isMesh) {
-                    // Restore Material Transparency for holes
-                    mesh.material = new THREE.MeshStandardMaterial({
-                        color: mesh.material.color,
-                        roughness: 0.5, metalness: 0.1,
-                        transparent: mesh.userData.isHole,
-                        opacity: mesh.userData.isHole ? 0.5 : 1,
-                        wireframe: appSettings.wireframe
-                    });
+                try {
+                    // Check if this is a ghost data before even parsing
+                    if(childData.userData && childData.userData.isGhost) return;
 
-                    // --- CRITICAL FIX START ---
-                    // Force the geometry to rebuild from parameters immediately.
-                    // This fixes the "1mm Cube" issue by ignoring the failed geometry load
-                    // and creating a fresh RoundedBox/Cylinder based on the saved 'w=20' params.
-                    if (mesh.userData.geoParams) {
-                        regenerateGeometry(mesh);
+                    const mesh = loader.parse(childData);
+
+                    if (mesh.isMesh) {
+                        // FIX: Ensure transparent is strictly true/false
+                        const isHole = !!mesh.userData.isHole;
+
+                        mesh.material = new THREE.MeshStandardMaterial({
+                            color: mesh.material.color,
+                            roughness: 0.5, metalness: 0.1,
+                            transparent: isHole,
+                            opacity: isHole ? 0.5 : 1,
+                            wireframe: appSettings.wireframe
+                        });
+
+                        if (mesh.userData.geoParams && mesh.userData.geoParams.type === 'text') {
+                            regenerateText(mesh);
+                        }
+                        else if (mesh.userData.geoParams) {
+                            regenerateGeometry(mesh);
+                        }
+
+                        scene.add(mesh);
                     }
-                    // --- CRITICAL FIX END ---
-
-                    scene.add(mesh);
+                } catch (err) {
+                    console.warn("Skipping corrupted object:", err);
                 }
             });
         }

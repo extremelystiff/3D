@@ -312,6 +312,7 @@
         <button class="btn btn-light border btn-tool" onclick="window.setMode('rotate')" data-mode="rotate" title="Rotate"><i class="bi bi-arrow-repeat"></i></button>
         <button class="btn btn-light border btn-tool" onclick="window.setMode('scale')" data-mode="scale" title="Scale"><i class="bi bi-arrows-angle-expand"></i></button>
         <button class="btn btn-light border btn-tool" onclick="window.startAlignTool()" title="Snap Face to Face"><i class="bi bi-magnet"></i></button>
+        <button class="btn btn-light border btn-tool" onclick="document.getElementById('mirror-panel').style.display='block'" title="Mirror / Flip"><i class="bi bi-symmetry-vertical"></i></button>
         <div class="divider"></div>
 
         <div class="small fw-bold text-muted" style="font-size:0.6rem">ACT</div>
@@ -425,6 +426,42 @@
                 <i class="bi bi-folder2-open"></i> Open Project File
             </button>
             <input type="file" id="project-upload" accept="*" style="display:none" onchange="window.loadProjectFile(this)">
+        </div>
+    </div>
+    <!-- Mirror / Flip Panel -->
+    <div class="float-panel float-export" id="mirror-panel" style="display:none; width: 250px;">
+        <div class="d-flex justify-content-between mb-3 border-bottom pb-2">
+            <strong><i class="bi bi-symmetry-vertical"></i> Mirror Object</strong>
+            <button class="btn-close" onclick="document.getElementById('mirror-panel').style.display='none'"></button>
+        </div>
+
+        <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" id="mirror-copy">
+            <label class="form-check-label small fw-bold">Duplicate (Keep Original)</label>
+        </div>
+
+        <div class="row g-2">
+            <div class="col-4">
+                <button class="btn btn-outline-primary w-100 btn-sm" onclick="window.dMirror('x')">
+                    <span class="d-block fw-bold">X</span>
+                    <i class="bi bi-arrow-left-right small"></i>
+                </button>
+            </div>
+            <div class="col-4">
+                <button class="btn btn-outline-primary w-100 btn-sm" onclick="window.dMirror('y')">
+                    <span class="d-block fw-bold">Y</span>
+                    <i class="bi bi-arrow-down-up small"></i>
+                </button>
+            </div>
+            <div class="col-4">
+                <button class="btn btn-outline-primary w-100 btn-sm" onclick="window.dMirror('z')">
+                    <span class="d-block fw-bold">Z</span>
+                    <i class="bi bi-arrow-down-up small" style="transform: rotate(90deg)"></i>
+                </button>
+            </div>
+        </div>
+        <div class="text-center mt-2">
+            <small class="text-muted" style="font-size:0.7rem">Flips scale along axis</small>
         </div>
     </div>
     <!-- Settings Panel -->
@@ -3183,7 +3220,63 @@ window.dImportFile = function(input) {
     function createLiftCone() { const g=new THREE.ConeGeometry(3,6,16); g.rotateX(Math.PI/2); liftCone=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:0x222222,transparent:true,opacity:0.8})); liftCone.visible=false; scene.add(liftCone); }
     function createRotationLabel() { rotLabelDiv=document.createElement('div'); rotLabelDiv.className='rot-label'; rotLabelObj=new CSS2DObject(rotLabelDiv); scene.add(rotLabelObj); }
     function updateRotationFeedback() { if(selectedObjects.length===1 && tCtrl.mode==='rotate' && tCtrl.dragging) { const r=selectedObjects[0].rotation; rotLabelDiv.innerText=`X:${Math.round(r.x*57.3)} Y:${Math.round(r.y*57.3)} Z:${Math.round(r.z*57.3)}`; rotLabelDiv.style.visibility='visible'; rotLabelObj.position.copy(selectedObjects[0].position); } else rotLabelDiv.style.visibility='hidden'; }
+window.dMirror = (axis) => {
+        if (selectedObjects.length === 0) return alert("Select an object to mirror.");
 
+        const keepOriginal = document.getElementById('mirror-copy').checked;
+
+        // Create a list of objects to process so we don't mess up the loop if we add new ones
+        const targets = [...selectedObjects];
+
+        // Deselect everything first so we can select the result later
+        selectObject(null);
+
+        const newSelection = [];
+
+        targets.forEach(obj => {
+            let targetObj = obj;
+
+            // 1. DUPLICATE LOGIC
+            if (keepOriginal) {
+                targetObj = obj.clone();
+                if (targetObj.material) targetObj.material = obj.material.clone();
+                targetObj.material.emissive.setHex(0); // Reset highlight
+
+                targetObj.userData = JSON.parse(JSON.stringify(obj.userData));
+                targetObj.userData.name = obj.userData.name + " (Mirror)";
+                targetObj.userData.markForMerge = false;
+
+                scene.add(targetObj);
+            }
+
+            // 2. FLIP LOGIC (Invert Scale)
+            // We use scale because rotating 180 is not a true mirror for asymmetric objects.
+            if (axis === 'x') targetObj.scale.x *= -1;
+            if (axis === 'y') targetObj.scale.y *= -1;
+            if (axis === 'z') targetObj.scale.z *= -1;
+
+            // 3. FLIP POSITION (If mirroring a group or offset object)
+            // If we are keeping original, we usually want the mirror to appear "Next to" it.
+            // But simple scale inversion happens in place.
+            // If user wants to separate them, they can move the new one.
+
+            // However, Three.js caches matrices. We must update.
+            targetObj.updateMatrixWorld(true);
+
+            // 4. FIX NORMALS (Optional but good practice)
+            // Negative scale can sometimes invert face winding (making it look inside out).
+            // Three.js handles this well usually, but if materials look weird, we set side to DoubleSide.
+            if(targetObj.material) targetObj.material.side = THREE.DoubleSide;
+
+            newSelection.push(targetObj);
+        });
+
+        // Select the result
+        newSelection.forEach(o => selectObject(o, true));
+
+        saveState();
+        window.requestRender();
+    };
     // --- UNDO / REDO / SAVE SYSTEM ---
 
 function createSnapshot() {

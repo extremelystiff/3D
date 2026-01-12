@@ -449,13 +449,19 @@
             </div>
         </div>
 
-        <!-- Visuals -->
+<!-- Visuals -->
         <div class="mb-3">
             <label class="small fw-bold text-muted">Visual Style</label>
 
             <div class="form-check form-switch mt-2">
                 <input class="form-check-input" type="checkbox" id="set-shadows" onchange="window.updateSettings('shadows', this.checked)">
                 <label class="form-check-label small">Cast Shadows</label>
+            </div>
+
+            <!-- CINEMATIC TOGGLE -->
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="set-cinematic" onchange="window.updateSettings('cinematic', this.checked)">
+                <label class="form-check-label small" style="color:#0d6efd; font-weight:600;">✨ Studio View (Screenshot)</label>
             </div>
 
             <div class="form-check form-switch">
@@ -562,6 +568,8 @@ import * as THREE from "three";
     let loadedFont = null;
     let textPlaceMode = false;
     let textGhost = null;
+    let shadowPlane;
+
 
 
     // --- OPTIMIZATION GLOBALS ---
@@ -854,6 +862,12 @@ function handleAlignClick(ray) {
     }
 
     // --- INIT ---
+// --- GLOBAL VARIABLE FOR SHADOW PLANE ---
+
+
+// Global reference for the shadow floor
+
+
     async function init3D() {
         // Init ZSTD
         try {
@@ -863,43 +877,66 @@ function handleAlignClick(ray) {
         } catch(e) {
             console.warn("Zstd failed to load, saving will be uncompressed", e);
         }
-        // --- NEW FONT LOADER LOGIC ---
+
+        // --- 1. FONT LOADING (Must happen before LoadFromStorage) ---
         const fLoader = new FontLoader();
         fLoader.load('https://unpkg.com/three@0.160.0/examples/fonts/helvetiker_regular.typeface.json', (font) => {
             loadedFont = font;
             console.log("Font Loaded - Starting App");
 
-            // ONLY LOAD DATA AFTER FONT IS READY
+            // This is the stable loading point
             loadFromStorage();
         });
+
         const canvas = document.getElementById("designer-canvas");
         const container = document.getElementById("designer-area");
 
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0xd0d0d0);
 
-        // 1. IMPROVED LIGHTING SETUP
-        // Hemisphere light creates a soft gradient (Sky vs Ground) filling the shadows
+        // --- 2. LIGHTING & SHADOWS ---
         ambientLight = new THREE.HemisphereLight(0xffffff, 0x444444, appSettings.ambient);
         scene.add(ambientLight);
 
-        // Main Directional Light (The Sun)
         dirLight = new THREE.DirectionalLight(0xffffff, appSettings.direct);
         dirLight.position.set(50, 100, 50);
         dirLight.castShadow = true;
 
-        // Optimize Shadow Map (Cleaner edges)
+        // --- CRITICAL FIX: EXPAND SHADOW COVERAGE ---
+        const d = 200; // Cover a 400x400 area (200 in each direction)
+        dirLight.shadow.camera.left = -d;
+        dirLight.shadow.camera.right = d;
+        dirLight.shadow.camera.top = d;
+        dirLight.shadow.camera.bottom = -d;
+
+        // Increase depth so it reaches the floor from height 100
+        dirLight.shadow.camera.far = 500;
+
+        // Resolution (Keep high for this large area)
         dirLight.shadow.mapSize.width = 2048;
         dirLight.shadow.mapSize.height = 2048;
-        dirLight.shadow.bias = -0.0001;
+
+        // Artifact cleanup
+        dirLight.shadow.bias = -0.0005;
+        dirLight.shadow.normalBias = 0.02;
         scene.add(dirLight);
 
-        // 2. RENDERER UPGRADE
+        // --- 3. SHADOW FLOOR PLANE ---
+        // Invisible plane that only catches shadows
+        const planeGeo = new THREE.PlaneGeometry(1000, 1000);
+        const planeMat = new THREE.ShadowMaterial({ opacity: 0.2, color: 0x000000 });
+        shadowPlane = new THREE.Mesh(planeGeo, planeMat);
+        shadowPlane.position.z = -0.1; // Slightly below zero to avoid Z-fighting
+        shadowPlane.receiveShadow = true;
+        shadowPlane.userData = { isRuler: true }; // Prevent selection
+        scene.add(shadowPlane);
+
+        // --- 4. RENDERER SETUP ---
         ren = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
         ren.setPixelRatio(window.devicePixelRatio);
         ren.setSize(window.innerWidth, window.innerHeight);
 
-        // Enable PCFSoftShadowMap for smoother shadow edges
+        // Soft Shadows
         ren.shadowMap.enabled = true;
         ren.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -907,10 +944,6 @@ function handleAlignClick(ray) {
         cam.position.set(60, -60, 60);
         cam.up.set(0, 0, 1);
         cam.lookAt(0, 0, 0);
-
-        ren = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
-        ren.setPixelRatio(window.devicePixelRatio);
-        ren.setSize(window.innerWidth, window.innerHeight);
 
         labelRen = new CSS2DRenderer();
         labelRen.setSize(window.innerWidth, window.innerHeight);
@@ -921,17 +954,11 @@ function handleAlignClick(ray) {
 
         ctrl = new OrbitControls(cam, ren.domElement);
         ctrl.enableDamping = true;
-            // --- OPTIMIZATION: ADAPTIVE RESOLUTION ---
-    // When user drags scene, drop pixel ratio to 1 (Low res)
-    // When user stops, restore device pixel ratio (High res / Retina)
-        ctrl.addEventListener('start', () => {
-            ren.setPixelRatio(1);
-        });
 
-        ctrl.addEventListener('end', () => {
-            ren.setPixelRatio(window.devicePixelRatio);
-        });
-          // --- OPTIMIZATION: ADAPTIVE RESOLUTION DONE---
+        // Performance: Low Res during drag
+        ctrl.addEventListener('start', () => { ren.setPixelRatio(1); });
+        ctrl.addEventListener('end', () => { ren.setPixelRatio(window.devicePixelRatio); });
+
         tCtrl = new TransformControls(cam, ren.domElement);
         tCtrl.addEventListener("dragging-changed", e => { ctrl.enabled = !e.value });
         tCtrl.addEventListener("change", () => {
@@ -940,18 +967,15 @@ function handleAlignClick(ray) {
             updateRotationFeedback();
             updatePropertiesPanel();
         });
-        tCtrl.addEventListener("mouseUp", () => {
-            saveState();
-        });
+        tCtrl.addEventListener("mouseUp", () => { saveState(); });
         scene.add(tCtrl);
-        // 3. GRID REFERENCE
+
+        // Grid
         gridHelper = new THREE.GridHelper(200, 20);
         gridHelper.rotateX(Math.PI / 2);
         gridHelper.material.opacity = 0.4;
         gridHelper.material.transparent = true;
         scene.add(gridHelper);
-
-
 
         ray = new THREE.Raycaster();
         createLiftCone(); createRotationLabel(); createRuler();
@@ -975,73 +999,48 @@ function handleAlignClick(ray) {
             panel.addEventListener('touchstart', e => e.stopPropagation());
         });
 
-        // Initialize time for optimization
         then = window.performance.now();
-        fpsLastTime = then; // Initialize counter time
+        fpsLastTime = then;
 
-// --- OPTIMIZATION GLOBALS ---
+        // Loop
+        window.requestRender = () => { needsRender = true; };
+        ctrl.addEventListener('change', () => { needsRender = true; });
+        tCtrl.addEventListener('change', () => { needsRender = true; });
+        document.addEventListener('pointerdown', () => { isInteracting = true; needsRender = true; });
+        document.addEventListener('pointerup', () => { isInteracting = false; });
 
-
-    // Call this whenever you change something (move object, change color, add shape)
-    window.requestRender = () => { needsRender = true; };
-
-    // Hook into controls to wake up renderer
-    ctrl.addEventListener('change', () => { needsRender = true; });
-    tCtrl.addEventListener('change', () => { needsRender = true; });
-
-    // Hook into UI interactions
-    document.addEventListener('pointerdown', () => { isInteracting = true; needsRender = true; });
-    document.addEventListener('pointerup', () => { isInteracting = false; });
-
-    function dLoop(newTime) {
-        requestAnimationFrame(dLoop);
-
-        // Always update controls for damping
-        ctrl.update();
-
-        // LOGIC:
-        // 1. If FPS is locked and too fast, skip.
-        // 2. IF nothing has changed AND controls are still, skip render (Save Battery).
-
-        if (isFpsLocked) {
-            now = newTime;
-            elapsed = now - then;
-            if (elapsed < fpsInterval) return;
-            then = now - (elapsed % fpsInterval);
-        }
-
-        // Only render if something changed or we are interacting
-        // We also check 'ctrl.getAzimuthalAngle' indirectly via change listener above
-        if (needsRender || isInteracting) {
-            ren.render(scene, cam);
-            labelRen.render(scene, cam);
-
-            // FPS Counter Logic
-            if (appSettings.showFps) {
-                fpsFrames++;
-                if (newTime >= fpsLastTime + 1000) {
-                    const delta = newTime - fpsLastTime;
-                    const fps = Math.round((fpsFrames * 1000) / delta);
-                    const div = document.getElementById('fps-display');
-                    if (div) div.innerText = `FPS: ${fps}`;
-                    fpsLastTime = newTime;
-                    fpsFrames = 0;
-                }
+        function dLoop(newTime) {
+            requestAnimationFrame(dLoop);
+            ctrl.update();
+            if (isFpsLocked) {
+                now = newTime;
+                elapsed = now - then;
+                if (elapsed < fpsInterval) return;
+                then = now - (elapsed % fpsInterval);
             }
-
-            // If we are not interacting, we can eventually set needsRender to false
-            // But because of damping (inertia), we keep it true slightly longer
-            // For simple implementation, we assume we need to render if controls change.
-            needsRender = false;
+            if (needsRender || isInteracting) {
+                ren.render(scene, cam);
+                labelRen.render(scene, cam);
+                if (appSettings.showFps) {
+                    fpsFrames++;
+                    if (newTime >= fpsLastTime + 1000) {
+                        const delta = newTime - fpsLastTime;
+                        const fps = Math.round((fpsFrames * 1000) / delta);
+                        const div = document.getElementById('fps-display');
+                        if (div) div.innerText = `FPS: ${fps}`;
+                        fpsLastTime = newTime;
+                        fpsFrames = 0;
+                    }
+                }
+                needsRender = false;
+            }
         }
-    }
         dLoop();
 
         buildColorPicker();
         window.setMode("translate");
 
-        // Load data safely
-        loadFromStorage();
+        // Data loading triggered in font loader callback above
     }
 
 window.updateSettings = (key, value) => {
@@ -1049,12 +1048,60 @@ window.updateSettings = (key, value) => {
     if (key === 'ambient' || key === 'direct') value = parseFloat(value);
     appSettings[key] = value;
 
-    // 2. Apply to Scene
+    // 2. Standard Lighting
     if (key === 'ambient' && ambientLight) ambientLight.intensity = value;
     if (key === 'direct' && dirLight) dirLight.intensity = value;
-    if (key === 'grid' && gridHelper) gridHelper.visible = value;
 
-    // 3. Apply FPS Settings
+    // 3. SHADOWS TOGGLE (Fixes the "Floor" issue)
+    if (key === 'shadows') {
+        if (dirLight) dirLight.castShadow = value;
+
+        // Hide/Show the floor plane
+        if (shadowPlane) shadowPlane.visible = value;
+
+        // Update objects so they stop calculating shadows (Performance)
+        scene.traverse(child => {
+            if (child.isMesh && !child.userData.isRuler && child !== liftCone && child !== shadowPlane) {
+                child.castShadow = value;
+                child.receiveShadow = value;
+            }
+        });
+        window.requestRender();
+    }
+
+    // 4. CINEMATIC MODE (Simple Version)
+    if (key === 'cinematic') {
+        if (value) {
+            // Mode ON: White BG, Hide Grid
+            scene.background = new THREE.Color(0xffffff); // Pure White
+            if(gridHelper) gridHelper.visible = false;
+            if(rulerGroup) rulerGroup.visible = false;
+            if(shadowPlane) shadowPlane.material.opacity = 0.1; // Fainter shadows for white BG
+        } else {
+            // Mode OFF: Grey BG, Show Grid
+            scene.background = new THREE.Color(0xd0d0d0); // Standard Grey
+            if(gridHelper) gridHelper.visible = appSettings.grid; // Respect grid setting
+            if(rulerGroup) rulerGroup.visible = showRuler;
+            if(shadowPlane) shadowPlane.material.opacity = 0.2; // Standard shadow opacity
+        }
+        window.requestRender();
+    }
+
+    // 5. Grid Toggle
+    if (key === 'grid' && !appSettings.cinematic) {
+        if (gridHelper) gridHelper.visible = value;
+    }
+
+    // 6. Wireframe
+    if (key === 'wireframe') {
+        scene.traverse(child => {
+            if (child.isMesh && !child.userData.isRuler && child !== liftCone && child.parent !== faceMarkerGroup && child !== shadowPlane) {
+                if (child.material) child.material.wireframe = value;
+            }
+        });
+    }
+
+    // FPS Settings
     if (key === 'fps') {
         if (value === 'unlocked') {
             isFpsLocked = false;
@@ -1067,27 +1114,12 @@ window.updateSettings = (key, value) => {
     if (key === 'showFps') {
         const div = document.getElementById('fps-display');
         if (div) div.style.display = value ? 'block' : 'none';
-
-        // Reset counter to avoid immediate jump
         fpsFrames = 0;
         fpsLastTime = performance.now();
     }
 
-    if (key === 'shadows' && dirLight) {
-        dirLight.castShadow = value;
-        scene.traverse(o => { if(o.material) o.material.needsUpdate = true; });
-    }
-
-    if (key === 'wireframe') {
-        scene.traverse(child => {
-            if (child.isMesh && !child.userData.isRuler && child !== liftCone && child.parent !== faceMarkerGroup) {
-                if (child.material) child.material.wireframe = value;
-            }
-        });
-    }
-
-    // 4. Save to LocalStorage
     localStorage.setItem('3d_app_settings', JSON.stringify(appSettings));
+    window.requestRender();
 };
 
 window.updateStorageUI = () => {
@@ -2145,11 +2177,15 @@ function buildAndAddMesh(geometry, name, geoParams = null, incomingMaterial = nu
         }
 
         const mesh = new THREE.Mesh(geometry, material);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
+        const shadowsEnabled = (appSettings.shadows !== false); // Default true if undefined
+        mesh.castShadow = shadowsEnabled;
+        mesh.receiveShadow = shadowsEnabled;
         mesh.position.set(0, 0, 10);
 
         mesh.userData = { isHole: false, name: name, geoParams: geoParams };
+        // Respect current shadow setting immediately
+        mesh.castShadow = appSettings.shadows !== false;
+        mesh.receiveShadow = appSettings.shadows !== false;
 
         scene.add(mesh);
         selectObject(mesh);

@@ -3143,7 +3143,7 @@ window.dImportFile = function(input) {
         scene.add(rulerGroup);
     }
 
-    function updateLiftConePos() { if(selectedObjects.length===1 && !selectedObjects[0].userData.isRuler) { const b=new THREE.Box3().setFromObject(selectedObjects[0]); liftCone.position.set((b.min.x+b.max.x)/2, (b.min.y+b.max.y)/2, b.max.z+15); liftCone.visible=true; } else liftCone.visible=false; }
+    function updateLiftConePos() { if(selectedObjects.length===1 && !selectedObjects[0].userData.isRuler) { const b=new THREE.Box3().setFromObject(selectedObjects[0]); liftCone.position.set((b.min.x+b.max.x)/2, (b.min.y+b.max.y)/2, b.max.z+50); liftCone.visible=true; } else liftCone.visible=false; }
     function createLiftCone() { const g=new THREE.ConeGeometry(3,6,16); g.rotateX(Math.PI/2); liftCone=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:0x222222,transparent:true,opacity:0.8})); liftCone.visible=false; scene.add(liftCone); }
     function createRotationLabel() { rotLabelDiv=document.createElement('div'); rotLabelDiv.className='rot-label'; rotLabelObj=new CSS2DObject(rotLabelDiv); scene.add(rotLabelObj); }
     function updateRotationFeedback() { if(selectedObjects.length===1 && tCtrl.mode==='rotate' && tCtrl.dragging) { const r=selectedObjects[0].rotation; rotLabelDiv.innerText=`X:${Math.round(r.x*57.3)} Y:${Math.round(r.y*57.3)} Z:${Math.round(r.z*57.3)}`; rotLabelDiv.style.visibility='visible'; rotLabelObj.position.copy(selectedObjects[0].position); } else rotLabelDiv.style.visibility='hidden'; }

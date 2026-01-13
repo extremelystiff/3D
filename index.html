@@ -287,6 +287,9 @@
         <button id="btn-ruler-mode" class="btn btn-sm btn-outline-dark border-0" onclick="window.toggleRulerMode()" title="Mode: Endpoint">
             <i class="bi bi-arrows-collapse"></i>
         </button>
+        <button class="btn btn-sm btn-outline-dark border-0" onclick="window.rotateRuler()" title="Flip Ruler Orientation">
+    <i class="bi bi-arrow-clockwise"></i>
+</button>
         <div style="border-left:1px solid #ccc; margin:0 5px; height:20px;"></div>
     </div>
 
@@ -586,6 +589,7 @@ import * as THREE from "three";
     const MESH_HIGHLIGHT_COLOR = 0xff0000;
     let isInteracting = false;
     let needsRender = true;
+    let rulerRotState = 0; // 0=BottomLeft, 1=BottomRight, 2=TopRight, 3=TopLeft
 
     // --- ALIGN / SNAP FACE TOOL ---
     let alignState = 'none'; // 'none', 'pick-source', 'pick-target'
@@ -1295,6 +1299,20 @@ window.updateStorageUI = () => {
         activeLabels.push(label);
         return label;
     }
+window.rotateRuler = () => {
+        if(!rulerGroup || !showRuler) return;
+
+        // Cycle state: 0 -> 1 -> 2 -> 3 -> 0
+        rulerRotState = (rulerRotState + 1) % 4;
+
+        // Apply visual rotation (Steps of 90 degrees)
+        // -PI/2 is used because Three.js rotation direction vs logical quadrant
+        rulerGroup.rotation.z = -(rulerRotState * (Math.PI / 2));
+
+        updateTinkerLabels();
+        window.requestRender();
+        saveState();
+    };
 
 function updateTinkerLabels() {
         // 1. Cleanup Old Labels
@@ -1309,13 +1327,11 @@ function updateTinkerLabels() {
 
         const box = new THREE.Box3().setFromObject(obj);
         const size = box.getSize(new THREE.Vector3());
-        const center = box.getCenter(new THREE.Vector3()); // NEW: Get Center
+        const center = box.getCenter(new THREE.Vector3());
 
         // ============================================
         // PART A: OBJECT SIZE (Always On - Gray/Black)
         // ============================================
-        // (This remains unchanged - measures total size)
-
         // Width (X Size)
         const sizeXPos = addDimensionLines(
             new THREE.Vector3(box.min.x, box.max.y, box.min.z),
@@ -1347,24 +1363,48 @@ function updateTinkerLabels() {
         if (showRuler && rulerGroup) {
             const rPos = rulerGroup.position;
 
-            // --- 1. X DISTANCE ---
-            let valX, startPtX, endPtX;
+            // Define Measurement Targets based on Rotation State
+            // State 0: Ruler is Bottom-Left (Measure to MinX, MinY)
+            // State 1: Ruler is Bottom-Right (Measure to MaxX, MinY)
+            // State 2: Ruler is Top-Right (Measure to MaxX, MaxY)
+            // State 3: Ruler is Top-Left (Measure to MinX, MaxY)
 
-            if (rulerMode === 'midpoint') {
-                // Measure to Center X
-                valX = center.x - rPos.x;
-                startPtX = new THREE.Vector3(rPos.x, box.min.y, 0);
-                endPtX = new THREE.Vector3(center.x, box.min.y, 0); // To Center
+            let targetX = box.min.x;
+            let targetY = box.min.y;
+
+            // Offset logic for where to draw the text (so it doesn't overlap object)
+            let labelOffsetX = new THREE.Vector3(0, -25, 0); // Default below
+            let labelOffsetY = new THREE.Vector3(-25, 0, 0); // Default left
+
+            if(rulerMode === 'midpoint') {
+                targetX = center.x;
+                targetY = center.y;
             } else {
-                // Measure to Left Edge (Min X)
-                valX = box.min.x - rPos.x;
-                startPtX = new THREE.Vector3(rPos.x, box.min.y, 0);
-                endPtX = new THREE.Vector3(box.min.x, box.min.y, 0); // To Edge
+                if(rulerRotState === 1 || rulerRotState === 2) targetX = box.max.x;
+                if(rulerRotState === 2 || rulerRotState === 3) targetY = box.max.y;
             }
 
-            const labelPosX = addDimensionLines(startPtX, endPtX, new THREE.Vector3(0, -25, 0), 0x0d6efd);
-            createInputLabel(labelPosX, valX, 'pos', (newVal) => {
-                const diff = newVal - valX;
+            // Flip Label Positions based on state
+            if(rulerRotState === 2 || rulerRotState === 3) labelOffsetX = new THREE.Vector3(0, 25, 0); // Draw Above
+            if(rulerRotState === 1 || rulerRotState === 2) labelOffsetY = new THREE.Vector3(25, 0, 0);  // Draw Right
+
+            // --- 1. X DISTANCE ---
+            const valX = targetX - rPos.x; // Math remains simple relative to world
+            const startPtX = new THREE.Vector3(rPos.x, targetY, 0); // Ruler X projected to object Y
+            const endPtX = new THREE.Vector3(targetX, targetY, 0);
+
+            // Special Visual Fix: Draw the line at the Ruler's Y level, or the Object's Y level?
+            // Standard CAD draws it relative to the ruler axis.
+            const rulerLineY = (rulerRotState === 0 || rulerRotState === 1) ? Math.min(box.min.y, rPos.y) : Math.max(box.max.y, rPos.y);
+            const visStartX = new THREE.Vector3(rPos.x, rulerLineY, 0);
+            const visEndX = new THREE.Vector3(targetX, rulerLineY, 0);
+
+            const labelPosX = addDimensionLines(visStartX, visEndX, labelOffsetX, 0x0d6efd);
+
+            createInputLabel(labelPosX, Math.abs(valX), 'pos', (newVal) => {
+                // If we are measuring to the Left (negative), keep it negative
+                const sign = valX < 0 ? -1 : 1;
+                const diff = (newVal * sign) - valX;
                 obj.position.x += diff;
                 obj.updateMatrixWorld();
                 updateTinkerLabels();
@@ -1374,23 +1414,17 @@ function updateTinkerLabels() {
 
 
             // --- 2. Y DISTANCE ---
-            let valY, startPtY, endPtY;
+            const valY = targetY - rPos.y;
 
-            if (rulerMode === 'midpoint') {
-                // Measure to Center Y
-                valY = center.y - rPos.y;
-                startPtY = new THREE.Vector3(box.min.x, rPos.y, 0);
-                endPtY = new THREE.Vector3(box.min.x, center.y, 0); // To Center
-            } else {
-                // Measure to Bottom Edge (Min Y)
-                valY = box.min.y - rPos.y;
-                startPtY = new THREE.Vector3(box.min.x, rPos.y, 0);
-                endPtY = new THREE.Vector3(box.min.x, box.min.y, 0); // To Edge
-            }
+            const rulerLineX = (rulerRotState === 0 || rulerRotState === 3) ? Math.min(box.min.x, rPos.x) : Math.max(box.max.x, rPos.x);
+            const visStartY = new THREE.Vector3(rulerLineX, rPos.y, 0);
+            const visEndY = new THREE.Vector3(rulerLineX, targetY, 0);
 
-            const labelPosY = addDimensionLines(startPtY, endPtY, new THREE.Vector3(-25, 0, 0), 0x0d6efd);
-            createInputLabel(labelPosY, valY, 'pos', (newVal) => {
-                const diff = newVal - valY;
+            const labelPosY = addDimensionLines(visStartY, visEndY, labelOffsetY, 0x0d6efd);
+
+            createInputLabel(labelPosY, Math.abs(valY), 'pos', (newVal) => {
+                const sign = valY < 0 ? -1 : 1;
+                const diff = (newVal * sign) - valY;
                 obj.position.y += diff;
                 obj.updateMatrixWorld();
                 updateTinkerLabels();
@@ -1400,11 +1434,15 @@ function updateTinkerLabels() {
 
 
             // --- 3. Z DISTANCE (LIFT) ---
-            // Note: Usually "Lift" is always measured from the bottom, even in midpoint mode.
-            // But we keep the line visually consistent.
+            // Lift is usually consistent, but we move the visual line to the ruler's corner
             const currentDistZ = box.min.z - rPos.z;
-            const rulerFloorPt = new THREE.Vector3(box.max.x, box.min.y, rPos.z);
-            const objectBottomPt = new THREE.Vector3(box.max.x, box.min.y, box.min.z);
+
+            // Anchor the Z ruler to the corner closest to the ruler origin
+            const anchorX = (rulerRotState === 1 || rulerRotState === 2) ? box.max.x : box.min.x;
+            const anchorY = (rulerRotState === 2 || rulerRotState === 3) ? box.max.y : box.min.y;
+
+            const rulerFloorPt = new THREE.Vector3(anchorX, anchorY, rPos.z);
+            const objectBottomPt = new THREE.Vector3(anchorX, anchorY, box.min.z);
 
             const labelPosZ = addDimensionLines(rulerFloorPt, objectBottomPt, new THREE.Vector3(25, 0, 0), 0x0d6efd);
             createInputLabel(labelPosZ, currentDistZ, 'pos', (newVal) => {

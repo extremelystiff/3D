@@ -307,6 +307,8 @@
         <button class="btn btn-light border btn-tool" onclick="window.dAdd('cone')" title="Cone / Pyramid"><i class="bi bi-cone-striped"></i></button>
         <button class="btn btn-light border btn-tool" onclick="window.dAdd('torus')" title="Torus (Donut)"><i class="bi bi-circle-half"></i></button>
         <button class="btn btn-light border btn-tool" onclick="window.dAdd('wedge')" title="Wedge / Ramp"><i class="bi bi-caret-up-fill"></i></button>
+        <!-- NEW THREAD BUTTON -->
+        <button class="btn btn-light border btn-tool" onclick="window.dAdd('thread')" title="Screw Thread (ISO/UNC)"><i class="bi bi-gear-wide-connected"></i></button>
         <button class="btn btn-light border btn-tool" onclick="window.dStartText()" title="3D Text"><i class="bi bi-type"></i></button>
         <div class="divider"></div>
 
@@ -641,6 +643,262 @@ import * as THREE from "three";
         loadedFont = font;
         console.log("Font Loaded");
     });
+
+// --- THREAD STANDARDS DATABASE ---
+const THREAD_SPECS = {
+    // Metric Coarse: name -> [MajorRadius(mm), Pitch(mm)]
+    metric: {
+        "M3":  [1.5, 0.5],
+        "M4":  [2.0, 0.7],
+        "M5":  [2.5, 0.8],
+        "M6":  [3.0, 1.0],
+        "M8":  [4.0, 1.25],
+        "M10": [5.0, 1.5],
+        "M12": [6.0, 1.75],
+        "M16": [8.0, 2.0],
+        "M20": [10.0, 2.5]
+    },
+    // Imperial (UNC): name -> [MajorRadius(mm approx), Pitch(mm approx)]
+    imperial: {
+        "#6-32":  [1.75, 0.794],
+        "#8-32":  [2.08, 0.794],
+        "#10-24": [2.4, 1.058],
+        "1/4-20": [3.175, 1.27],
+        "5/16-18": [3.97, 1.411],
+        "3/8-16": [4.76, 1.588],
+        "1/2-13": [6.35, 1.954]
+    }
+};
+
+function generateThreadGeometry(params) {
+    const radius = params.r; // Major radius
+    const pitch = params.p;
+    const len = params.h;
+    const segments = 32; // Resolution per turn
+
+    // Calculate iterations
+    const totalAngle = (len / pitch) * Math.PI * 2;
+    const steps = Math.ceil((len / pitch) * segments);
+
+    // Thread Profile (ISO-ish triangular cut)
+    // We create a "Tube" that modulates radius
+    const positions = [];
+    const indices = [];
+
+    // We generate a "strip" of vertices spiraling up
+    // innerR = Minor Diameter, outerR = Major Diameter
+    // ISO threads: depth is approx 0.54 * pitch (simplified for 3D printing)
+    const threadDepth = 0.6 * pitch;
+    const innerR = radius - threadDepth;
+    const outerR = radius;
+
+    // We need 3 rings of vertices per step to define the "V" shape + the core cylinder
+    // Ring 0: Bottom Valley (Inner Radius)
+    // Ring 1: Peak (Outer Radius)
+    // Ring 2: Top Valley (Inner Radius)
+
+    for (let i = 0; i <= steps; i++) {
+        const t = i / steps; // 0 to 1
+        const angle = t * totalAngle;
+        const zBase = t * len;
+
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+
+        // Define the V-shape relative to the current Z height
+        // To make it a solid rod, we essentially just modulate the outer surface
+        // But for a true thread, we need a specific profile.
+
+        // Simplified approach for robust Boolean operations:
+        // Create a central core cylinder (radius = innerR)
+        // Add the spiral V-shape on top?
+        // No, let's generate the surface directly.
+
+        // Vertices for this slice:
+        // 0: Center (for caps)
+        positions.push(0, 0, zBase);
+
+        // 1: Inner Radius (Core surface)
+        positions.push(innerR * cos, innerR * sin, zBase);
+
+        // 2: Outer Radius (Peak of thread) - Shifted Z by half pitch?
+        // Actually, to make a continuous spiral, the peak trails the valley.
+        // Let's use a Sine wave modulation on the radius for a smooth approximate thread
+        // This is computationally cheaper and prints very well.
+
+        // FORMULA: r = base + amp * (1 + cos(z/pitch * 2PI))
+        // This creates a "Wavy" cylinder which acts as a thread.
+        // For a sharp V-thread, we use a Triangle Wave.
+    }
+
+    // --- BETTER APPROACH: PARAMETRIC FUNCTION ---
+    // Let's use the 'TubeGeometry' concept but manually push vertices for a sharp thread.
+
+    const vertCountPerStep = 4; // Low, High, Low (next), Center
+
+    const geom = new THREE.BufferGeometry();
+    const posArray = [];
+    const idxArray = [];
+
+    // Helper to add vertex
+    function addV(x, y, z) { posArray.push(x, y, z); }
+
+    // We are going to build a ribbon.
+    // Top of thread, Bottom of thread (root).
+
+    for (let i = 0; i <= steps; i++) {
+        const angle = (i / segments) * Math.PI * 2;
+        const z = (i / segments) * pitch; // This is Z for ONE turn.
+
+        // We accumulate total height via loops?
+        // Actually, let's loop total steps across full length.
+    }
+
+    // --- FALLBACK TO ROBUST "STACKED" METHOD ---
+    // Since custom geometry code is lengthy, let's use a clever hack:
+    // Create a Cylinder.
+    // Modify its vertex data to twist and bulge.
+
+    // 1. Create High-Res Cylinder
+    const radialSegs = 32;
+    const heightSegs = Math.ceil(len / (pitch/4)); // High vertical resolution
+    const geo = new THREE.CylinderGeometry(radius, radius, len, radialSegs, heightSegs, true); // Open ended
+    const pos = geo.attributes.position;
+
+    const Vector3 = THREE.Vector3;
+    const v = new Vector3();
+
+    for(let i=0; i < pos.count; i++){
+        v.fromBufferAttribute(pos, i);
+
+        // Convert to Cylindrical
+        const r = Math.sqrt(v.x*v.x + v.y*v.y);
+        let theta = Math.atan2(v.y, v.x);
+
+        // Calculate "Phase" based on Z and Angle
+        // We want the bulge to travel up.
+        // zIndex relative to pitch
+        // Note: Cylinder is centered on Y=0 usually, but we rotated it?
+        // Let's assume standard Y-up cylinder from ThreeJS
+
+        const zPos = v.y + (len/2); // 0 to len
+
+        // The Spiral Equation
+        // We want the radius to be maximum when z corresponds to the thread peak
+        const threadPhase = (zPos / pitch) * (Math.PI * 2);
+
+        // Combine with angle (spiral twist)
+        // theta goes -PI to PI.
+        const wave = Math.cos(threadPhase - theta);
+
+        // Triangle Wave for sharp thread
+        // acos(cos(x)) gives a triangle wave from 0 to PI
+        const sharpWave = Math.acos(wave) / Math.PI; // 0 (valley) to 1 (peak)
+
+        // Modulate Radius
+        // sharpWave=1 -> Outer Radius. sharpWave=0 -> Inner Radius.
+        const currentR = innerR + (sharpWave * (outerR - innerR));
+
+        // Apply new radius
+        const scale = currentR / r;
+        pos.setXY(i, v.x * scale, v.z * scale); // CylinderGeometry uses X-Z for circle, Y for height?
+        // Wait, default Cylinder is Y-up. Circle is X-Z.
+        // pos.setX(i, v.x * scale);
+        // pos.setZ(i, v.z * scale);
+        // Correct logic below:
+    }
+
+    // RE-DO LOOP WITH CORRECT AXIS MAPPING
+    // ThreeJS Cylinder: Y is Up. X/Z are circle.
+    for(let i=0; i < pos.count; i++){
+        const x = pos.getX(i);
+        const y = pos.getY(i); // Height
+        const z = pos.getZ(i);
+
+        // Current Angle
+        const theta = Math.atan2(z, x);
+
+        // Z Height (normalize 0 to len)
+        const h = y + (len/2);
+
+        // Spiral Math
+        const phase = (h / pitch) * (Math.PI * 2);
+
+        // Triangle profile (0.0 to 1.0)
+        // Adjust phase by theta creates the spiral
+        const val = Math.acos(Math.cos(phase - theta)) / Math.PI;
+
+        // Determine Radius
+        const r = innerR + (val * threadDepth);
+
+        // Apply back to X/Z
+        const currentAngle = Math.atan2(z, x); // Re-calc or reuse theta
+        pos.setX(i, Math.cos(currentAngle) * r);
+        pos.setZ(i, Math.sin(currentAngle) * r);
+    }
+
+    geo.computeVertexNormals();
+
+    // Close the caps manually (since we used open-ended cylinder to avoid distorting cap vertices)
+    // We create simple flat circles for top/bottom and merge.
+
+    const topCap = new THREE.CircleGeometry(innerR, radialSegs);
+    topCap.rotateX(-Math.PI/2);
+    topCap.translate(0, len/2, 0);
+
+    const botCap = new THREE.CircleGeometry(innerR, radialSegs);
+    botCap.rotateX(Math.PI/2);
+    botCap.translate(0, -len/2, 0);
+
+    // Use BufferGeometryUtils (imported as mergeVertices, but we need mergeGeometries)
+    // Since we don't have mergeGeometries imported in the map, we use a manual approach
+    // OR we just use closed cylinder and accept that the caps might look a bit swirled (usually fine for printing).
+
+    // Let's retry with closed cylinder:
+    const finalGeo = new THREE.CylinderGeometry(radius, radius, len, radialSegs, heightSegs, false);
+    const p = finalGeo.attributes.position;
+
+    for(let i=0; i < p.count; i++){
+        const x = p.getX(i);
+        const y = p.getY(i);
+        const z = p.getZ(i);
+
+        // Only modify side vertices, not caps.
+        // Caps are located exactly at y = +/- len/2
+        const isCap = Math.abs(Math.abs(y) - len/2) < 0.001;
+
+        if(!isCap) {
+             const theta = Math.atan2(z, x);
+             const h = y + (len/2);
+             const phase = (h / pitch) * (Math.PI * 2);
+             const val = Math.acos(Math.cos(phase - theta)) / Math.PI;
+
+             // Taper the ends of the thread so they don't snap off?
+             // Optional, but helps printing. For now, straight cut.
+
+             const r = innerR + (val * threadDepth);
+             const currentAngle = Math.atan2(z, x);
+             p.setX(i, Math.cos(currentAngle) * r);
+             p.setZ(i, Math.sin(currentAngle) * r);
+        } else {
+             // For caps, we set them to the Minor diameter (innerR)
+             // so they fit inside the hole if used as a bolt
+             const currentR = Math.sqrt(x*x + z*z);
+             if(currentR > 0.1) { // Don't squash center point
+                 const scale = innerR / currentR;
+                 p.setX(i, x * scale);
+                 p.setZ(i, z * scale);
+             }
+        }
+    }
+
+    finalGeo.computeVertexNormals();
+
+    // Rotate to Z-up to match app standard
+    finalGeo.rotateX(Math.PI/2);
+
+    return finalGeo;
+}
 
     window.startAlignTool = () => {
         if (selectedObjects.length !== 1) {
@@ -2087,6 +2345,13 @@ const onPointerMove = e => {
                 baseName = "Torus";
                 params = { type: 'torus', r: 10, t: 3, rSeg: 16, tSeg: 32 };
                 break;
+
+            case "thread":
+                baseName = "Thread";
+                // Default to M10 x 20mm
+                params = { type: 'thread', std: 'metric', name: 'M10', r: 5.0, p: 1.5, h: 20 };
+                geo = generateThreadGeometry(params);
+                break;
         }
 
         // Note: We no longer rotate the MESH. We rotated the GEOMETRY above.
@@ -2167,6 +2432,9 @@ const onPointerMove = e => {
         }
         else if (p.type === 'sphere') {
             newGeo = new THREE.SphereGeometry(p.r, p.wSeg, p.wSeg);
+        }
+        else if (p.type === 'thread') {
+            newGeo = generateThreadGeometry(p);
         }
 
         if (newGeo) {
@@ -2416,54 +2684,158 @@ const updatePropertiesPanel = () => {
             if(n.material) updateColorPicker(n.material.color);
 
             // =========================================================
-            // 2. SHAPE SPECIFIC UI (Text vs Standard) - MODIFIED SECTION
+            // 2. SHAPE SPECIFIC UI (SWITCH STATEMENT)
             // =========================================================
-if (n.userData.geoParams && n.userData.geoParams.type === 'text') {
-                container.innerHTML = "";
+
+            // Clear container first
+            container.innerHTML = "";
+
+            if (n.userData.geoParams) {
                 container.style.display = "block";
 
-                container.innerHTML += `
-                    <div class="mb-2">
-                        <label class="small fw-bold">Text Content</label>
-                        <input type="text" class="form-control form-control-sm" value="${n.userData.geoParams.text}" id="prop-text-input">
-                    </div>`;
+                switch (n.userData.geoParams.type) {
 
-                // Curvature Slider: Range -0.2 to 0.2 covers flat to Radius ~5
-                container.innerHTML += `
-                    <div class="d-flex justify-content-between align-items-center mb-1">
-                        <span class="small text-muted">Bend (Auto)</span>
-                        <input type="range" class="form-range w-50" min="-0.2" max="0.2" step="0.005" value="${n.userData.geoParams.bend}" id="prop-text-bend">
-                    </div>`;
-                container.innerHTML += `
-                    <div class="d-grid gap-2 mt-2">
-                        <button class="btn btn-sm btn-outline-primary" onclick="window.reSnapText()">
-                            <i class="bi bi-arrow-repeat"></i> Auto-Wrap to Surface
-                        </button>
-                    </div>`;
+                    // --- CASE A: 3D TEXT ---
+                    case 'text':
+                        container.innerHTML += `
+                            <div class="mb-2">
+                                <label class="small fw-bold">Text Content</label>
+                                <input type="text" class="form-control form-control-sm" value="${n.userData.geoParams.text}" id="prop-text-input">
+                            </div>`;
 
-                setTimeout(() => {
-                    const txtIn = document.getElementById('prop-text-input');
-                    const bendIn = document.getElementById('prop-text-bend');
+                        container.innerHTML += `
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="small text-muted">Bend (Auto)</span>
+                                <input type="range" class="form-range w-50" min="-0.2" max="0.2" step="0.005" value="${n.userData.geoParams.bend}" id="prop-text-bend">
+                            </div>`;
 
-                    if(txtIn) {
-                        txtIn.onchange = (e) => {
-                            n.userData.geoParams.text = e.target.value;
-                            regenerateText(n);
-                            saveState();
-                        };
-                    }
-                    if(bendIn) {
-                        bendIn.oninput = (e) => {
-                            n.userData.geoParams.bend = parseFloat(e.target.value);
-                            regenerateText(n);
-                        };
-                        bendIn.onchange = () => saveState();
-                    }
-                }, 0);
+                        container.innerHTML += `
+                            <div class="d-grid gap-2 mt-2">
+                                <button class="btn btn-sm btn-outline-primary" onclick="window.reSnapText()">
+                                    <i class="bi bi-arrow-repeat"></i> Auto-Wrap to Surface
+                                </button>
+                            </div>`;
+
+                        setTimeout(() => {
+                            const txtIn = document.getElementById('prop-text-input');
+                            const bendIn = document.getElementById('prop-text-bend');
+                            if(txtIn) {
+                                txtIn.onchange = (e) => {
+                                    n.userData.geoParams.text = e.target.value;
+                                    regenerateText(n);
+                                    saveState();
+                                };
+                            }
+                            if(bendIn) {
+                                bendIn.oninput = (e) => {
+                                    n.userData.geoParams.bend = parseFloat(e.target.value);
+                                    regenerateText(n);
+                                };
+                                bendIn.onchange = () => saveState();
+                            }
+                        }, 0);
+                        break;
+
+                    // --- CASE B: THREADS (NEW) ---
+                    case 'thread':
+                        const p = n.userData.geoParams;
+
+                        // 1. Standard Type Dropdown
+                        container.innerHTML += `
+                            <div class="mb-2">
+                                <label class="small fw-bold">Standard</label>
+                                <select id="th-std" class="form-select form-select-sm">
+                                    <option value="metric" ${p.std==='metric'?'selected':''}>Metric (ISO)</option>
+                                    <option value="imperial" ${p.std==='imperial'?'selected':''}>Imperial (UNC)</option>
+                                </select>
+                            </div>
+                        `;
+
+                        // 2. Dynamic Size Dropdown
+                        let options = "";
+                        // Guard clause: ensure THREAD_SPECS exists
+                        if(typeof THREAD_SPECS !== 'undefined' && THREAD_SPECS[p.std]) {
+                            const currentLib = THREAD_SPECS[p.std];
+                            for(let key in currentLib) {
+                                const sel = (key === p.name) ? "selected" : "";
+                                options += `<option value="${key}" ${sel}>${key}</option>`;
+                            }
+                        }
+
+                        container.innerHTML += `
+                            <div class="mb-2">
+                                <label class="small fw-bold">Size</label>
+                                <select id="th-size" class="form-select form-select-sm">${options}</select>
+                            </div>
+                        `;
+
+                        // 3. Length Slider
+                        container.innerHTML += `
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="small text-muted">Length</span>
+                                <input type="range" id="th-len" class="form-range w-50" min="2" max="100" step="1" value="${p.h}">
+                                <span class="small fw-bold">${p.h}mm</span>
+                            </div>
+                        `;
+
+                        // Listeners
+                        setTimeout(() => {
+                            const stdSel = document.getElementById('th-std');
+                            const sizeSel = document.getElementById('th-size');
+                            const lenIn = document.getElementById('th-len');
+
+                            if(stdSel && sizeSel && typeof THREAD_SPECS !== 'undefined') {
+                                // Change Standard -> Reset Size to first option
+                                stdSel.onchange = (e) => {
+                                    const newStd = e.target.value;
+                                    const firstKey = Object.keys(THREAD_SPECS[newStd])[0];
+                                    const specs = THREAD_SPECS[newStd][firstKey];
+
+                                    n.userData.geoParams.std = newStd;
+                                    n.userData.geoParams.name = firstKey;
+                                    n.userData.geoParams.r = specs[0];
+                                    n.userData.geoParams.p = specs[1];
+                                    regenerateGeometry(n);
+                                    updatePropertiesPanel(); // Re-render to update Size dropdown options
+                                    saveState();
+                                };
+
+                                // Change Size -> Update Radius/Pitch
+                                sizeSel.onchange = (e) => {
+                                    const key = e.target.value;
+                                    const std = n.userData.geoParams.std;
+                                    const specs = THREAD_SPECS[std][key];
+
+                                    n.userData.geoParams.name = key;
+                                    n.userData.geoParams.r = specs[0];
+                                    n.userData.geoParams.p = specs[1];
+                                    regenerateGeometry(n);
+                                    saveState();
+                                };
+                            }
+
+                            if(lenIn) {
+                                lenIn.oninput = (e) => {
+                                    n.userData.geoParams.h = parseFloat(e.target.value);
+                                    e.target.nextElementSibling.innerText = e.target.value + "mm";
+                                    regenerateGeometry(n);
+                                };
+                                lenIn.onchange = () => saveState();
+                            }
+                        }, 0);
+                        break;
+
+                    // --- CASE C: STANDARD SHAPES (Cube, Cylinder, etc) ---
+                    default:
+                        // Use the existing helper function
+                        updateParametricUI(n);
+                        break;
+                }
             } else {
-                // B. IT IS NOT TEXT -> Use standard sliders (Cone, Cylinder, etc)
-                updateParametricUI(n);
+                // Merged objects (no params)
+                container.style.display = "none";
             }
+
             // =========================================================
 
 

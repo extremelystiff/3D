@@ -133,7 +133,8 @@
     .color-picker { display:flex; flex-wrap:wrap; gap:4px; margin-top: 5px; }
     .color-option { width:20px; height:20px; border-radius:3px; cursor:pointer; border:1px solid rgba(0,0,0,0.1); }
     .color-option.selected { border:2px solid #000; transform:scale(1.2); }
-
+.cursor-cross { cursor: crosshair !important; }
+.cursor-grab { cursor: grab !important; }
 /* --- MOBILE & LANDSCAPE OPTIMIZATIONS --- */
     @media (max-width: 950px) {
         /* General Scaling for Touch */
@@ -279,16 +280,22 @@
         <button class="btn btn-sm btn-outline-danger border-0" onclick="if(confirm('Clear Scene?')) window.dDelAll()" title="Clear Scene">
             <i class="bi bi-trash"></i>
         </button>
-        <div style="border-left:1px solid #ccc; margin:0 5px; height:20px;"></div>
-        <button id="btn-ruler" class="btn btn-sm btn-outline-dark border-0" onclick="window.toggleRuler()" title="Toggle Ruler (M)">
-            <i class="bi bi-ruler"></i>
-        </button>
-        <!-- NEW: Ruler Mode Toggle -->
-        <button id="btn-ruler-mode" class="btn btn-sm btn-outline-dark border-0" onclick="window.toggleRulerMode()" title="Mode: Endpoint">
-            <i class="bi bi-arrows-collapse"></i>
-        </button>
-        <button class="btn btn-sm btn-outline-dark border-0" onclick="window.rotateRuler()" title="Flip Ruler Orientation">
-    <i class="bi bi-arrow-clockwise"></i>
+<!-- RULER TOOLS -->
+<div style="border-left:1px solid #ccc; margin:0 5px; height:20px;"></div>
+
+<!-- 1. Toggle Ruler On/Off -->
+<button id="btn-ruler" class="btn btn-sm btn-outline-dark border-0" onclick="window.toggleRuler()" title="Toggle Ruler (M)">
+    <i class="bi bi-ruler"></i>
+</button>
+
+<!-- 2. Smart Snap Ruler (New) -->
+<button id="btn-ruler-snap" class="btn btn-sm btn-outline-dark border-0" onclick="window.startRulerSnap()" title="Align Ruler to Object (Click Point, then Click Edge)">
+    <i class="bi bi-magnet"></i>
+</button>
+
+<!-- 3. Reset Ruler -->
+<button class="btn btn-sm btn-outline-dark border-0" onclick="window.resetRuler()" title="Reset Ruler to World Center">
+    <i class="bi bi-arrow-counterclockwise"></i>
 </button>
         <div style="border-left:1px solid #ccc; margin:0 5px; height:20px;"></div>
     </div>
@@ -592,6 +599,12 @@ import * as THREE from "three";
     let isInteracting = false;
     let needsRender = true;
     let rulerRotState = 0; // 0=BottomLeft, 1=BottomRight, 2=TopRight, 3=TopLeft
+    // Globals for Smart Ruler
+    let rulerSnapState = 0; // 0=Idle, 1=Pick Origin, 2=Pick Axis
+    let rulerGhost = null;
+    let rulerOriginVec = new THREE.Vector3();
+    let ghostRulerGroup, snapMarker, snapEdgeLine;
+
 
     // --- ALIGN / SNAP FACE TOOL ---
     let alignState = 'none'; // 'none', 'pick-source', 'pick-target'
@@ -1772,11 +1785,11 @@ function updateTinkerLabels() {
         window.requestRender();
     };
 
-    // 3. UPDATED POINTER UP (The Brains)
+// 3. UPDATED POINTER UP (The Brains)
     const onPointerUp = e => {
         isInteracting = false; // Stop high-refresh rendering
 
-        // Check for Lift Tool
+        // Check for Lift Tool (Priority 1)
         if (isLifting) {
             isLifting = false;
             ctrl.enabled = true;
@@ -1790,6 +1803,16 @@ function updateTinkerLabels() {
 
         // If moved more than 5 pixels, it was a Camera Rotation/Zoom. Ignore click.
         if (dist > 5) return;
+
+        // --- CALC RAY EARLY (Moved Up) ---
+        // We calculate this now because Ruler and Text tools need it immediately
+        const rect = ren.domElement.getBoundingClientRect();
+        const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+        ray.setFromCamera(mouse, cam);
+
+        // --- NEW: RULER SNAP CHECK ---
+        // If we are in Ruler Mode, handle the click and stop everything else
+        if (window.handleRulerClick && window.handleRulerClick(ray)) return;
 
         // --- NEW: CLICK TO PLACE TEXT ---
         if (textPlaceMode) {
@@ -1808,13 +1831,10 @@ function updateTinkerLabels() {
              status.style.opacity = 0;
              return;
         }
+
         // --- CLICK LOGIC BELOW ---
         if (e.target.tagName === 'INPUT') return;
         if (tCtrl.dragging || tCtrl.axis) return;
-
-        const rect = ren.domElement.getBoundingClientRect();
-        const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
-        ray.setFromCamera(mouse, cam);
 
         // A. ALIGN TOOL
         if (alignState !== 'none') {
@@ -1833,6 +1853,7 @@ function updateTinkerLabels() {
         const validHits = intersects.filter(hit => {
             const o = hit.object;
             let p = o.parent;
+            // Recursively check parents to see if they are the Ruler or Markers
             while(p) { if(p === schematicGroup || p === faceMarkerGroup) return false; p = p.parent; }
             return (o.isMesh || o.isLine) && o !== liftCone && o !== schematicGroup && o !== faceMarkerGroup;
         });
@@ -1840,8 +1861,14 @@ function updateTinkerLabels() {
         if (validHits.length > 0) {
             let hitObj = validHits[0].object;
             let parent = hitObj.parent;
-            if(parent && parent.userData && parent.userData.isRuler) selectObject(parent);
-            else if (hitObj.userData.name) selectObject(hitObj, e.shiftKey);
+
+            // Special check: If we clicked the Ruler Visualization, select it
+            if(parent && parent.userData && parent.userData.isRuler) {
+                selectObject(parent);
+            }
+            else if (hitObj.userData.name) {
+                selectObject(hitObj, e.shiftKey);
+            }
         } else {
             selectObject(null);
         }
@@ -1977,6 +2004,509 @@ function getConnectedFlatSurface(mesh, startFaceIndex, targetNormal) {
 
         return { indices };
     }
+
+
+// 1. IMPROVED RULER CREATION
+// We create a ruler that is a real object in the scene with a local matrix
+window.createRuler = function() {
+    if(rulerGroup) scene.remove(rulerGroup);
+
+    rulerGroup = new THREE.Group();
+    rulerGroup.userData = { isRuler: true };
+
+    // A. Visual Lines (The L-Shape)
+    const len = 200; // Longer ruler
+    const material = new THREE.LineBasicMaterial({ color: 0x0d6efd, linewidth: 2, depthTest: false, transparent: true, opacity: 0.8 });
+
+    // X Axis (Blue)
+    const xGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(len,0,0)]);
+    const xLine = new THREE.Line(xGeo, new THREE.LineBasicMaterial({ color: 0x0077ff, linewidth: 2, depthTest:false }));
+    rulerGroup.add(xLine);
+
+    // Y Axis (Green-ish)
+    const yGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,len,0)]);
+    const yLine = new THREE.Line(yGeo, new THREE.LineBasicMaterial({ color: 0x00cc44, linewidth: 2, depthTest:false }));
+    rulerGroup.add(yLine);
+
+    // Z Axis (Vertical Indicator)
+    const zGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,50)]);
+    const zLine = new THREE.Line(zGeo, new THREE.LineBasicMaterial({ color: 0x999999, linewidth: 1, transparent:true, opacity:0.3 }));
+    rulerGroup.add(zLine);
+
+    // Grid (The "Plane")
+    const grid = new THREE.GridHelper(len*2, 20, 0x0077ff, 0xcccccc);
+    grid.rotation.x = Math.PI/2; // Rotate to lie on XY plane
+    grid.position.set(len/2, len/2, 0); // Offset center
+    grid.material.opacity = 0.15;
+    grid.material.transparent = true;
+    grid.material.depthTest = false;
+    rulerGroup.add(grid);
+
+    // Protractor Arc (Visual)
+    const arcCurve = new THREE.EllipseCurve(0, 0, 30, 30, 0, Math.PI/2, false, 0);
+    const arcPts = arcCurve.getPoints(50);
+    const arcGeo = new THREE.BufferGeometry().setFromPoints(arcPts);
+    const arcLine = new THREE.Line(arcGeo, new THREE.LineBasicMaterial({ color: 0xffaa00, transparent:true, opacity:0.6 }));
+    rulerGroup.add(arcLine);
+
+    // Add Origin Sphere (Click target)
+    const sphere = new THREE.Mesh(new THREE.SphereGeometry(2), new THREE.MeshBasicMaterial({ color: 0x0d6efd }));
+    rulerGroup.add(sphere);
+
+    // Default Position
+    rulerGroup.position.set(-50, -50, 0);
+    rulerGroup.visible = showRuler;
+    rulerGroup.renderOrder = 999; // Draw on top
+    scene.add(rulerGroup);
+};
+
+window.resetRuler = function() {
+    rulerGroup.position.set(-50, -50, 0);
+    rulerGroup.rotation.set(0,0,0);
+    rulerGroup.scale.set(1,1,1);
+    updateTinkerLabels();
+    window.requestRender();
+}
+
+// 2. RULER INTERACTION LOGIC
+
+window.startRulerSnap = function() {
+    if(!showRuler) window.toggleRuler();
+
+    // Step 1: Pick Origin
+    rulerSnapState = 1;
+    document.body.classList.add("cursor-cross");
+    selectObject(null);
+
+    const status = document.getElementById("auto-save-status");
+    status.innerText = "Step 1: Click a CORNER to place Ruler Start";
+    status.style.opacity = 1;
+
+    // Visual feedback on button
+    document.getElementById('btn-ruler-snap').classList.add('active-tool');
+}
+
+// Helper: Get Closest Vertex to Mouse Ray
+function getClosestVertex(ray, object) {
+    // 1. Raycast against mesh to find hit point
+    const intersects = ray.intersectObject(object, false);
+    if(intersects.length === 0) return null;
+
+    const hit = intersects[0];
+    const geo = object.geometry;
+    const pos = geo.attributes.position;
+
+    // 2. Iterate vertices to find closest to hit point
+    let minD = Infinity;
+    let closestWorldPt = new THREE.Vector3();
+    const tempV = new THREE.Vector3();
+
+    // Optimization: Only check vertices in the intersected face?
+    // For snapping, checking whole object is safer for "corners"
+    // To save perf, we only check if object has < 10k verts, else use face
+
+    const indices = [hit.face.a, hit.face.b, hit.face.c];
+
+    indices.forEach(idx => {
+        tempV.fromBufferAttribute(pos, idx).applyMatrix4(object.matrixWorld);
+        const d = tempV.distanceTo(hit.point);
+        if(d < minD) {
+            minD = d;
+            closestWorldPt.copy(tempV);
+        }
+    });
+
+    return { point: closestWorldPt, normal: hit.face.normal };
+}
+
+// Hook into existing Pointer Events (Inject this logic)
+const originalPointerUp = window.onPointerUp || ((e)=>{}); // Backup if needed, though we rely on order
+
+// We replace the logic inside the main event loop slightly, but to keep it simple,
+// we will intercept the click in a new handler that runs *before* the main selection.
+
+// 1. HELPER: Calculate Rotation (Guarantees Ghost & Real Ruler match)
+function getRulerRotation(origin, targetPoint, surfaceNormal) {
+    // X-Axis: Points from Origin to Mouse
+    const xDir = new THREE.Vector3().subVectors(targetPoint, origin).normalize();
+
+    // Z-Axis: Points OUT of the surface (Surface Normal)
+    // We clone it to be safe
+    let zDir = surfaceNormal.clone().normalize();
+
+    // Safety: If X and Z are parallel (unlikely), force Z to World Up
+    if(Math.abs(xDir.dot(zDir)) > 0.99) {
+        zDir.set(0,0,1);
+    }
+
+    // Y-Axis: Perpendicular to Z and X (Right Hand Rule)
+    const yDir = new THREE.Vector3().crossVectors(zDir, xDir).normalize();
+
+    // Recalculate Z to ensure it's perfectly orthogonal
+    // (This fixes the "tilted" or "180 off" look)
+    const finalZ = new THREE.Vector3().crossVectors(xDir, yDir).normalize();
+
+    const m = new THREE.Matrix4().makeBasis(xDir, yDir, finalZ);
+    return new THREE.Quaternion().setFromRotationMatrix(m);
+}
+
+// 2. UPDATED CLICK HANDLER (Uses the helper)
+window.handleRulerClick = function(ray) {
+    if(rulerSnapState === 0) return false;
+
+    // Filter targets
+    const targets = scene.children.filter(o => o.isMesh && !o.userData.isRuler && o !== liftCone && o !== snapMarker && o !== snapEdgeLine);
+
+    // STEP 1: PLACE ORIGIN
+    if(rulerSnapState === 1) {
+        const hitData = window.getSmartSnap(ray, targets);
+        if(hitData) {
+            rulerGroup.position.copy(hitData.point);
+            rulerOriginVec.copy(hitData.point); // Store for step 2
+
+            // Align Z to normal immediately for better visual
+            const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1), hitData.normal);
+            rulerGroup.quaternion.copy(q);
+
+            rulerSnapState = 2;
+            document.getElementById("auto-save-status").innerText = "Step 2: Click to align X-Axis";
+            return true;
+        }
+    }
+
+    // STEP 2: ALIGN ROTATION
+    else if(rulerSnapState === 2) {
+        const hitData = window.getSmartSnap(ray, targets);
+        if(hitData) {
+            // Prevent zero-length error
+            if(rulerOriginVec.distanceTo(hitData.point) < 0.1) return true;
+
+            // Use the Helper Function
+            const newQuat = getRulerRotation(rulerOriginVec, hitData.point, hitData.normal);
+            rulerGroup.quaternion.copy(newQuat);
+
+            // Finish
+            rulerSnapState = 0;
+            document.body.classList.remove("cursor-cross");
+            document.getElementById('btn-ruler-snap').classList.remove('active-tool');
+            document.getElementById("auto-save-status").innerText = "Ruler Set";
+            setTimeout(() => document.getElementById("auto-save-status").style.opacity = 0, 1500);
+
+            updateTinkerLabels();
+            return true;
+        }
+    }
+    return false;
+}
+
+
+
+// Helper for finding smart snap points (Vertices or Midpoints)
+function getSmartSnap(ray, targets) {
+    const intersects = ray.intersectObjects(targets, false);
+    if(intersects.length === 0) return null;
+
+    const hit = intersects[0];
+    const mesh = hit.object;
+
+    // 1. Try Vertex Snap (Distance threshold)
+    const vert = getClosestVertex(ray, mesh);
+
+    // Check distance from hit point to vertex
+    if(vert && vert.point.distanceTo(hit.point) < 5.0) {
+        return { point: vert.point, normal: hit.face.normal, obj: mesh };
+    }
+
+    // 2. Default to Hit Point (Surface Snap)
+    return { point: hit.point, normal: hit.face.normal, obj: mesh };
+}
+
+
+// 3. UPDATED LABELS (Enables Negative Numbers)
+// 3. UPDATED LABELS (Absolute Positive + Purple Height Label)
+window.updateTinkerLabels = function() {
+    // Cleanup old labels
+    activeLabels.forEach(l => scene.remove(l));
+    activeLabels.length = 0;
+    while(schematicGroup.children.length > 0) schematicGroup.remove(schematicGroup.children[0]);
+
+    if(selectedObjects.length !== 1) return;
+    const obj = selectedObjects[0];
+    if(obj.userData.isRuler) return;
+
+    // --- A. SIZE LABELS (Grey) ---
+    const box = new THREE.Box3().setFromObject(obj);
+    const size = box.getSize(new THREE.Vector3());
+
+    // X, Y, Z Size
+    const sx = addDimensionLines(new THREE.Vector3(box.min.x, box.max.y, box.min.z), new THREE.Vector3(box.max.x, box.max.y, box.min.z), new THREE.Vector3(0, 5, 0), 0x444444);
+    createInputLabel(sx, size.x, 'size', (v) => resizeObject(obj, 'x', v));
+
+    const sy = addDimensionLines(new THREE.Vector3(box.min.x, box.min.y, box.min.z), new THREE.Vector3(box.min.x, box.max.y, box.min.z), new THREE.Vector3(-5, 0, 0), 0x444444);
+    createInputLabel(sy, size.y, 'size', (v) => resizeObject(obj, 'y', v));
+
+    const sz = addDimensionLines(new THREE.Vector3(box.max.x, box.min.y, box.min.z), new THREE.Vector3(box.max.x, box.min.y, box.max.z), new THREE.Vector3(10, 0, 0), 0x444444);
+    createInputLabel(sz, size.z, 'size', (v) => resizeObject(obj, 'z', v));
+
+
+    // --- B. RULER RELATIVE POSITION ---
+    if(showRuler && rulerGroup) {
+        const worldPos = obj.position.clone();
+        const localPos = worldPos.clone().applyMatrix4(rulerGroup.matrixWorld.clone().invert());
+
+        const rPos = rulerGroup.position;
+        const rQuat = rulerGroup.quaternion;
+        const vX = new THREE.Vector3(1,0,0).applyQuaternion(rQuat);
+        const vY = new THREE.Vector3(0,1,0).applyQuaternion(rQuat);
+        const vZ = new THREE.Vector3(0,0,1).applyQuaternion(rQuat);
+
+        // --- X DISTANCE (Blue) ---
+        const endX = rPos.clone().add(vX.clone().multiplyScalar(localPos.x));
+        const offY = vY.clone().multiplyScalar(-15);
+
+        addDimensionLines(rPos, endX, offY, 0x0d6efd);
+        createInputLabel(
+            rPos.clone().lerp(endX, 0.5).add(offY),
+            Math.abs(localPos.x), // Force Positive
+            'pos',
+            (newVal) => {
+                const sign = localPos.x < 0 ? -1 : 1;
+                const diff = (newVal * sign) - localPos.x;
+                obj.position.add(vX.clone().multiplyScalar(diff));
+                updateTinkerLabels(); saveState();
+            }
+        );
+
+        // --- Y DISTANCE (Green) ---
+        const endY = rPos.clone().add(vY.clone().multiplyScalar(localPos.y));
+        const offX = vX.clone().multiplyScalar(-15);
+
+        addDimensionLines(rPos, endY, offX, 0x00cc44);
+        createInputLabel(
+            rPos.clone().lerp(endY, 0.5).add(offX),
+            Math.abs(localPos.y), // Force Positive
+            'pos',
+            (newVal) => {
+                const sign = localPos.y < 0 ? -1 : 1;
+                const diff = (newVal * sign) - localPos.y;
+                obj.position.add(vY.clone().multiplyScalar(diff));
+                updateTinkerLabels(); saveState();
+            }
+        );
+
+        // --- Z DISTANCE / UP-DOWN (Purple) ---
+        const endZ = rPos.clone().add(vZ.clone().multiplyScalar(localPos.z));
+        const offZ = new THREE.Vector3().addVectors(vX, vY).normalize().multiplyScalar(20);
+
+        // We use a different color (Purple) for the line to verify the update
+        addDimensionLines(rPos, endZ, offZ, 0x6f42c1); // Purple Line
+
+        const zLabel = createInputLabel(
+            rPos.clone().lerp(endZ, 0.5).add(offZ),
+            Math.abs(localPos.z), // Force Positive
+            'pos',
+            (newVal) => {
+                const sign = localPos.z < 0 ? -1 : 1;
+                const diff = (newVal * sign) - localPos.z;
+                obj.position.add(vZ.clone().multiplyScalar(diff));
+                updateTinkerLabels();
+                updateLiftConePos();
+                saveState();
+            }
+        );
+        // Turn the text box Purple too
+        if(zLabel && zLabel.element && zLabel.element.children[0]) {
+            zLabel.element.children[0].style.borderColor = '#6f42c1';
+            zLabel.element.children[0].style.color = '#6f42c1';
+        }
+
+        // --- ANGLE ---
+        const objForward = new THREE.Vector3(1,0,0).applyQuaternion(obj.quaternion).normalize();
+        const rulerForward = vX.clone().normalize();
+        let angleDeg = Math.round(rulerForward.angleTo(objForward) * (180/Math.PI));
+
+        const div = document.createElement('div');
+        div.className = 'rot-label';
+        div.style.background = 'rgba(255, 165, 0, 0.8)'; div.style.color = 'white';
+        div.innerText = angleDeg + "°";
+        const angleLabel = new CSS2DObject(div);
+        const boxZ = box.getSize(new THREE.Vector3()).z;
+        angleLabel.position.copy(worldPos).add(new THREE.Vector3(0,0, boxZ/2 + 10));
+        scene.add(angleLabel);
+        activeLabels.push(angleLabel);
+    }
+};
+
+// 1. Initialize Visuals
+function initSmartVisuals() {
+    if(ghostRulerGroup) return;
+
+    // A. Vertex Marker (Yellow Sphere)
+    snapMarker = new THREE.Mesh(
+        new THREE.SphereGeometry(1.5, 16, 16),
+        new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.9, depthTest: false })
+    );
+    snapMarker.renderOrder = 9999;
+    // CRITICAL FIX: Disable raycasting so the mouse "sees through" this marker
+    snapMarker.raycast = () => {};
+    snapMarker.visible = false;
+    scene.add(snapMarker);
+
+    // B. Edge Highlight (Yellow Cylinder)
+    snapEdgeLine = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.5, 0.5, 1, 8),
+        new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.8, depthTest: false })
+    );
+    snapEdgeLine.rotation.z = Math.PI / 2;
+    snapEdgeLine.renderOrder = 9999;
+    // CRITICAL FIX: Disable raycasting here too
+    snapEdgeLine.raycast = () => {};
+    snapEdgeLine.visible = false;
+    scene.add(snapEdgeLine);
+
+    // C. Ghost Ruler (Transparent Blue Preview)
+    ghostRulerGroup = new THREE.Group();
+    const ghostMat = new THREE.LineBasicMaterial({ color: 0x0d6efd, transparent: true, opacity: 0.3, depthTest: false });
+
+    // Ghost Axes
+    const xGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(50,0,0)]);
+    const yGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,50,0)]);
+    ghostRulerGroup.add(new THREE.Line(xGeo, ghostMat));
+    ghostRulerGroup.add(new THREE.Line(yGeo, ghostMat));
+
+    // Ghost Protractor
+    const arcCurve = new THREE.EllipseCurve(0, 0, 20, 20, 0, Math.PI/2);
+    const arcLine = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(arcCurve.getPoints(32)),
+        ghostMat
+    );
+    ghostRulerGroup.add(arcLine);
+
+    ghostRulerGroup.visible = false;
+    ghostRulerGroup.renderOrder = 9998;
+    // CRITICAL FIX: Disable raycasting on the whole group
+    ghostRulerGroup.traverse(c => { c.raycast = () => {}; });
+    scene.add(ghostRulerGroup);
+}
+
+// 2. Logic to Find Closest Vertex or Edge
+window.getSmartSnap = function(ray, targets) {
+    const intersects = ray.intersectObjects(targets, false);
+    if(intersects.length === 0) return null;
+
+    const hit = intersects[0];
+    const mesh = hit.object;
+    const posAttr = mesh.geometry.attributes.position;
+
+    // Calculate World Positions of the triangle vertices we hit
+    const vA = new THREE.Vector3().fromBufferAttribute(posAttr, hit.face.a).applyMatrix4(mesh.matrixWorld);
+    const vB = new THREE.Vector3().fromBufferAttribute(posAttr, hit.face.b).applyMatrix4(mesh.matrixWorld);
+    const vC = new THREE.Vector3().fromBufferAttribute(posAttr, hit.face.c).applyMatrix4(mesh.matrixWorld);
+
+    const snapDist = 2.5; // Tighter snap tolerance
+
+    // Priority 1: Snap to VERTEX
+    if(hit.point.distanceTo(vA) < snapDist) return { point: vA, normal: hit.face.normal, obj: mesh, type: 'vertex' };
+    if(hit.point.distanceTo(vB) < snapDist) return { point: vB, normal: hit.face.normal, obj: mesh, type: 'vertex' };
+    if(hit.point.distanceTo(vC) < snapDist) return { point: vC, normal: hit.face.normal, obj: mesh, type: 'vertex' };
+
+    // Priority 2: Snap to EDGE
+    const checkEdge = (start, end) => {
+        const line = new THREE.Line3(start, end);
+        const closest = new THREE.Vector3();
+        line.closestPointToPoint(hit.point, true, closest);
+        if(closest.distanceTo(hit.point) < snapDist) {
+            return { pos: closest, start: start, end: end };
+        }
+        return null;
+    }
+
+    const e1 = checkEdge(vA, vB);
+    const e2 = checkEdge(vB, vC);
+    const e3 = checkEdge(vC, vA);
+    const edge = e1 || e2 || e3;
+
+    if(edge) {
+        return {
+            point: edge.pos,
+            normal: hit.face.normal,
+            obj: mesh,
+            type: 'edge',
+            edgeStart: edge.start,
+            edgeEnd: edge.end
+        };
+    }
+
+    // Default: Snap to SURFACE
+    return { point: hit.point, normal: hit.face.normal, obj: mesh, type: 'face' };
+}
+
+// 3. UPDATED HOVER LISTENER (Visual Sync Fix)
+const canvasEl = document.getElementById("designer-canvas");
+canvasEl.addEventListener("pointermove", (e) => {
+    if(!ren || !cam) return;
+    window.requestRender();
+
+    if(typeof rulerSnapState !== 'undefined' && rulerSnapState > 0) {
+        initSmartVisuals();
+
+        const rect = canvasEl.getBoundingClientRect();
+        const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+        ray.setFromCamera(mouse, cam);
+
+        const targets = scene.children.filter(o =>
+            o.isMesh &&
+            !o.userData.isRuler &&
+            o !== liftCone &&
+            o !== snapMarker &&
+            o !== snapEdgeLine &&
+            o.parent !== ghostRulerGroup
+        );
+
+        const hit = window.getSmartSnap(ray, targets);
+
+        if(hit) {
+            // Highlights (Same as before)
+            if(hit.type === 'vertex') {
+                snapMarker.position.copy(hit.point);
+                snapMarker.visible = true; snapEdgeLine.visible = false;
+            } else if(hit.type === 'edge') {
+                snapMarker.visible = false; snapEdgeLine.visible = true;
+                const center = new THREE.Vector3().addVectors(hit.edgeStart, hit.edgeEnd).multiplyScalar(0.5);
+                snapEdgeLine.position.copy(center);
+                const len = hit.edgeStart.distanceTo(hit.edgeEnd);
+                snapEdgeLine.scale.set(1, len, 1);
+                snapEdgeLine.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), new THREE.Vector3().subVectors(hit.edgeEnd, hit.edgeStart).normalize());
+            } else {
+                snapMarker.visible = false; snapEdgeLine.visible = false;
+            }
+
+            // GHOST LOGIC
+            ghostRulerGroup.visible = true;
+
+            if(rulerSnapState === 1) {
+                // Step 1: Just place on point, align Z up
+                ghostRulerGroup.position.copy(hit.point);
+                const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1), hit.normal);
+                ghostRulerGroup.quaternion.copy(q);
+            }
+            else if(rulerSnapState === 2) {
+                // Step 2: Use the SHARED HELPER to ensure visual match
+                ghostRulerGroup.position.copy(rulerOriginVec);
+                if(rulerOriginVec.distanceTo(hit.point) > 0.1) {
+                    const q = getRulerRotation(rulerOriginVec, hit.point, hit.normal);
+                    ghostRulerGroup.quaternion.copy(q);
+                }
+            }
+        } else {
+            ghostRulerGroup.visible = false; snapMarker.visible = false; snapEdgeLine.visible = false;
+        }
+    } else {
+        if(ghostRulerGroup) ghostRulerGroup.visible = false;
+        if(snapMarker) snapMarker.visible = false;
+        if(snapEdgeLine) snapEdgeLine.visible = false;
+    }
+});
 
 // 1. START PLACEMENT MODE
     window.dStartText = () => {

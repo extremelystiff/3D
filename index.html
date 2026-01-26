@@ -3272,7 +3272,7 @@ const updatePropertiesPanel = () => {
                         }, 0);
                         break;
 
-                    // --- CASE B: THREADS (NEW) ---
+                    // --- CASE B: THREADS ---
                     case 'thread':
                         const p = n.userData.geoParams;
 
@@ -3289,7 +3289,6 @@ const updatePropertiesPanel = () => {
 
                         // 2. Dynamic Size Dropdown
                         let options = "";
-                        // Guard clause: ensure THREAD_SPECS exists
                         if(typeof THREAD_SPECS !== 'undefined' && THREAD_SPECS[p.std]) {
                             const currentLib = THREAD_SPECS[p.std];
                             for(let key in currentLib) {
@@ -3321,27 +3320,22 @@ const updatePropertiesPanel = () => {
                             const lenIn = document.getElementById('th-len');
 
                             if(stdSel && sizeSel && typeof THREAD_SPECS !== 'undefined') {
-                                // Change Standard -> Reset Size to first option
                                 stdSel.onchange = (e) => {
                                     const newStd = e.target.value;
                                     const firstKey = Object.keys(THREAD_SPECS[newStd])[0];
                                     const specs = THREAD_SPECS[newStd][firstKey];
-
                                     n.userData.geoParams.std = newStd;
                                     n.userData.geoParams.name = firstKey;
                                     n.userData.geoParams.r = specs[0];
                                     n.userData.geoParams.p = specs[1];
                                     regenerateGeometry(n);
-                                    updatePropertiesPanel(); // Re-render to update Size dropdown options
+                                    updatePropertiesPanel();
                                     saveState();
                                 };
-
-                                // Change Size -> Update Radius/Pitch
                                 sizeSel.onchange = (e) => {
                                     const key = e.target.value;
                                     const std = n.userData.geoParams.std;
                                     const specs = THREAD_SPECS[std][key];
-
                                     n.userData.geoParams.name = key;
                                     n.userData.geoParams.r = specs[0];
                                     n.userData.geoParams.p = specs[1];
@@ -3363,25 +3357,52 @@ const updatePropertiesPanel = () => {
 
                     // --- CASE C: STANDARD SHAPES (Cube, Cylinder, etc) ---
                     default:
-                        // Use the existing helper function
                         updateParametricUI(n);
                         break;
                 }
+
+                // --- ADDITION: BAKE BUTTON (For all parametric shapes) ---
+                container.innerHTML += `
+                <div class="border-top pt-2 mt-2">
+                    <button class="btn btn-sm btn-outline-secondary w-100" onclick="window.subdivideObject()">
+                        <i class="bi bi-grid-3x3"></i> Bake & Subdivide
+                    </button>
+                    <small class="text-muted" style="font-size:0.65rem">Converts shape to raw mesh</small>
+                </div>`;
+
             } else {
-                // Merged objects (no params)
-                container.style.display = "none";
+                // --- ADDITION: RAW MESH UI (Imported/Merged) ---
+                container.style.display = "block";
+                const vertCount = n.geometry.attributes.position.count;
+                
+                container.innerHTML += `
+                <div class="mb-2">
+                    <div class="small fw-bold text-muted"><i class="bi bi-heptagon-half"></i> Mesh Data</div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="small text-muted">Vertices:</span>
+                        <span class="small fw-bold">${vertCount.toLocaleString()}</span>
+                    </div>
+                    
+                    <label class="small fw-bold mb-1">Resolution</label>
+                    <button class="btn btn-sm btn-primary w-100 mb-1" onclick="window.subdivideObject()">
+                        <i class="bi bi-grid-3x3"></i> Increase (x4)
+                    </button>
+                    <small class="text-muted d-block lh-1" style="font-size:0.7rem">
+                        Adds detail for Shrink Wrap / Molding.
+                    </small>
+                </div>`;
             }
 
             // =========================================================
 
-
-            // 3. Add Chamfer / Smoothness Slider (Existing Logic)
+            // 3. Add Chamfer / Smoothness Slider
+            // (Shared logic for Box, Straight Extrusion, or Raw Mesh)
             const isParametric = !!n.userData.geoParams;
             const isBox = isParametric && n.userData.geoParams.type === 'box';
             const isStraightExtrusion = isParametric &&
                 (n.userData.geoParams.type === 'cylinder' || n.userData.geoParams.type === 'wedge') &&
                 Math.abs(n.userData.geoParams.rt - n.userData.geoParams.rb) < 0.1;
-            const isMerged = !isParametric;
+            const isMerged = !isParametric; // Raw mesh
 
             if (isBox || isStraightExtrusion || isMerged) {
                 let currentVal = 0;
@@ -4432,7 +4453,7 @@ window.dMirror = (axis) => {
         sourceObj.geometry = sourceGeo;
 
         window.requestRender();
-        window.saveState();
+        saveState();
         alert("Shrink wrap complete! Note: If the shape looks jagged, try starting with a shape that has more 'Segments' (Resolution).");
     };
 function createSnapshot() {
@@ -4468,7 +4489,91 @@ function createSnapshot() {
             return data;
         }
     }
+// --- INCREASE MESH RESOLUTION ---
+    window.subdivideObject = () => {
+        if (selectedObjects.length !== 1) return;
+        const obj = selectedObjects[0];
+        
+        // Safety: Don't crash the browser
+        const count = obj.geometry.attributes.position.count;
+        if (count > 100000) {
+            if (!confirm(`This mesh already has ${count} vertices. Subdividing might freeze your browser. Continue?`)) return;
+        }
 
+        // 1. Get Geometry & Convert to non-indexed for easier splitting
+        let geo = obj.geometry.clone();
+        if (geo.index) geo = geo.toNonIndexed();
+        
+        const pos = geo.attributes.position;
+        const newPos = [];
+        const newUVs = []; // Keep texture mapping working
+        const uvs = geo.attributes.uv;
+
+        // 2. Iterate every triangle (3 vertices at a time)
+        for (let i = 0; i < pos.count; i += 3) {
+            // Get original vertices
+            const v1 = new THREE.Vector3().fromBufferAttribute(pos, i);
+            const v2 = new THREE.Vector3().fromBufferAttribute(pos, i+1);
+            const v3 = new THREE.Vector3().fromBufferAttribute(pos, i+2);
+            
+            // Calculate Midpoints
+            const m1 = new THREE.Vector3().addVectors(v1, v2).multiplyScalar(0.5); // Between 1-2
+            const m2 = new THREE.Vector3().addVectors(v2, v3).multiplyScalar(0.5); // Between 2-3
+            const m3 = new THREE.Vector3().addVectors(v3, v1).multiplyScalar(0.5); // Between 3-1
+            
+            // Helper to push triangle
+            const pushTri = (a, b, c) => {
+                newPos.push(a.x, a.y, a.z);
+                newPos.push(b.x, b.y, b.z);
+                newPos.push(c.x, c.y, c.z);
+            };
+
+            // Push 4 new triangles
+            // 1. Top (V1 - M1 - M3)
+            pushTri(v1, m1, m3);
+            // 2. Right (M1 - V2 - M2)
+            pushTri(m1, v2, m2);
+            // 3. Bottom (M3 - M2 - V3)
+            pushTri(m3, m2, v3);
+            // 4. Center (M1 - M2 - M3)
+            pushTri(m1, m2, m3);
+            
+            // Handle UVs if they exist (Interpolate them)
+            if (uvs) {
+                 const uv1 = new THREE.Vector2().fromBufferAttribute(uvs, i);
+                 const uv2 = new THREE.Vector2().fromBufferAttribute(uvs, i+1);
+                 const uv3 = new THREE.Vector2().fromBufferAttribute(uvs, i+2);
+                 
+                 const um1 = new THREE.Vector2().addVectors(uv1, uv2).multiplyScalar(0.5);
+                 const um2 = new THREE.Vector2().addVectors(uv2, uv3).multiplyScalar(0.5);
+                 const um3 = new THREE.Vector2().addVectors(uv3, uv1).multiplyScalar(0.5);
+                 
+                 const pushUV = (a, b, c) => { newUVs.push(a.x, a.y, b.x, b.y, c.x, c.y); };
+                 pushUV(uv1, um1, um3);
+                 pushUV(um1, uv2, um2);
+                 pushUV(um3, um2, uv3);
+                 pushUV(um1, um2, um3);
+            }
+        }
+
+        // 3. Build new Geometry
+        const newGeo = new THREE.BufferGeometry();
+        newGeo.setAttribute('position', new THREE.Float32BufferAttribute(newPos, 3));
+        if (newUVs.length > 0) newGeo.setAttribute('uv', new THREE.Float32BufferAttribute(newUVs, 2));
+        
+        newGeo.computeVertexNormals();
+
+        // 4. Update Object
+        obj.geometry.dispose();
+        obj.geometry = newGeo;
+        
+        // Remove parametric data so the UI knows it's a "Raw Mesh" now
+        if(obj.userData.geoParams) delete obj.userData.geoParams;
+
+        window.requestRender();
+        window.saveState();
+        updatePropertiesPanel(); // Refresh UI to update the vertex count
+    };
 function saveState() {
         // 1. Always update view when state changes (Fixes UI lag)
         window.requestRender();

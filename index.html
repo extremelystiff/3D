@@ -4571,7 +4571,7 @@ function createSnapshot() {
         if(obj.userData.geoParams) delete obj.userData.geoParams;
 
         window.requestRender();
-        window.saveState();
+        saveState();
         updatePropertiesPanel(); // Refresh UI to update the vertex count
     };
 function saveState() {

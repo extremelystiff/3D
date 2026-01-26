@@ -4489,65 +4489,53 @@ function createSnapshot() {
             return data;
         }
     }
-// --- INCREASE MESH RESOLUTION ---
+// --- INCREASE MESH RESOLUTION (FIXED SMOOTHING) ---
     window.subdivideObject = () => {
         if (selectedObjects.length !== 1) return;
         const obj = selectedObjects[0];
         
-        // Safety: Don't crash the browser
         const count = obj.geometry.attributes.position.count;
         if (count > 100000) {
             if (!confirm(`This mesh already has ${count} vertices. Subdividing might freeze your browser. Continue?`)) return;
         }
 
-        // 1. Get Geometry & Convert to non-indexed for easier splitting
+        // 1. Prepare Geometry
         let geo = obj.geometry.clone();
         if (geo.index) geo = geo.toNonIndexed();
         
         const pos = geo.attributes.position;
         const newPos = [];
-        const newUVs = []; // Keep texture mapping working
+        const newUVs = []; 
         const uvs = geo.attributes.uv;
 
-        // 2. Iterate every triangle (3 vertices at a time)
+        // 2. Split Triangles (1 -> 4)
         for (let i = 0; i < pos.count; i += 3) {
-            // Get original vertices
             const v1 = new THREE.Vector3().fromBufferAttribute(pos, i);
             const v2 = new THREE.Vector3().fromBufferAttribute(pos, i+1);
             const v3 = new THREE.Vector3().fromBufferAttribute(pos, i+2);
             
-            // Calculate Midpoints
-            const m1 = new THREE.Vector3().addVectors(v1, v2).multiplyScalar(0.5); // Between 1-2
-            const m2 = new THREE.Vector3().addVectors(v2, v3).multiplyScalar(0.5); // Between 2-3
-            const m3 = new THREE.Vector3().addVectors(v3, v1).multiplyScalar(0.5); // Between 3-1
+            const m1 = new THREE.Vector3().addVectors(v1, v2).multiplyScalar(0.5);
+            const m2 = new THREE.Vector3().addVectors(v2, v3).multiplyScalar(0.5);
+            const m3 = new THREE.Vector3().addVectors(v3, v1).multiplyScalar(0.5);
             
-            // Helper to push triangle
             const pushTri = (a, b, c) => {
                 newPos.push(a.x, a.y, a.z);
                 newPos.push(b.x, b.y, b.z);
                 newPos.push(c.x, c.y, c.z);
             };
 
-            // Push 4 new triangles
-            // 1. Top (V1 - M1 - M3)
             pushTri(v1, m1, m3);
-            // 2. Right (M1 - V2 - M2)
             pushTri(m1, v2, m2);
-            // 3. Bottom (M3 - M2 - V3)
             pushTri(m3, m2, v3);
-            // 4. Center (M1 - M2 - M3)
             pushTri(m1, m2, m3);
             
-            // Handle UVs if they exist (Interpolate them)
             if (uvs) {
                  const uv1 = new THREE.Vector2().fromBufferAttribute(uvs, i);
                  const uv2 = new THREE.Vector2().fromBufferAttribute(uvs, i+1);
                  const uv3 = new THREE.Vector2().fromBufferAttribute(uvs, i+2);
-                 
                  const um1 = new THREE.Vector2().addVectors(uv1, uv2).multiplyScalar(0.5);
                  const um2 = new THREE.Vector2().addVectors(uv2, uv3).multiplyScalar(0.5);
                  const um3 = new THREE.Vector2().addVectors(uv3, uv1).multiplyScalar(0.5);
-                 
                  const pushUV = (a, b, c) => { newUVs.push(a.x, a.y, b.x, b.y, c.x, c.y); };
                  pushUV(uv1, um1, um3);
                  pushUV(um1, uv2, um2);
@@ -4556,23 +4544,31 @@ function createSnapshot() {
             }
         }
 
-        // 3. Build new Geometry
-        const newGeo = new THREE.BufferGeometry();
+        let newGeo = new THREE.BufferGeometry();
         newGeo.setAttribute('position', new THREE.Float32BufferAttribute(newPos, 3));
         if (newUVs.length > 0) newGeo.setAttribute('uv', new THREE.Float32BufferAttribute(newUVs, 2));
         
+        // --- THE FIX: WELD VERTICES ---
+        // This connects the split triangles back together so they share edges.
+        // This allows 'computeVertexNormals' to smooth the shading.
+        
+        // Use the utility already imported at the top
+        newGeo = mergeVertices(newGeo, 0.001); 
         newGeo.computeVertexNormals();
 
-        // 4. Update Object
+        // Update Object
         obj.geometry.dispose();
         obj.geometry = newGeo;
         
-        // Remove parametric data so the UI knows it's a "Raw Mesh" now
+        // Ensure material is set to smooth
+        if(obj.material) obj.material.flatShading = false;
+        if(obj.material) obj.material.needsUpdate = true;
+
         if(obj.userData.geoParams) delete obj.userData.geoParams;
 
         window.requestRender();
         saveState();
-        updatePropertiesPanel(); // Refresh UI to update the vertex count
+        updatePropertiesPanel(); 
     };
 function saveState() {
         // 1. Always update view when state changes (Fixes UI lag)

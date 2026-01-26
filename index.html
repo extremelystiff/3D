@@ -335,7 +335,8 @@
         <button class="btn btn-light border btn-tool" onclick="window.dLoft()" title="Loft / Hull"><i class="bi bi-bezier2"></i></button>
         <button class="btn btn-light border btn-tool" onclick="window.dShell()" title="Hollow / Shell"><i class="bi bi-nut"></i></button>
         <button class="btn btn-light border btn-tool" onclick="window.dDrop()" title="Drop to Floor"><i class="bi bi-arrow-bar-down"></i></button>
-
+        <!-- ADD THIS BUTTON -->
+        <button class="btn btn-light border btn-tool" onclick="window.dVacuum()" title="Vacuum Mold (Create Mount Impression)"><i class="bi bi-cloud-download"></i></button>
         <div class="divider"></div>
 
         <button class="btn btn-primary border btn-tool" onclick="document.getElementById('file-upload').click()" title="Import File"><i class="bi bi-upload"></i></button>
@@ -4222,6 +4223,112 @@ window.dMirror = (axis) => {
     };
     // --- UNDO / REDO / SAVE SYSTEM ---
 
+// --- VACUUM MOLD TOOL ---
+    window.dVacuum = () => {
+        if (selectedObjects.length !== 1) return alert("Select the object (e.g., Headset) to mold over.");
+        
+        const targetObj = selectedObjects[0];
+        
+        // 1. Get Bounds of target
+        const box = new THREE.Box3().setFromObject(targetObj);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+        
+        // 2. Define resolution (Higher = smoother curve, but slower)
+        const segsX = 64; 
+        const segsY = 64; 
+        
+        // 3. Create the "Clay" Block
+        // We make it slightly larger (10%) than the object so it covers edges
+        const clayGeo = new THREE.BoxGeometry(size.x * 1.1, size.y * 1.1, 20, segsX, segsY, 1);
+        
+        // 4. Position Clay Block ABOVE the object
+        // We place the bottom of the block at the top of the object
+        const clayMat = new THREE.MeshStandardMaterial({ 
+            color: 0x0dcaf0, 
+            roughness: 0.5,
+            wireframe: appSettings.wireframe
+        });
+        const clayMesh = new THREE.Mesh(clayGeo, clayMat);
+        
+        // Align centers, but move Z up
+        clayMesh.position.set(center.x, center.y, box.max.z + 10); // +10 is half height of block (20/2)
+        
+        // Update matrix to handle raycasting in world space
+        clayMesh.updateMatrixWorld();
+        targetObj.updateMatrixWorld();
+        
+        // 5. THE MOLDING PROCESS (Raycasting)
+        const posAttr = clayGeo.attributes.position;
+        const vertex = new THREE.Vector3();
+        const raycaster = new THREE.Raycaster();
+        const downDir = new THREE.Vector3(0, 0, -1);
+        
+        // Tolerance/Clearance (0.5mm gap so it fits easily)
+        const clearance = 0.5; 
+        
+        let hitCount = 0;
+
+        for (let i = 0; i < posAttr.count; i++) {
+            vertex.fromBufferAttribute(posAttr, i);
+            
+            // Convert local vertex to world space
+            vertex.applyMatrix4(clayMesh.matrixWorld);
+            
+            // Only modify the BOTTOM face of the block
+            // Local Z of BoxGeometry bottom face is -height/2 (-10 in this case)
+            // But we are in world space now.
+            // Easier check: Is this vertex below the centerline of the block?
+            const localZ = posAttr.getZ(i);
+            
+            if (localZ < -9.0) { // If it's a bottom vertex
+                // Cast ray DOWN from this vertex position
+                // Start ray slightly above vertex to ensure no self-intersection issues
+                raycaster.set(new THREE.Vector3(vertex.x, vertex.y, box.max.z + 1), downDir);
+                
+                const intersects = raycaster.intersectObject(targetObj, true); // True = recursive check
+                
+                if (intersects.length > 0) {
+                    // We hit the headset!
+                    const hit = intersects[0];
+                    
+                    // Move the vertex to the hit point (+ clearance)
+                    // We need to convert the Hit Point (World) back to Local Space of Clay
+                    const localHit = clayMesh.worldToLocal(hit.point.clone());
+                    
+                    // Apply clearance (move up slightly)
+                    posAttr.setZ(i, localHit.z + clearance);
+                    hitCount++;
+                } else {
+                    // Missed the object (part of the box overhanging the void)
+                    // Drop it down to the object's bottom level to create a "wall"
+                    // Or keep it flat? Let's drop it slightly below the hit plane for a skirt effect
+                    const floorLevel = clayMesh.worldToLocal(new THREE.Vector3(0,0, box.min.z)).z;
+                    posAttr.setZ(i, floorLevel);
+                }
+            }
+        }
+        
+        if(hitCount === 0) return alert("Mold failed. Ensure object is directly below the mold area.");
+
+        // 6. Finish Up
+        clayGeo.computeVertexNormals(); // Recalculate lighting
+        
+        clayMesh.userData = { 
+            name: targetObj.userData.name + " (Mold)",
+            isHole: false 
+        };
+        
+        clayMesh.castShadow = true;
+        clayMesh.receiveShadow = true;
+        
+        scene.add(clayMesh);
+        selectObject(clayMesh);
+        saveState();
+        
+        // Optional: Hide original to show result
+        // targetObj.visible = false; 
+    };
 function createSnapshot() {
         const l = [];
         scene.children.forEach(c => {

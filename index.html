@@ -337,6 +337,7 @@
         <button class="btn btn-light border btn-tool" onclick="window.dDrop()" title="Drop to Floor"><i class="bi bi-arrow-bar-down"></i></button>
         <!-- ADD THIS BUTTON -->
         <button class="btn btn-light border btn-tool" onclick="window.dVacuum()" title="Vacuum Mold (Create Mount Impression)"><i class="bi bi-cloud-download"></i></button>
+        <button class="btn btn-light border btn-tool" onclick="window.dShrinkWrap()" title="Shrink Wrap / Snap to Surface"><i class="bi bi-bandaid"></i></button>
         <div class="divider"></div>
 
         <button class="btn btn-primary border btn-tool" onclick="document.getElementById('file-upload').click()" title="Import File"><i class="bi bi-upload"></i></button>
@@ -587,6 +588,7 @@ import * as THREE from "three";
     import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 
     import { SUBTRACTION, ADDITION, Brush, Evaluator } from "three-bvh-csg";
+    import { MeshBVH } from "three-mesh-bvh";
 
     // IMPORT ZSTD
     import { init as initZstd, compress, decompress } from "zstd-wasm";
@@ -4328,6 +4330,110 @@ window.dMirror = (axis) => {
         
         // Optional: Hide original to show result
         // targetObj.visible = false; 
+    };
+
+// --- SHRINK WRAP (SNAP TO SURFACE) ---
+    window.dShrinkWrap = () => {
+        // 1. Validation
+        if (selectedObjects.length !== 2) {
+            return alert("Select 2 objects:\n1. The Strap/Shape (to be deformed)\n2. The Headset (Target surface)");
+        }
+
+        // We assume the last selected object is the Target (Headset), 
+        // and the first one is the Strap (Source).
+        // (Based on typical click order: Click Strap, Shift+Click Headset)
+        const targetObj = selectedObjects[1]; // The Headset
+        const sourceObj = selectedObjects[0]; // The Strap
+
+        // Safety check: Don't deform the complex headset by accident
+        if (targetObj.geometry.attributes.position.count < sourceObj.geometry.attributes.position.count) {
+             const confirmSwap = confirm("Warning: You are shrinking the complex object onto the simple one.\n\nSwap target and source?");
+             if(confirmSwap) {
+                 // Swap them
+                 window.selectObject(null);
+                 window.selectObject(targetObj, true); // Select Strap 
+                 window.selectObject(sourceObj, true); // Select Headset
+                 window.dShrinkWrap();
+                 return;
+             }
+        }
+        
+        // 2. Settings
+        const offsetInput = prompt("Offset distance (mm)?\n(Gap between headset and strap)", "0.5");
+        if(offsetInput === null) return;
+        const offset = parseFloat(offsetInput);
+
+        // 3. Prepare Geometry
+        // We need to make sure the Source (Strap) has enough vertices to bend.
+        // If it's a simple box, it won't curve. 
+        // Let's verify or auto-subdivide (simplified approach: just warn/proceed).
+        const sourceGeo = sourceObj.geometry.clone();
+        // Convert to world space to match target
+        sourceGeo.applyMatrix4(sourceObj.matrixWorld);
+
+        // 4. Build BVH for Target (High Speed Geometry Search)
+        // This creates a spatial index of the headset so we can find closest points instantly.
+        const targetGeo = targetObj.geometry.clone();
+        targetGeo.applyMatrix4(targetObj.matrixWorld);
+        const bvh = new MeshBVH(targetGeo);
+
+        // 5. The Algorithm
+        const posAttr = sourceGeo.attributes.position;
+        const tempVec = new THREE.Vector3();
+        const targetPoint = new THREE.Vector3();
+        const targetNormal = new THREE.Vector3();
+        const matrixWorldInv = sourceObj.matrixWorld.clone().invert();
+
+        for (let i = 0; i < posAttr.count; i++) {
+            // Get current vertex of strap (in World Space)
+            tempVec.fromBufferAttribute(posAttr, i);
+
+            // Find the closest point on the Headset
+            const hit = bvh.closestPointToPoint(tempVec);
+
+            if (hit) {
+                // Get the point and the normal at that point
+                targetPoint.copy(hit.point);
+                
+                // If the target has normals, use them to push outward
+                // (Note: BVH hit gives us point and distance, getting interpolated normal is harder)
+                // Simpler approach: Calculate vector from Target Center to Hit Point? 
+                // No, complex shapes need face normals.
+                
+                // Let's approximate normal by vector from Hit -> Old Source Position?
+                // Or better: Use the target geometry normal if available?
+                // BVH return structure depends on version. Let's use a simpler offset method:
+                // Move vertex to Hit Point.
+                
+                // apply offset: We move it slightly *away* from the surface.
+                // We can approximate the "Out" direction by (SourcePos - HitPos) normalized.
+                // If the strap was "outside" the headset, this vector points out.
+                const normal = new THREE.Vector3().subVectors(tempVec, targetPoint).normalize();
+                
+                // If they were overlapping, normal might be zero or weird. 
+                // Fallback: Use Z-up or verify distance.
+                if(normal.lengthSq() < 0.001) normal.set(0,0,1);
+
+                // New Position = Hit Point + (Normal * Offset)
+                tempVec.copy(targetPoint).add(normal.multiplyScalar(offset));
+
+                // Write back
+                posAttr.setXYZ(i, tempVec.x, tempVec.y, tempVec.z);
+            }
+        }
+
+        // 6. Finish
+        // Convert back to Local Space of the Source Object
+        sourceGeo.applyMatrix4(matrixWorldInv);
+        sourceGeo.computeVertexNormals();
+
+        // Update the mesh
+        sourceObj.geometry.dispose();
+        sourceObj.geometry = sourceGeo;
+
+        window.requestRender();
+        window.saveState();
+        alert("Shrink wrap complete! Note: If the shape looks jagged, try starting with a shape that has more 'Segments' (Resolution).");
     };
 function createSnapshot() {
         const l = [];

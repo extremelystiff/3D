@@ -631,6 +631,9 @@ import * as THREE from "three";
     let textPlaceMode = false;
     let textGhost = null;
     let shadowPlane;
+        // --- NEW GLOBALS FOR SHELL ---
+    let isShellSelectMode = false;
+    let shellSelectedFaces = [];
 
 
 
@@ -1792,10 +1795,10 @@ function updateTinkerLabels() {
     };
 
 // 3. UPDATED POINTER UP (The Brains)
-    const onPointerUp = e => {
-        isInteracting = false; // Stop high-refresh rendering
+const onPointerUp = e => {
+        isInteracting = false; 
 
-        // Check for Lift Tool (Priority 1)
+        // Check for Lift Tool
         if (isLifting) {
             isLifting = false;
             ctrl.enabled = true;
@@ -1804,62 +1807,59 @@ function updateTinkerLabels() {
             return;
         }
 
-        // --- CALCULATE DRAG DISTANCE ---
         const dist = Math.sqrt(Math.pow(e.clientX - pointerStartX, 2) + Math.pow(e.clientY - pointerStartY, 2));
-
-        // If moved more than 5 pixels, it was a Camera Rotation/Zoom. Ignore click.
         if (dist > 5) return;
 
-        // --- CALC RAY EARLY (Moved Up) ---
-        // We calculate this now because Ruler and Text tools need it immediately
         const rect = ren.domElement.getBoundingClientRect();
         const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
         ray.setFromCamera(mouse, cam);
 
-        // --- NEW: RULER SNAP CHECK ---
-        // If we are in Ruler Mode, handle the click and stop everything else
         if (window.handleRulerClick && window.handleRulerClick(ray)) return;
 
-        // --- NEW: CLICK TO PLACE TEXT ---
         if (textPlaceMode) {
              if (textGhost && textGhost.visible) {
-                // PASS THE CALCULATED BEND
                 const bend = textGhost.userData.geoParams ? textGhost.userData.geoParams.bend : 0;
                 createTextObject(textGhost.position, textGhost.quaternion, bend);
              }
-
-             // Cleanup
              textPlaceMode = false;
              scene.remove(textGhost);
              textGhost = null;
              document.body.style.cursor = 'default';
-             const status = document.getElementById("auto-save-status");
-             status.style.opacity = 0;
+             document.getElementById("auto-save-status").style.opacity = 0;
              return;
         }
 
-        // --- CLICK LOGIC BELOW ---
         if (e.target.tagName === 'INPUT') return;
         if (tCtrl.dragging || tCtrl.axis) return;
 
-        // A. ALIGN TOOL
         if (alignState !== 'none') {
             if(handleAlignClick(ray)) return;
         }
 
-        // B. LOFT FACE SELECTION
+        // --- B. LOFT FACE SELECTION ---
         if (isFaceLoftMode) {
             const intersects = ray.intersectObjects(scene.children.filter(o => o.isMesh && o !== liftCone && !o.userData.isRuler && o.visible), false);
             if (intersects.length > 0) handleFaceSelection(intersects[0]);
             return;
         }
 
+        // --- NEW: D. SHELL FACE SELECTION ---
+        if (isShellSelectMode) {
+            // Only allow clicking the selected object
+            const targetObj = selectedObjects[0];
+            const intersects = ray.intersectObject(targetObj, false);
+            if (intersects.length > 0) {
+                window.handleShellFaceClick(intersects[0]);
+            }
+            return;
+        }
+        // ------------------------------------
+
         // C. STANDARD SELECTION
         const intersects = ray.intersectObjects(scene.children, true);
         const validHits = intersects.filter(hit => {
             const o = hit.object;
             let p = o.parent;
-            // Recursively check parents to see if they are the Ruler or Markers
             while(p) { if(p === schematicGroup || p === faceMarkerGroup) return false; p = p.parent; }
             return (o.isMesh || o.isLine) && o !== liftCone && o !== schematicGroup && o !== faceMarkerGroup;
         });
@@ -1867,8 +1867,6 @@ function updateTinkerLabels() {
         if (validHits.length > 0) {
             let hitObj = validHits[0].object;
             let parent = hitObj.parent;
-
-            // Special check: If we clicked the Ruler Visualization, select it
             if(parent && parent.userData && parent.userData.isRuler) {
                 selectObject(parent);
             }
@@ -1879,7 +1877,54 @@ function updateTinkerLabels() {
             selectObject(null);
         }
     };
+window.handleShellFaceClick = (hit) => {
+        const mesh = hit.object;
+        const normal = hit.face.normal.clone();
+        
+        // Check if already selected (simple normal check)
+        // We only allow 2 faces max
+        if (shellSelectedFaces.length >= 2) {
+            alert("2 faces already selected. Click 'Shell' button again to execute.");
+            return;
+        }
 
+        // Visual Feedback (Green Marker)
+        const surfaceData = getConnectedFlatSurface(mesh, hit.faceIndex, hit.face.normal);
+        const markerGeo = new THREE.BufferGeometry();
+        const markerPositions = [];
+        const posAttr = mesh.geometry.attributes.position;
+        
+        for(let i = 0; i < surfaceData.indices.length; i++) {
+            const idx = surfaceData.indices[i];
+            markerPositions.push(posAttr.getX(idx), posAttr.getY(idx), posAttr.getZ(idx));
+        }
+        
+        markerGeo.setAttribute('position', new THREE.Float32BufferAttribute(markerPositions, 3));
+        // Push slightly out along normal to prevent z-fighting
+        markerGeo.translate(normal.x*0.1, normal.y*0.1, normal.z*0.1);
+
+        const markerMat = new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide, transparent: true, opacity: 0.6, depthTest: false });
+        const markerMesh = new THREE.Mesh(markerGeo, markerMat);
+        
+        // Sync transforms
+        markerMesh.position.copy(mesh.position);
+        markerMesh.rotation.copy(mesh.rotation);
+        markerMesh.scale.copy(mesh.scale);
+        
+        markerMesh.userData = { isMarker: true };
+        faceMarkerGroup.add(markerMesh);
+
+        // Store Data
+        shellSelectedFaces.push({
+            normal: normal,
+            // We transform normal to world space for the logic calculation later
+            worldNormal: normal.clone().applyQuaternion(mesh.quaternion).normalize() 
+        });
+
+        const status = document.getElementById("auto-save-status");
+        if (shellSelectedFaces.length === 1) status.innerText = "1 Face Selected. Select 1 more, or click Shell button to Finish.";
+        if (shellSelectedFaces.length === 2) status.innerText = "2 Faces Selected. Click Shell button to Execute.";
+    };
     function handleFaceSelection(hit) {
         const mesh = hit.object;
         const hitNormal = hit.face.normal.clone();
@@ -3699,111 +3744,186 @@ window.dUnmerge = () => {
         saveState();
     };
 
-window.dShell = () => {
+window.dShell = () => {window.dShell = () => {
         if (selectedObjects.length !== 1) return alert("Select exactly 1 object.");
-
         const obj = selectedObjects[0];
 
+        // --- STEP 1: MODE CHECK ---
+        if (!isShellSelectMode) {
+            // Ask user for preference
+            const useFaceMode = confirm(
+                "Hollow / Shell Options:\n\n" +
+                "OK = Select 2 Specific Faces to open (Custom Tube)\n" +
+                "CANCEL = Standard Z-Axis (Auto Tube or Closed Hollow)"
+            );
+
+            if (useFaceMode) {
+                // ENTER FACE SELECTION MODE
+                isShellSelectMode = true;
+                shellSelectedFaces = [];
+                document.body.style.cursor = "crosshair";
+                
+                // Visuals
+                const btn = document.querySelector('button[onclick="window.dShell()"]');
+                if(btn) btn.classList.add('active-tool');
+                
+                const status = document.getElementById("auto-save-status");
+                status.innerText = "Select 2 Faces (Ends of the tube)";
+                status.style.opacity = 1;
+                return; // Stop here, wait for clicks
+            }
+        }
+
+        // --- STEP 2: GATHER PARAMETERS ---
+        // Whether in standard mode or executing the custom face mode, we need thickness
+        
         // 1. Get LOCAL Geometry Bounds
-        // We measure the raw geometry to ensure rotation doesn't confuse the math
         if (!obj.geometry.boundingBox) obj.geometry.computeBoundingBox();
         const gBox = obj.geometry.boundingBox;
-
-        // 2. Calculate True Local Dimensions (Geometry Size * Current Scale)
         const dimX = (gBox.max.x - gBox.min.x) * obj.scale.x;
         const dimY = (gBox.max.y - gBox.min.y) * obj.scale.y;
         const dimZ = (gBox.max.z - gBox.min.z) * obj.scale.z;
+        const minDim = Math.min(dimX, dimY, dimZ);
 
-        const minDim = Math.min(dimX, dimY);
-
-        // 3. User Input
-        const input = prompt(`Object Base: ${Math.round(dimX)}x${Math.round(dimY)}mm.\nWall Thickness (mm):`, "2");
-        if (input === null) return;
+        const input = prompt(`Object Base: ${Math.round(dimX)}x${Math.round(dimY)}x${Math.round(dimZ)}mm.\nWall Thickness (mm):`, "2");
+        if (input === null) {
+            // Cancelled, reset mode
+            isShellSelectMode = false;
+            shellSelectedFaces = [];
+            document.body.style.cursor = "default";
+             while(faceMarkerGroup.children.length > 0) faceMarkerGroup.remove(faceMarkerGroup.children[0]);
+            return;
+        }
+        
         const mm = parseFloat(input);
-
-        // Safety Checks
         if (isNaN(mm) || mm <= 0) return alert("Invalid thickness.");
         if (mm * 2 >= minDim) return alert(`Too thick! Max thickness is ${(minDim/2) - 0.1}mm`);
 
-        const isTube = confirm("Make it a Tube (Open Ends)?\n\nOK = Yes (Tube)\nCancel = No (Hollow Inside)");
-
-        // 4. Calculate Shrink Ratios (TargetSize / CurrentSize)
-        const ratX = (dimX - (mm * 2)) / dimX;
-        const ratY = (dimY - (mm * 2)) / dimY;
-
-        // 5. Z-Axis Logic (The Fix)
-        let ratZ;
-        if (isTube) {
-            // TUBE MODE:
-            // Instead of stretching by 20% (which ruins cones/pyramids),
-            // we add just 1mm extra height (0.5mm sticking out top/bottom).
-            // This ensures it cuts open the ends without destroying the side wall slope.
-            ratZ = (dimZ + 1.0) / dimZ;
-        } else {
-            // HOLLOW MODE:
-            // Shrink Z to keep the top and bottom closed
-            ratZ = (dimZ - (mm * 2)) / dimZ;
-        }
-
-        // 6. Prepare CSG
+        // --- STEP 3: EXECUTION LOGIC ---
+        
         const ev = new Evaluator();
-
-        // Outer Brush
+        
+        // Prepare Outer Brush
         const bOut = new Brush(prepareCSG(obj.geometry));
         bOut.position.copy(obj.position);
         bOut.rotation.copy(obj.rotation);
         bOut.scale.copy(obj.scale);
         bOut.updateMatrixWorld();
 
-        // Inner Brush
+        // Prepare Base Inner Brush (The Void)
         const bIn = new Brush(prepareCSG(obj.geometry));
         bIn.position.copy(obj.position);
         bIn.rotation.copy(obj.rotation);
+        
+        // Calculate uniform-ish shrink ratios
+        const ratX = (dimX - (mm * 2)) / dimX;
+        const ratY = (dimY - (mm * 2)) / dimY;
+        const ratZ = (dimZ - (mm * 2)) / dimZ;
 
-        // Apply calculated scales
-        bIn.scale.set(
-            obj.scale.x * ratX,
-            obj.scale.y * ratY,
-            obj.scale.z * ratZ
-        );
-        bIn.updateMatrixWorld();
+        let result;
 
-        // 7. Center Fix
-        // Ensure the inner shape cuts exactly from the volumetric center
-        const boxOut = new THREE.Box3().setFromObject(bOut);
-        const boxIn = new THREE.Box3().setFromObject(bIn);
-        const centerOut = boxOut.getCenter(new THREE.Vector3());
-        const centerIn = boxIn.getCenter(new THREE.Vector3());
+        // === BRANCH A: CUSTOM FACES ===
+        if (isShellSelectMode) {
+            if (shellSelectedFaces.length === 0) {
+                 alert("No faces selected. Aborting.");
+                 isShellSelectMode = false;
+                 document.body.style.cursor = "default";
+                 return;
+            }
 
-        const shift = new THREE.Vector3().subVectors(centerOut, centerIn);
-        bIn.position.add(shift);
-        bIn.updateMatrixWorld();
+            // 1. Shrink Inner Brush Uniformly
+            bIn.scale.set(obj.scale.x * ratX, obj.scale.y * ratY, obj.scale.z * ratZ);
+            bIn.updateMatrixWorld();
+            
+            // 2. Center Align
+            const boxOut = new THREE.Box3().setFromObject(bOut);
+            const boxIn = new THREE.Box3().setFromObject(bIn);
+            const shift = new THREE.Vector3().subVectors(boxOut.getCenter(new THREE.Vector3()), boxIn.getCenter(new THREE.Vector3()));
+            bIn.position.add(shift);
+            bIn.updateMatrixWorld();
 
-        // 8. Boolean Subtract
-        let result = ev.evaluate(bOut, bIn, SUBTRACTION);
+            // 3. Create Extensions for each selected face
+            // We create a copy of the inner void, and shift it OUTWARDS through the selected face
+            // This punches the hole.
+            
+            let combinedCutter = bIn;
 
-        // 9. Build Result
-        const newMesh = new THREE.Mesh(
-            result.geometry,
-            obj.material.clone()
-        );
+            shellSelectedFaces.forEach(faceData => {
+                const extender = new Brush(prepareCSG(obj.geometry));
+                extender.position.copy(bIn.position);
+                extender.rotation.copy(bIn.rotation);
+                extender.scale.copy(bIn.scale);
+                
+                // Calculate shift vector in Local Space or World Space?
+                // The Brush coordinates are World. faceData.worldNormal is World.
+                // We shift the extender OUT by the thickness + a bit extra
+                
+                const shiftVec = faceData.worldNormal.clone().multiplyScalar(mm * 2.5);
+                extender.position.add(shiftVec);
+                extender.updateMatrixWorld();
+                
+                // Union the inner void with this extension
+                combinedCutter = ev.evaluate(combinedCutter, extender, ADDITION);
+            });
 
+            // 4. Subtract Combined Cutter from Outer
+            result = ev.evaluate(bOut, combinedCutter, SUBTRACTION);
+
+            // Reset Mode
+            isShellSelectMode = false;
+            shellSelectedFaces = [];
+            while(faceMarkerGroup.children.length > 0) faceMarkerGroup.remove(faceMarkerGroup.children[0]);
+            document.body.style.cursor = "default";
+            const btn = document.querySelector('button[onclick="window.dShell()"]');
+            if(btn) btn.classList.remove('active-tool');
+        } 
+        
+        // === BRANCH B: STANDARD AUTO-AXIS ===
+        else {
+            const isTube = confirm("Make it a Tube (Open Ends on Z-Axis)?\n\nOK = Yes (Tube)\nCancel = No (Hollow Inside)");
+
+            // Z-Axis Logic
+            let finalRatZ = ratZ;
+            if (isTube) {
+                // TUBE MODE: Stretch Z to cut through top/bottom
+                finalRatZ = (dimZ + 1.0) / dimZ;
+            }
+
+            bIn.scale.set(obj.scale.x * ratX, obj.scale.y * ratY, obj.scale.z * finalRatZ);
+            bIn.updateMatrixWorld();
+
+            // Center Align
+            const boxOut = new THREE.Box3().setFromObject(bOut);
+            const boxIn = new THREE.Box3().setFromObject(bIn);
+            const shift = new THREE.Vector3().subVectors(boxOut.getCenter(new THREE.Vector3()), boxIn.getCenter(new THREE.Vector3()));
+            bIn.position.add(shift);
+            bIn.updateMatrixWorld();
+
+            result = ev.evaluate(bOut, bIn, SUBTRACTION);
+        }
+
+        // --- FINALIZATION ---
+        const newMesh = new THREE.Mesh(result.geometry, obj.material.clone());
         newMesh.position.set(0,0,0);
         newMesh.rotation.set(0,0,0);
         newMesh.scale.set(1,1,1);
-
         newMesh.castShadow = true;
         newMesh.receiveShadow = true;
 
         newMesh.userData = {
             ...obj.userData,
-            name: obj.userData.name + (isTube ? " (Tube)" : " (Shell)"),
-            geoParams: null // Shape is no longer parametric
+            name: obj.userData.name + " (Shell)",
+            geoParams: null
         };
 
         scene.remove(obj);
         scene.add(newMesh);
         selectObject(newMesh);
+        
+        const status = document.getElementById("auto-save-status");
+        status.innerText = "Shell Created";
+        status.style.opacity = 0;
+        
         saveState();
     };
 

@@ -3812,7 +3812,7 @@ window.dUnmerge = () => {
         return geo;
     }
 
-    window.dShell = () => {
+window.dShell = () => {
         if (selectedObjects.length !== 1) return alert("Select exactly 1 object.");
         const obj = selectedObjects[0];
 
@@ -3854,7 +3854,7 @@ window.dUnmerge = () => {
             (gBox.max.z - gBox.min.z) * obj.scale.z
         );
 
-        // Customize Prompt based on state
+        // Customize Prompt
         const isAlreadyShell = !!obj.userData.isShell;
         const promptText = isAlreadyShell 
             ? "Cut Depth (Match your Wall Thickness):" 
@@ -3866,7 +3866,6 @@ window.dUnmerge = () => {
         const mm = parseFloat(input);
         if (isNaN(mm) || mm <= 0) return alert("Invalid thickness.");
         
-        // Safety check only for fresh solids
         if (!isAlreadyShell && mm * 2 >= minDim) return alert(`Too thick! Max thickness is ${(minDim/2) - 0.1}mm`);
 
         const status = document.getElementById("auto-save-status");
@@ -3876,7 +3875,7 @@ window.dUnmerge = () => {
         setTimeout(() => {
             const ev = new Evaluator();
             
-            // Outer Brush (Target)
+            // Outer Brush
             const bOut = new Brush(prepareCSG(obj.geometry));
             bOut.position.copy(obj.position);
             bOut.rotation.copy(obj.rotation);
@@ -3889,26 +3888,37 @@ window.dUnmerge = () => {
             const createPlugs = () => {
                 let combinedPlug = null;
                 shellMarkers.forEach(marker => {
-                    // 1. Get Marker Vertices
-                    const verts = [];
+                    // 1. Get Original Vertices
+                    const rawVerts = [];
                     const posAttr = marker.geometry.attributes.position;
                     for(let i=0; i<posAttr.count; i++) {
-                        verts.push(new THREE.Vector3().fromBufferAttribute(posAttr, i));
+                        rawVerts.push(new THREE.Vector3().fromBufferAttribute(posAttr, i));
                     }
 
-                    // 2. Create Inner Vertices (Project inward by thickness + epsilon)
-                    // This ensures we cut exactly through the wall
-                    const innerVerts = verts.map(v => {
+                    // --- NEW: INFLATE THE FACE ---
+                    // Calculate center of face
+                    const center = new THREE.Vector3();
+                    rawVerts.forEach(v => center.add(v));
+                    center.divideScalar(rawVerts.length);
+
+                    // Expand vertices outward from center by 5% to clean up edges
+                    const expandedVerts = rawVerts.map(v => {
+                        const dir = new THREE.Vector3().subVectors(v, center);
+                        // Multiply by 1.05 to overcut edges by 5%
+                        return center.clone().add(dir.multiplyScalar(1.05));
+                    });
+
+                    // 2. Create Inner Vertices (Project inward from the EXPANDED vertices)
+                    const innerVerts = expandedVerts.map(v => {
                         const shift = marker.userData.worldNormal.clone().negate().multiplyScalar(mm + 0.5);
-                        // Convert world vector to local space orientation
                         const localShift = shift.applyQuaternion(obj.quaternion.clone().invert());
                         return v.clone().add(localShift);
                     });
 
-                    // 3. Convex Hull
-                    let plugGeo = new ConvexGeometry([...verts, ...innerVerts]);
+                    // 3. Convex Hull using expanded + inner
+                    let plugGeo = new ConvexGeometry([...expandedVerts, ...innerVerts]);
                     
-                    // 4. CRITICAL FIX: Ensure UVs/Normals exist
+                    // 4. Ensure UVs/Normals exist
                     plugGeo = ensureCSGCompatible(plugGeo);
 
                     const plugBrush = new Brush(plugGeo);
@@ -3930,7 +3940,7 @@ window.dUnmerge = () => {
                 if(plugs) {
                     result = ev.evaluate(bOut, plugs, SUBTRACTION);
                 } else {
-                    result = bOut; // Should not happen
+                    result = bOut;
                 }
             }
             
@@ -3943,7 +3953,6 @@ window.dUnmerge = () => {
                 bIn.position.copy(obj.position);
                 bIn.rotation.copy(obj.rotation);
                 
-                // Calculate Scale Ratios
                 const dimX = (gBox.max.x - gBox.min.x) * obj.scale.x;
                 const dimY = (gBox.max.y - gBox.min.y) * obj.scale.y;
                 const dimZ = (gBox.max.z - gBox.min.z) * obj.scale.z;
@@ -3953,28 +3962,24 @@ window.dUnmerge = () => {
                 const ratZ = (dimZ - (mm * 2)) / dimZ;
 
                 if (isShellSelectMode) {
-                    // CUSTOM FACES: Standard Hollow Void ...
+                    // CUSTOM FACES
                     bIn.scale.set(obj.scale.x * ratX, obj.scale.y * ratY, obj.scale.z * ratZ);
                     bIn.updateMatrixWorld();
                     
-                    // Re-center void
                     const boxOut = new THREE.Box3().setFromObject(bOut);
                     const boxIn = new THREE.Box3().setFromObject(bIn);
                     const shift = new THREE.Vector3().subVectors(boxOut.getCenter(new THREE.Vector3()), boxIn.getCenter(new THREE.Vector3()));
                     bIn.position.add(shift);
                     bIn.updateMatrixWorld();
 
-                    // ... PLUS The Plugs
                     const plugs = createPlugs();
                     
-                    // Subtract Void
                     let tempRes = ev.evaluate(bOut, bIn, SUBTRACTION);
-                    // Subtract Plugs
                     if(plugs) result = ev.evaluate(tempRes, plugs, SUBTRACTION);
                     else result = tempRes;
 
                 } else {
-                    // STANDARD TUBE/HOLLOW
+                    // STANDARD TUBE
                     const isTube = confirm("Make it a Tube (Open Ends on Z-Axis)?\n\nOK = Yes (Tube)\nCancel = No (Hollow Inside)");
                     const finalRatZ = isTube ? (dimZ + 1.0) / dimZ : ratZ;
 
@@ -4004,8 +4009,8 @@ window.dUnmerge = () => {
                     ...obj.userData,
                     name: obj.userData.name + " (Shell)",
                     geoParams: null,
-                    isShell: true,        // Flag for next time
-                    lastThickness: mm     // Store thickness for convenience
+                    isShell: true,
+                    lastThickness: mm
                 };
 
                 scene.remove(obj);

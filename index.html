@@ -3793,13 +3793,31 @@ window.dUnmerge = () => {
         newObjects.forEach(o => selectObject(o, true));
         saveState();
     };
-window.dShell = () => {
+// --- HELPER: Fixes Crash by ensuring UVs and Normals exist ---
+    function ensureCSGCompatible(geometry) {
+        // 1. Merge to ensure watertightness (needed for ConvexGeometry)
+        let geo = mergeVertices(geometry, 0.001);
+        
+        // 2. Compute Normals if missing
+        geo.computeVertexNormals();
+        
+        // 3. Add Dummy UVs if missing (Fixes 'aAttr is undefined' crash)
+        if (!geo.attributes.uv) {
+            const count = geo.attributes.position.count;
+            const uvs = new Float32Array(count * 2);
+            // Just fill with 0, we don't need textures on the cut surface usually
+            geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+        }
+        
+        return geo;
+    }
+
+    window.dShell = () => {
         if (selectedObjects.length !== 1) return alert("Select exactly 1 object.");
         const obj = selectedObjects[0];
 
         // --- STEP 1: MODE CHECK ---
         if (!isShellSelectMode) {
-            // Ask user for preference
             const useFaceMode = confirm(
                 "Hollow / Shell Options:\n\n" +
                 "OK = Select Custom Faces (Multi-Select, Toggle)\n" +
@@ -3807,16 +3825,13 @@ window.dShell = () => {
             );
 
             if (useFaceMode) {
-                // ENTER FACE SELECTION MODE
                 isShellSelectMode = true;
                 shellMarkers = [];
                 document.body.style.cursor = "crosshair";
-                
                 const btn = document.querySelector('button[onclick="window.dShell()"]');
                 if(btn) btn.classList.add('active-tool');
-                
                 updateShellStatus();
-                return; // Stop here, wait for clicks
+                return; 
             }
         }
 
@@ -3830,33 +3845,38 @@ window.dShell = () => {
              return;
         }
         
-        // Get Bounds
+        // Bounds for validation
         if (!obj.geometry.boundingBox) obj.geometry.computeBoundingBox();
         const gBox = obj.geometry.boundingBox;
-        const dimX = (gBox.max.x - gBox.min.x) * obj.scale.x;
-        const dimY = (gBox.max.y - gBox.min.y) * obj.scale.y;
-        const dimZ = (gBox.max.z - gBox.min.z) * obj.scale.z;
-        const minDim = Math.min(dimX, dimY, dimZ);
+        const minDim = Math.min(
+            (gBox.max.x - gBox.min.x) * obj.scale.x,
+            (gBox.max.y - gBox.min.y) * obj.scale.y,
+            (gBox.max.z - gBox.min.z) * obj.scale.z
+        );
 
-        const input = prompt(`Wall Thickness (mm):`, "2");
+        // Customize Prompt based on state
+        const isAlreadyShell = !!obj.userData.isShell;
+        const promptText = isAlreadyShell 
+            ? "Cut Depth (Match your Wall Thickness):" 
+            : "Wall Thickness (mm):";
+            
+        const input = prompt(promptText, obj.userData.lastThickness || "2");
         if (input === null) return; 
         
         const mm = parseFloat(input);
         if (isNaN(mm) || mm <= 0) return alert("Invalid thickness.");
         
-        // Only check max thickness if we are doing a fresh hollow. 
-        // If it's already a shell, we are just cutting, so thickness doesn't limit geometry as much.
-        if (!obj.userData.isShell && mm * 2 >= minDim) return alert(`Too thick! Max thickness is ${(minDim/2) - 0.1}mm`);
+        // Safety check only for fresh solids
+        if (!isAlreadyShell && mm * 2 >= minDim) return alert(`Too thick! Max thickness is ${(minDim/2) - 0.1}mm`);
 
         const status = document.getElementById("auto-save-status");
         status.innerText = "Processing... (Please Wait)";
         status.style.opacity = 1;
         
-        // Delay for UI update
         setTimeout(() => {
             const ev = new Evaluator();
             
-            // Prepare Outer Brush (The current object)
+            // Outer Brush (Target)
             const bOut = new Brush(prepareCSG(obj.geometry));
             bOut.position.copy(obj.position);
             bOut.rotation.copy(obj.rotation);
@@ -3865,122 +3885,98 @@ window.dShell = () => {
 
             let result;
 
-            // =========================================================
-            // SCENARIO A: SECOND PASS (Object is ALREADY a Shell)
-            // Logic: Just cut the selected faces. Do NOT hollow again.
-            // =========================================================
-            if (isShellSelectMode && obj.userData.isShell) {
-                
-                // We will create a "Cutter" brush that is the union of all "Plugs"
-                // Start with the first plug
-                let combinedCutter = null;
-
+            // --- FUNCTION TO GENERATE PLUGS (The Cutters) ---
+            const createPlugs = () => {
+                let combinedPlug = null;
                 shellMarkers.forEach(marker => {
-                    // 1. Get Vertices from the Marker (The selected face surface)
+                    // 1. Get Marker Vertices
                     const verts = [];
                     const posAttr = marker.geometry.attributes.position;
                     for(let i=0; i<posAttr.count; i++) {
                         verts.push(new THREE.Vector3().fromBufferAttribute(posAttr, i));
                     }
 
-                    // 2. Create "Inner" Vertices
-                    // Clone the surface vertices and push them INWARDS (opposite to normal)
-                    // We push them by (Thickness + 1mm) to ensure we cut fully through the wall.
+                    // 2. Create Inner Vertices (Project inward by thickness + epsilon)
+                    // This ensures we cut exactly through the wall
                     const innerVerts = verts.map(v => {
-                        const vClone = v.clone();
-                        // Marker normal is stored in World Space, but marker verts are Local to the Marker?
-                        // Actually, Marker mesh has same position/rotation as Obj.
-                        // So we can use the marker.userData.worldNormal directly if we apply it in World Space?
-                        // Easier: Work in Local space relative to the object center.
-                        
-                        // Transform world normal to local normal relative to the mesh
-                        // actually, let's just use the inverse of the world normal for direction
-                        const shift = marker.userData.worldNormal.clone().negate().multiplyScalar(mm + 1.0);
-                        
-                        // But wait, the marker geometry is positioned at (0,0,0) inside the Mesh container?
-                        // No, in handleShellFaceClick we did `markerMesh.position.copy(mesh.position)`.
-                        // The geometry is local.
-                        
-                        // We need to apply the shift in the object's local rotation space.
-                        const localShift = shift.clone().applyQuaternion(obj.quaternion.clone().invert());
-                        return vClone.add(localShift);
+                        const shift = marker.userData.worldNormal.clone().negate().multiplyScalar(mm + 0.5);
+                        // Convert world vector to local space orientation
+                        const localShift = shift.applyQuaternion(obj.quaternion.clone().invert());
+                        return v.clone().add(localShift);
                     });
 
-                    // 3. Combine Surface + Inner vertices
-                    const allPoints = [...verts, ...innerVerts];
-
-                    // 4. Create Convex Hull (Solid Plug)
-                    const plugGeo = new ConvexGeometry(allPoints);
+                    // 3. Convex Hull
+                    let plugGeo = new ConvexGeometry([...verts, ...innerVerts]);
                     
-                    // 5. Create Brush
+                    // 4. CRITICAL FIX: Ensure UVs/Normals exist
+                    plugGeo = ensureCSGCompatible(plugGeo);
+
                     const plugBrush = new Brush(plugGeo);
                     plugBrush.position.copy(obj.position);
                     plugBrush.rotation.copy(obj.rotation);
                     plugBrush.scale.copy(obj.scale);
                     plugBrush.updateMatrixWorld();
 
-                    // 6. Combine
-                    if (!combinedCutter) {
-                        combinedCutter = plugBrush;
-                    } else {
-                        combinedCutter = ev.evaluate(combinedCutter, plugBrush, ADDITION);
-                    }
+                    combinedPlug = combinedPlug ? ev.evaluate(combinedPlug, plugBrush, ADDITION) : plugBrush;
                 });
+                return combinedPlug;
+            };
 
-                // Subtract the plugs from the shell
-                result = ev.evaluate(bOut, combinedCutter, SUBTRACTION);
+            // =========================================================
+            // SCENARIO A: ALREADY A SHELL -> JUST CUT FACES
+            // =========================================================
+            if (isShellSelectMode && isAlreadyShell) {
+                const plugs = createPlugs();
+                if(plugs) {
+                    result = ev.evaluate(bOut, plugs, SUBTRACTION);
+                } else {
+                    result = bOut; // Should not happen
+                }
             }
             
             // =========================================================
-            // SCENARIO B: FIRST PASS (Solid -> Shell)
-            // Logic: Shrink object to create void, then subtract.
+            // SCENARIO B: SOLID -> HOLLOW + CUT FACES (or Standard Tube)
             // =========================================================
             else {
-                // Prepare Inner Brush (The Void)
+                // 1. Create Inner Void Brush
                 const bIn = new Brush(prepareCSG(obj.geometry));
                 bIn.position.copy(obj.position);
                 bIn.rotation.copy(obj.rotation);
                 
-                // Shrink ratios
+                // Calculate Scale Ratios
+                const dimX = (gBox.max.x - gBox.min.x) * obj.scale.x;
+                const dimY = (gBox.max.y - gBox.min.y) * obj.scale.y;
+                const dimZ = (gBox.max.z - gBox.min.z) * obj.scale.z;
+                
                 const ratX = (dimX - (mm * 2)) / dimX;
                 const ratY = (dimY - (mm * 2)) / dimY;
                 const ratZ = (dimZ - (mm * 2)) / dimZ;
 
                 if (isShellSelectMode) {
-                    // CUSTOM FACE MODE (First Pass)
+                    // CUSTOM FACES: Standard Hollow Void ...
                     bIn.scale.set(obj.scale.x * ratX, obj.scale.y * ratY, obj.scale.z * ratZ);
                     bIn.updateMatrixWorld();
                     
-                    // Center Align
+                    // Re-center void
                     const boxOut = new THREE.Box3().setFromObject(bOut);
                     const boxIn = new THREE.Box3().setFromObject(bIn);
                     const shift = new THREE.Vector3().subVectors(boxOut.getCenter(new THREE.Vector3()), boxIn.getCenter(new THREE.Vector3()));
                     bIn.position.add(shift);
                     bIn.updateMatrixWorld();
 
-                    // Create Extensions to punch through
-                    let combinedCutter = bIn;
-
-                    shellMarkers.forEach(marker => {
-                        const extender = new Brush(prepareCSG(obj.geometry));
-                        extender.position.copy(bIn.position);
-                        extender.rotation.copy(bIn.rotation);
-                        extender.scale.copy(bIn.scale);
-                        
-                        // Shift OUTWARDS
-                        const shiftVec = marker.userData.worldNormal.clone().multiplyScalar(mm * 3.0);
-                        extender.position.add(shiftVec);
-                        extender.updateMatrixWorld();
-                        
-                        combinedCutter = ev.evaluate(combinedCutter, extender, ADDITION);
-                    });
-
-                    result = ev.evaluate(bOut, combinedCutter, SUBTRACTION);
+                    // ... PLUS The Plugs
+                    const plugs = createPlugs();
+                    
+                    // Subtract Void
+                    let tempRes = ev.evaluate(bOut, bIn, SUBTRACTION);
+                    // Subtract Plugs
+                    if(plugs) result = ev.evaluate(tempRes, plugs, SUBTRACTION);
+                    else result = tempRes;
 
                 } else {
-                    // STANDARD AXIS MODE
+                    // STANDARD TUBE/HOLLOW
                     const isTube = confirm("Make it a Tube (Open Ends on Z-Axis)?\n\nOK = Yes (Tube)\nCancel = No (Hollow Inside)");
-                    let finalRatZ = isTube ? (dimZ + 1.0) / dimZ : ratZ;
+                    const finalRatZ = isTube ? (dimZ + 1.0) / dimZ : ratZ;
 
                     bIn.scale.set(obj.scale.x * ratX, obj.scale.y * ratY, obj.scale.z * finalRatZ);
                     bIn.updateMatrixWorld();
@@ -4008,7 +4004,8 @@ window.dShell = () => {
                     ...obj.userData,
                     name: obj.userData.name + " (Shell)",
                     geoParams: null,
-                    isShell: true // MARK AS SHELL for future operations
+                    isShell: true,        // Flag for next time
+                    lastThickness: mm     // Store thickness for convenience
                 };
 
                 scene.remove(obj);

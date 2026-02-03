@@ -5215,15 +5215,20 @@ function finishExtrude() {
             bExtrude.updateMatrixWorld();
 
             // 3. Perform Operation
-            // If height is positive, we ADD. If negative, we SUBTRACT (Cut).
             let result;
             if (currentHeight >= 0) {
                  result = ev.evaluate(bBase, bExtrude, ADDITION);
             } else {
-                 // For subtraction, we need to ensure normals are flipped correctly by the evaluator
-                 // But simply evaluating usually works if the volume intersects.
                  result = ev.evaluate(bBase, bExtrude, SUBTRACTION);
             }
+
+            // --- FIX FOR POSITION SHIFT ---
+            // The result is in World Space. We map it back to Local Space
+            // so it stays aligned with the object's existing Position/Rotation.
+            mesh.updateMatrixWorld();
+            const inverseMat = mesh.matrixWorld.clone().invert();
+            result.geometry.applyMatrix4(inverseMat);
+            // ------------------------------
 
             // 4. Replace Mesh
             mesh.geometry.dispose();

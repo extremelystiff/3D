@@ -328,6 +328,7 @@
         <button class="btn btn-light border btn-tool" onclick="window.setMode('scale')" data-mode="scale" title="Scale"><i class="bi bi-arrows-angle-expand"></i></button>
         <button class="btn btn-light border btn-tool" onclick="window.startAlignTool()" title="Snap Face to Face"><i class="bi bi-magnet"></i></button>
         <button class="btn btn-light border btn-tool" onclick="document.getElementById('mirror-panel').style.display='block'" title="Mirror / Flip"><i class="bi bi-symmetry-vertical"></i></button>
+        <button class="btn btn-light border btn-tool" onclick="window.dExtrude()" title="Extrude / Push-Pull (E)"><i class="bi bi-box-arrow-up"></i></button>
         <div class="divider"></div>
 
         <div class="small fw-bold text-muted" style="font-size:0.6rem">ACT</div>
@@ -637,7 +638,11 @@ import * as THREE from "three";
     let shellMarkers = []; // Stores the visual green meshes
 
 
+    let isExtrudeMode = false;
+    let isExtrudeDragging = false;
+    let extrudeData = null; // { mesh, normal, indices, startY, currentHeight, ghost }
 
+    
     // --- OPTIMIZATION GLOBALS ---
     let fpsInterval, now, then, elapsed;
     let isFpsLocked = false;
@@ -1798,7 +1803,10 @@ function updateTinkerLabels() {
 // 3. UPDATED POINTER UP (The Brains)
 const onPointerUp = e => {
         isInteracting = false; 
-
+        const rect = ren.domElement.getBoundingClientRect();
+        const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+        ray.setFromCamera(mouse, cam);
+        if(window.handleExtrudeClick && window.handleExtrudeClick(ray)) return;
         // Check for Lift Tool
         if (isLifting) {
             isLifting = false;
@@ -2808,7 +2816,10 @@ const onPointerMove = e => {
         // BUG FIX: Don't set isInteracting = true here.
         // We only want a single frame update for hovering, not a continuous loop.
         window.requestRender();
-
+        if (typeof window.handleExtrudeHover === 'function') {
+            // We only pass the raw Y for calculation, ray is optional
+            window.handleExtrudeHover(null, e.clientY);
+        }
         // --- NEW: TEXT PLACEMENT GHOST ---
 // --- ADVANCED TEXT PLACEMENT ---
         if (textPlaceMode && textGhost) {
@@ -5013,7 +5024,234 @@ function loadSnapshot(compressedData) {
         // Update labels immediately
         updateTinkerLabels();
     };
+// --- EXTRUDE (PUSH/PULL) TOOL ---
 
+
+window.dExtrude = () => {
+    // 1. Enter Mode
+    if(selectedObjects.length > 0) selectObject(null); // Clear selection
+    isExtrudeMode = true;
+    isExtrudeDragging = false;
+    extrudeData = null;
+
+    document.body.style.cursor = 'crosshair';
+    
+    // UI Feedback
+    document.querySelectorAll(".btn-tool").forEach(b => b.classList.remove("active-tool"));
+    const btn = document.querySelector('button[onclick="window.dExtrude()"]');
+    if(btn) btn.classList.add('active-tool');
+
+    const status = document.getElementById("auto-save-status");
+    status.innerText = "Step 1: Click a FLAT FACE to extrude";
+    status.style.opacity = 1;
+};
+
+// HELPER: Create the extrusion volume
+function createExtrusionGeo(mesh, indices, height, normal) {
+    const posAttr = mesh.geometry.attributes.position;
+    const vertices = [];
+
+    // 1. Get Base Vertices (The selected face)
+    const uniqueIndices = [...new Set(indices)];
+    uniqueIndices.forEach(idx => {
+        const v = new THREE.Vector3().fromBufferAttribute(posAttr, idx);
+        // We keep them in LOCAL space of the object for now
+        vertices.push(v);
+    });
+
+    // 2. Create Top Vertices (Moved by height along normal)
+    // Note: Normal is in World Space usually, need Local Normal
+    const localNormal = normal.clone().applyQuaternion(mesh.quaternion.clone().invert()).normalize();
+    
+    const topVertices = vertices.map(v => {
+        return v.clone().add(localNormal.clone().multiplyScalar(height));
+    });
+
+    // 3. Create Convex Hull (Robust way to make a solid from 2 caps)
+    // Note: This works perfectly for Convex shapes (Rect, Circle, Hex).
+    // For Concave shapes (L-shapes), ConvexHull will fill the gap. 
+    // This is a trade-off for performance/stability in a lightweight editor.
+    const allVerts = [...vertices, ...topVertices];
+    let geo = new THREE.ConvexGeometry(allVerts);
+
+    // 4. Cleanup for CSG
+    geo = mergeVertices(geo, 0.001);
+    geo.computeVertexNormals();
+    
+    return geo;
+}
+
+// INTERCEPT CLICK FOR EXTRUDE
+const originalHandleShellClick = window.handleShellFaceClick; // Backup just in case
+// We inject logic into the main pointerUp/Move handlers via flags
+
+// --- 1. HANDLE CLICK (Select Face or Finish Drag) ---
+// Find the existing 'onPointerUp' function in the code.
+// We need to inject this block AT THE VERY TOP of 'onPointerUp':
+
+/* 
+   INSTRUCTIONS: 
+   Paste the content of 'handleExtrudeUp' into the existing onPointerUp function
+   at the very beginning, OR use this standalone logic that overrides specific behaviors.
+   
+   To make it easier, I will provide a function you can call inside onPointerUp.
+*/
+
+window.handleExtrudeClick = (ray) => {
+    if (!isExtrudeMode) return false;
+
+    // SCENARIO A: FINISH DRAGGING (COMMIT)
+    if (isExtrudeDragging && extrudeData) {
+        finishExtrude();
+        return true;
+    }
+
+    // SCENARIO B: SELECT FACE
+    const targets = scene.children.filter(o => o.isMesh && !o.userData.isRuler && o !== liftCone && !o.userData.isGhost);
+    const intersects = ray.intersectObjects(targets, false);
+
+    if (intersects.length > 0) {
+        const hit = intersects[0];
+        const mesh = hit.object;
+
+        // 1. Get Connected Surface (Reuse the logic from Loft/Shell)
+        const surfaceData = getConnectedFlatSurface(mesh, hit.faceIndex, hit.face.normal);
+        
+        // 2. Setup Data
+        extrudeData = {
+            mesh: mesh,
+            normal: hit.face.normal.clone(), // World Normal
+            indices: surfaceData.indices,
+            startY: 0, // Set on drag start
+            currentHeight: 0,
+            ghost: null
+        };
+
+        // 3. Create Visual Ghost (Start with 1mm height)
+        const geo = createExtrusionGeo(mesh, surfaceData.indices, 0.1, hit.face.normal);
+        const mat = new THREE.MeshStandardMaterial({ 
+            color: 0xffff00, 
+            transparent: true, 
+            opacity: 0.6,
+            roughness: 0.2
+        });
+        
+        const ghost = new THREE.Mesh(geo, mat);
+        // Sync Transform
+        ghost.position.copy(mesh.position);
+        ghost.rotation.copy(mesh.rotation);
+        ghost.scale.copy(mesh.scale);
+        ghost.userData = { isGhost: true };
+        
+        scene.add(ghost);
+        extrudeData.ghost = ghost;
+
+        // 4. Switch State
+        isExtrudeDragging = true;
+        document.getElementById("auto-save-status").innerText = "Step 2: DRAG mouse to Extrude";
+        
+        return true;
+    }
+    
+    return false;
+};
+
+// --- 2. HANDLE HOVER/DRAG ---
+// Call this inside onPointerMove
+window.handleExtrudeHover = (ray, y) => {
+    if (isExtrudeMode && isExtrudeDragging && extrudeData && extrudeData.ghost) {
+        if(extrudeData.startY === 0) extrudeData.startY = y;
+        
+        // Calculate Height
+        const sensitivity = 0.5;
+        const delta = (extrudeData.startY - y) * sensitivity;
+        
+        // Snap to grid (1mm)
+        let height = Math.round(delta); 
+        if(Math.abs(height) < 0.1) height = 0.1; // Min thickness
+        
+        extrudeData.currentHeight = height;
+
+        // Regenerate Ghost Geometry
+        const newGeo = createExtrusionGeo(extrudeData.mesh, extrudeData.indices, height, extrudeData.normal);
+        extrudeData.ghost.geometry.dispose();
+        extrudeData.ghost.geometry = newGeo;
+        
+        // Update Label
+        document.getElementById("auto-save-status").innerText = `Extrude: ${height}mm (Click to Finish)`;
+    }
+};
+
+function finishExtrude() {
+    if(!extrudeData || !extrudeData.ghost) return;
+
+    const { mesh, ghost, currentHeight } = extrudeData;
+    const status = document.getElementById("auto-save-status");
+    
+    status.innerText = "Processing...";
+
+    setTimeout(() => {
+        try {
+            // 1. Prepare Evaluator
+            const ev = new Evaluator();
+            
+            // 2. Prepare Brushes
+            const bBase = new Brush(prepareCSG(mesh.geometry));
+            bBase.position.copy(mesh.position);
+            bBase.rotation.copy(mesh.rotation);
+            bBase.scale.copy(mesh.scale);
+            bBase.updateMatrixWorld();
+
+            const bExtrude = new Brush(prepareCSG(ghost.geometry));
+            bExtrude.position.copy(ghost.position);
+            bExtrude.rotation.copy(ghost.rotation);
+            bExtrude.scale.copy(ghost.scale);
+            bExtrude.updateMatrixWorld();
+
+            // 3. Perform Operation
+            // If height is positive, we ADD. If negative, we SUBTRACT (Cut).
+            let result;
+            if (currentHeight >= 0) {
+                 result = ev.evaluate(bBase, bExtrude, ADDITION);
+            } else {
+                 // For subtraction, we need to ensure normals are flipped correctly by the evaluator
+                 // But simply evaluating usually works if the volume intersects.
+                 result = ev.evaluate(bBase, bExtrude, SUBTRACTION);
+            }
+
+            // 4. Replace Mesh
+            mesh.geometry.dispose();
+            mesh.geometry = result.geometry;
+            
+            // Recalc shadow/bounds
+            mesh.geometry.computeBoundingBox();
+            
+            // Update UI
+            if(mesh.userData.geoParams) delete mesh.userData.geoParams; // It's no longer parametric
+            mesh.userData.name = mesh.userData.name + " (Extruded)";
+
+        } catch (e) {
+            console.error("Extrude Failed", e);
+            alert("Extrude failed. Try a simpler shape.");
+        }
+
+        // Cleanup
+        scene.remove(ghost);
+        extrudeData = null;
+        isExtrudeDragging = false;
+        isExtrudeMode = false;
+        
+        document.body.style.cursor = 'default';
+        document.querySelectorAll(".btn-tool").forEach(b => b.classList.remove("active-tool"));
+        window.setMode('translate'); // Back to normal
+        
+        status.innerText = "Done";
+        setTimeout(() => status.style.opacity = 0, 1000);
+        
+        saveState();
+        window.requestRender();
+    }, 50);
+}
     // Initialize
     init3D();
 

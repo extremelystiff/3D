@@ -5072,14 +5072,15 @@ function createExtrusionGeo(mesh, indices, height, normal) {
         return v.clone().add(localNormal.clone().multiplyScalar(height));
     });
 
-    // 3. Create Convex Hull (Robust way to make a solid from 2 caps)
-    // Note: This works perfectly for Convex shapes (Rect, Circle, Hex).
-    // For Concave shapes (L-shapes), ConvexHull will fill the gap. 
-    // This is a trade-off for performance/stability in a lightweight editor.
+    // 3. Create Convex Hull
     const allVerts = [...vertices, ...topVertices];
-    let geo = new THREE.ConvexGeometry(allVerts);
+    
+    // --- FIX IS HERE: Use 'ConvexGeometry', not 'THREE.ConvexGeometry' ---
+    let geo = new ConvexGeometry(allVerts); 
+    // ---------------------------------------------------------------------
 
     // 4. Cleanup for CSG
+    // Ensure 'mergeVertices' is imported at the top of your file (it should be there already)
     geo = mergeVertices(geo, 0.001);
     geo.computeVertexNormals();
     

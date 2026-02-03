@@ -2822,8 +2822,8 @@ const onPointerMove = e => {
         // We only want a single frame update for hovering, not a continuous loop.
         window.requestRender();
         if (typeof window.handleExtrudeHover === 'function') {
-            // We only pass the raw Y for calculation, ray is optional
-            window.handleExtrudeHover(null, e.clientY);
+            // Pass the full event 'e' so we have X and Y
+            window.handleExtrudeHover(null, e); 
         }
         // --- NEW: TEXT PLACEMENT GHOST ---
 // --- ADVANCED TEXT PLACEMENT ---
@@ -5032,16 +5032,17 @@ function loadSnapshot(compressedData) {
 // --- EXTRUDE (PUSH/PULL) TOOL ---
 
 
+// --- EXTRUDE (PUSH/PULL) TOOL (IMPROVED) ---
+
+
 window.dExtrude = () => {
-    // 1. Enter Mode
-    if(selectedObjects.length > 0) selectObject(null); // Clear selection
+    if(selectedObjects.length > 0) selectObject(null);
     isExtrudeMode = true;
     isExtrudeDragging = false;
     extrudeData = null;
 
     document.body.style.cursor = 'crosshair';
     
-    // UI Feedback
     document.querySelectorAll(".btn-tool").forEach(b => b.classList.remove("active-tool"));
     const btn = document.querySelector('button[onclick="window.dExtrude()"]');
     if(btn) btn.classList.add('active-tool');
@@ -5051,68 +5052,62 @@ window.dExtrude = () => {
     status.style.opacity = 1;
 };
 
-// HELPER: Create the extrusion volume
-function createExtrusionGeo(mesh, indices, height, normal) {
+// 1. HELPER: Project 3D Vector to 2D Screen Space
+// This allows us to know which way "Out" is on your screen
+function getScreenDirection(position, worldNormal, camera, renderer) {
+    const p1 = position.clone();
+    const p2 = position.clone().add(worldNormal.clone().multiplyScalar(10)); // Arbitrary length
+
+    // Project p1
+    p1.project(camera);
+    const x1 = (p1.x * .5 + .5) * renderer.domElement.clientWidth;
+    const y1 = (p1.y * -.5 + .5) * renderer.domElement.clientHeight;
+
+    // Project p2
+    p2.project(camera);
+    const x2 = (p2.x * .5 + .5) * renderer.domElement.clientWidth;
+    const y2 = (p2.y * -.5 + .5) * renderer.domElement.clientHeight;
+
+    // Return normalized 2D vector
+    return new THREE.Vector2(x2 - x1, y2 - y1).normalize();
+}
+
+function createExtrusionGeo(mesh, indices, height, localNormal) {
     const posAttr = mesh.geometry.attributes.position;
     const vertices = [];
 
-    // 1. Get Base Vertices (The selected face)
+    // 1. Get Base Vertices
     const uniqueIndices = [...new Set(indices)];
     uniqueIndices.forEach(idx => {
         const v = new THREE.Vector3().fromBufferAttribute(posAttr, idx);
-        // We keep them in LOCAL space of the object for now
         vertices.push(v);
     });
 
-    // 2. Create Top Vertices (Moved by height along normal)
-    // Note: Normal is in World Space usually, need Local Normal
-    const localNormal = normal.clone().applyQuaternion(mesh.quaternion.clone().invert()).normalize();
-    
+    // 2. Create Top Vertices
     const topVertices = vertices.map(v => {
         return v.clone().add(localNormal.clone().multiplyScalar(height));
     });
 
-    // 3. Create Convex Hull
+    // 3. Convex Hull
+    // Note: We use the imported ConvexGeometry. 
+    // Ensure "import { ConvexGeometry } ..." is at top of file.
     const allVerts = [...vertices, ...topVertices];
-    
-    // --- FIX IS HERE: Use 'ConvexGeometry', not 'THREE.ConvexGeometry' ---
-    let geo = new ConvexGeometry(allVerts); 
-    // ---------------------------------------------------------------------
+    let geo = new ConvexGeometry(allVerts);
 
-    // 4. Cleanup for CSG
-    // Ensure 'mergeVertices' is imported at the top of your file (it should be there already)
     geo = mergeVertices(geo, 0.001);
     geo.computeVertexNormals();
     
     return geo;
 }
 
-// INTERCEPT CLICK FOR EXTRUDE
-const originalHandleShellClick = window.handleShellFaceClick; // Backup just in case
-// We inject logic into the main pointerUp/Move handlers via flags
-
-// --- 1. HANDLE CLICK (Select Face or Finish Drag) ---
-// Find the existing 'onPointerUp' function in the code.
-// We need to inject this block AT THE VERY TOP of 'onPointerUp':
-
-/* 
-   INSTRUCTIONS: 
-   Paste the content of 'handleExtrudeUp' into the existing onPointerUp function
-   at the very beginning, OR use this standalone logic that overrides specific behaviors.
-   
-   To make it easier, I will provide a function you can call inside onPointerUp.
-*/
-
 window.handleExtrudeClick = (ray) => {
     if (!isExtrudeMode) return false;
 
-    // SCENARIO A: FINISH DRAGGING (COMMIT)
     if (isExtrudeDragging && extrudeData) {
         finishExtrude();
         return true;
     }
 
-    // SCENARIO B: SELECT FACE
     const targets = scene.children.filter(o => o.isMesh && !o.userData.isRuler && o !== liftCone && !o.userData.isGhost);
     const intersects = ray.intersectObjects(targets, false);
 
@@ -5120,30 +5115,36 @@ window.handleExtrudeClick = (ray) => {
         const hit = intersects[0];
         const mesh = hit.object;
 
-        // 1. Get Connected Surface (Reuse the logic from Loft/Shell)
         const surfaceData = getConnectedFlatSurface(mesh, hit.faceIndex, hit.face.normal);
         
-        // 2. Setup Data
+        // --- 1. CALCULATE NORMALS CORRECTLY ---
+        // Hit.face.normal is LOCAL. We need WORLD to calculate screen drag direction.
+        const worldNormal = hit.face.normal.clone().applyQuaternion(mesh.quaternion).normalize();
+        const localNormal = hit.face.normal.clone().normalize(); // Keep original for geometry generation
+
+        // --- 2. SETUP SCREEN DRAG VECTOR ---
+        // We calculate the 2D direction of the normal on the screen.
+        // This ensures dragging along the arrow always works.
+        const screenDir = getScreenDirection(hit.point, worldNormal, cam, ren);
+
         extrudeData = {
             mesh: mesh,
-            normal: hit.face.normal.clone(), // World Normal
+            localNormal: localNormal,
+            worldNormal: worldNormal,
+            screenDir: screenDir,
             indices: surfaceData.indices,
-            startY: 0, // Set on drag start
+            startMouse: null, // Set on first drag
             currentHeight: 0,
             ghost: null
         };
 
-        // 3. Create Visual Ghost (Start with 1mm height)
-        const geo = createExtrusionGeo(mesh, surfaceData.indices, 0.1, hit.face.normal);
+        // 3. Create Ghost
+        const geo = createExtrusionGeo(mesh, surfaceData.indices, 0.1, localNormal);
         const mat = new THREE.MeshStandardMaterial({ 
-            color: 0xffff00, 
-            transparent: true, 
-            opacity: 0.6,
-            roughness: 0.2
+            color: 0xffff00, transparent: true, opacity: 0.6, roughness: 0.2 
         });
         
         const ghost = new THREE.Mesh(geo, mat);
-        // Sync Transform
         ghost.position.copy(mesh.position);
         ghost.rotation.copy(mesh.rotation);
         ghost.scale.copy(mesh.scale);
@@ -5152,9 +5153,8 @@ window.handleExtrudeClick = (ray) => {
         scene.add(ghost);
         extrudeData.ghost = ghost;
 
-        // 4. Switch State
         isExtrudeDragging = true;
-        document.getElementById("auto-save-status").innerText = "Step 2: DRAG mouse to Extrude";
+        document.getElementById("auto-save-status").innerText = "Step 2: Drag Mouse ALONG the face direction";
         
         return true;
     }
@@ -5162,29 +5162,38 @@ window.handleExtrudeClick = (ray) => {
     return false;
 };
 
-// --- 2. HANDLE HOVER/DRAG ---
-// Call this inside onPointerMove
-window.handleExtrudeHover = (ray, y) => {
+window.handleExtrudeHover = (ray, e) => {
     if (isExtrudeMode && isExtrudeDragging && extrudeData && extrudeData.ghost) {
-        if(extrudeData.startY === 0) extrudeData.startY = y;
+        // Init Start Position
+        if(!extrudeData.startMouse) {
+            extrudeData.startMouse = new THREE.Vector2(e.clientX, e.clientY);
+            return;
+        }
         
-        // Calculate Height
-        const sensitivity = 0.5;
-        const delta = (extrudeData.startY - y) * sensitivity;
-        
-        // Snap to grid (1mm)
-        let height = Math.round(delta); 
-        if(Math.abs(height) < 0.1) height = 0.1; // Min thickness
-        
+        // --- 1. CALCULATE DRAG ALONG SCREEN VECTOR ---
+        const currentMouse = new THREE.Vector2(e.clientX, e.clientY);
+        const mouseDelta = new THREE.Vector2().subVectors(currentMouse, extrudeData.startMouse);
+
+        // Project Mouse Movement onto the Screen Direction of the normal
+        // This effectively ignores sideways movement and only cares about "In vs Out"
+        const projection = mouseDelta.dot(extrudeData.screenDir);
+
+        // Adjust Sensitivity (0.5mm per pixel of useful drag)
+        let height = projection * 0.5;
+
+        // Snap to zero if close
+        if(Math.abs(height) < 0.5) height = 0.1;
+
         extrudeData.currentHeight = height;
 
-        // Regenerate Ghost Geometry
-        const newGeo = createExtrusionGeo(extrudeData.mesh, extrudeData.indices, height, extrudeData.normal);
+        // --- 2. UPDATE GHOST ---
+        const newGeo = createExtrusionGeo(extrudeData.mesh, extrudeData.indices, height, extrudeData.localNormal);
         extrudeData.ghost.geometry.dispose();
         extrudeData.ghost.geometry = newGeo;
         
-        // Update Label
-        document.getElementById("auto-save-status").innerText = `Extrude: ${height}mm (Click to Finish)`;
+        // --- 3. UI FEEDBACK ---
+        const label = height >= 0 ? "Extrude (Add)" : "Cut (Sub)";
+        document.getElementById("auto-save-status").innerText = `${label}: ${Math.abs(height).toFixed(1)}mm`;
     }
 };
 
@@ -5194,14 +5203,15 @@ function finishExtrude() {
     const { mesh, ghost, currentHeight } = extrudeData;
     const status = document.getElementById("auto-save-status");
     
-    status.innerText = "Processing...";
+    status.innerText = "Computing Boolean...";
 
     setTimeout(() => {
         try {
-            // 1. Prepare Evaluator
             const ev = new Evaluator();
             
-            // 2. Prepare Brushes
+            // Note: We use existing materials if possible
+            const mat = mesh.material;
+
             const bBase = new Brush(prepareCSG(mesh.geometry));
             bBase.position.copy(mesh.position);
             bBase.rotation.copy(mesh.rotation);
@@ -5214,7 +5224,6 @@ function finishExtrude() {
             bExtrude.scale.copy(ghost.scale);
             bExtrude.updateMatrixWorld();
 
-            // 3. Perform Operation
             let result;
             if (currentHeight >= 0) {
                  result = ev.evaluate(bBase, bExtrude, ADDITION);
@@ -5222,31 +5231,28 @@ function finishExtrude() {
                  result = ev.evaluate(bBase, bExtrude, SUBTRACTION);
             }
 
-            // --- FIX FOR POSITION SHIFT ---
-            // The result is in World Space. We map it back to Local Space
-            // so it stays aligned with the object's existing Position/Rotation.
+            // Map back to Local Space
             mesh.updateMatrixWorld();
             const inverseMat = mesh.matrixWorld.clone().invert();
             result.geometry.applyMatrix4(inverseMat);
-            // ------------------------------
 
-            // 4. Replace Mesh
             mesh.geometry.dispose();
             mesh.geometry = result.geometry;
             
-            // Recalc shadow/bounds
+            // Clean CSG output
+            mesh.geometry.computeVertexNormals();
+
+            // Re-assign material to avoid "gray" glitch
+            mesh.material = mat;
+
             mesh.geometry.computeBoundingBox();
-            
-            // Update UI
-            if(mesh.userData.geoParams) delete mesh.userData.geoParams; // It's no longer parametric
-            mesh.userData.name = mesh.userData.name + " (Extruded)";
+            if(mesh.userData.geoParams) delete mesh.userData.geoParams;
+            mesh.userData.name = mesh.userData.name + " (Mod)";
 
         } catch (e) {
             console.error("Extrude Failed", e);
-            alert("Extrude failed. Try a simpler shape.");
         }
 
-        // Cleanup
         scene.remove(ghost);
         extrudeData = null;
         isExtrudeDragging = false;
@@ -5254,7 +5260,7 @@ function finishExtrude() {
         
         document.body.style.cursor = 'default';
         document.querySelectorAll(".btn-tool").forEach(b => b.classList.remove("active-tool"));
-        window.setMode('translate'); // Back to normal
+        window.setMode('translate');
         
         status.innerText = "Done";
         setTimeout(() => status.style.opacity = 0, 1000);

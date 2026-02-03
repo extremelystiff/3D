@@ -5072,28 +5072,95 @@ function getScreenDirection(position, worldNormal, camera, renderer) {
     return new THREE.Vector2(x2 - x1, y2 - y1).normalize();
 }
 
+// HELPER: Create a true extrusion by building walls along boundary edges
+// This supports holes, concave shapes, and complex topology.
 function createExtrusionGeo(mesh, indices, height, localNormal) {
     const posAttr = mesh.geometry.attributes.position;
-    const vertices = [];
+    const vertexMap = new Map(); // Map original index -> new local vector
+    
+    // 1. Helper to get/cache vector from index
+    const getVec = (idx) => {
+        if (!vertexMap.has(idx)) {
+            vertexMap.set(idx, new THREE.Vector3().fromBufferAttribute(posAttr, idx));
+        }
+        return vertexMap.get(idx);
+    };
 
-    // 1. Get Base Vertices
-    const uniqueIndices = [...new Set(indices)];
-    uniqueIndices.forEach(idx => {
-        const v = new THREE.Vector3().fromBufferAttribute(posAttr, idx);
-        vertices.push(v);
+    // 2. Identify Boundary Edges (The "Naked" Edges)
+    // We iterate all triangles. If an edge appears once, it's a boundary.
+    // If it appears twice (A->B and B->A), it's internal and we skip it.
+    const edges = new Map(); // Key: "a_b", Value: { a: idx, b: idx }
+
+    for (let i = 0; i < indices.length; i += 3) {
+        const a = indices[i];
+        const b = indices[i+1];
+        const c = indices[i+2];
+
+        const addEdge = (v1, v2) => {
+            const key = `${v1}_${v2}`;
+            const revKey = `${v2}_${v1}`;
+            if (edges.has(revKey)) {
+                edges.delete(revKey); // Internal edge found, remove both
+            } else {
+                edges.set(key, { a: v1, b: v2 }); // Potential boundary
+            }
+        };
+
+        addEdge(a, b);
+        addEdge(b, c);
+        addEdge(c, a);
+    }
+
+    // 3. Build the Geometry Arrays
+    const newPos = [];
+
+    // shift vector
+    const shift = localNormal.clone().multiplyScalar(height);
+
+    // A. Top Cap (The Selected Faces moved up)
+    for (let i = 0; i < indices.length; i++) {
+        const v = getVec(indices[i]).clone().add(shift);
+        newPos.push(v.x, v.y, v.z);
+    }
+
+    // B. Bottom Cap (The Original Faces, winding reversed to face down)
+    for (let i = 0; i < indices.length; i += 3) {
+        const v1 = getVec(indices[i]);
+        const v2 = getVec(indices[i+1]);
+        const v3 = getVec(indices[i+2]);
+        
+        // Push v3, v2, v1 to flip normal
+        newPos.push(v3.x, v3.y, v3.z);
+        newPos.push(v2.x, v2.y, v2.z);
+        newPos.push(v1.x, v1.y, v1.z);
+    }
+
+    // C. Walls (Connecting edges)
+    // For every boundary edge A->B, we create a quad (A, B, B', A')
+    // Tri 1: A, B, B'
+    // Tri 2: B', A', A
+    edges.forEach(edge => {
+        const vA = getVec(edge.a);
+        const vB = getVec(edge.b);
+        const vA_Top = vA.clone().add(shift);
+        const vB_Top = vB.clone().add(shift);
+
+        // Triangle 1
+        newPos.push(vA.x, vA.y, vA.z);
+        newPos.push(vB.x, vB.y, vB.z);
+        newPos.push(vB_Top.x, vB_Top.y, vB_Top.z);
+
+        // Triangle 2
+        newPos.push(vB_Top.x, vB_Top.y, vB_Top.z);
+        newPos.push(vA_Top.x, vA_Top.y, vA_Top.z);
+        newPos.push(vA.x, vA.y, vA.z);
     });
 
-    // 2. Create Top Vertices
-    const topVertices = vertices.map(v => {
-        return v.clone().add(localNormal.clone().multiplyScalar(height));
-    });
+    // 4. Construct BufferGeometry
+    let geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(newPos, 3));
 
-    // 3. Convex Hull
-    // Note: We use the imported ConvexGeometry. 
-    // Ensure "import { ConvexGeometry } ..." is at top of file.
-    const allVerts = [...vertices, ...topVertices];
-    let geo = new ConvexGeometry(allVerts);
-
+    // 5. Merge and Smooth
     geo = mergeVertices(geo, 0.001);
     geo.computeVertexNormals();
     

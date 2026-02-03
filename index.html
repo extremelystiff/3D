@@ -1800,122 +1800,127 @@ function updateTinkerLabels() {
         window.requestRender();
     };
 
-// 3. UPDATED POINTER UP (The Brains)
+/// 3. UPDATED POINTER UP (The Brains)
 const onPointerUp = e => {
-        isInteracting = false; 
-        const rect = ren.domElement.getBoundingClientRect();
-        const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
-        ray.setFromCamera(mouse, cam);
-        if(window.handleExtrudeClick && window.handleExtrudeClick(ray)) return;
-        // Check for Lift Tool
-        if (isLifting) {
-            isLifting = false;
-            ctrl.enabled = true;
-            liftCone.material.color.setHex(0x222222);
-            saveState();
-            return;
+    isInteracting = false; 
+
+    // 1. Calculate Mouse/Ray ONCE for all tools
+    const rect = ren.domElement.getBoundingClientRect();
+    const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+    ray.setFromCamera(mouse, cam);
+
+    // 2. Extrude Tool (High Priority)
+    if(window.handleExtrudeClick && window.handleExtrudeClick(ray)) return;
+
+    // 3. Lift Tool (High Priority)
+    if (isLifting) {
+        isLifting = false;
+        ctrl.enabled = true;
+        liftCone.material.color.setHex(0x222222);
+        saveState();
+        return;
+    }
+
+    // 4. Drag Check (Stop click logic if we just dragged the camera)
+    const dist = Math.sqrt(Math.pow(e.clientX - pointerStartX, 2) + Math.pow(e.clientY - pointerStartY, 2));
+    if (dist > 5) return;
+
+    // --- FROM HERE DOWN, WE USE THE RAY CALCULATED AT THE TOP ---
+
+    if (window.handleRulerClick && window.handleRulerClick(ray)) return;
+
+    if (textPlaceMode) {
+         if (textGhost && textGhost.visible) {
+            const bend = textGhost.userData.geoParams ? textGhost.userData.geoParams.bend : 0;
+            createTextObject(textGhost.position, textGhost.quaternion, bend);
+         }
+         textPlaceMode = false;
+         scene.remove(textGhost);
+         textGhost = null;
+         document.body.style.cursor = 'default';
+         document.getElementById("auto-save-status").style.opacity = 0;
+         return;
+    }
+
+    if (e.target.tagName === 'INPUT') return;
+    if (tCtrl.dragging || tCtrl.axis) return;
+
+    if (alignState !== 'none') {
+        if(handleAlignClick(ray)) return;
+    }
+
+    // --- B. LOFT FACE SELECTION ---
+    if (isFaceLoftMode) {
+        const intersects = ray.intersectObjects(scene.children.filter(o => o.isMesh && o !== liftCone && !o.userData.isRuler && o.visible), false);
+        if (intersects.length > 0) handleFaceSelection(intersects[0]);
+        return;
+    }
+
+    // --- NEW: D. SHELL FACE SELECTION ---
+    if (isShellSelectMode) {
+        // Only allow clicking the selected object
+        const targetObj = selectedObjects[0];
+        const intersects = ray.intersectObject(targetObj, false);
+        if (intersects.length > 0) {
+            window.handleShellFaceClick(intersects[0]);
         }
+        return;
+    }
+    // ------------------------------------
 
-        const dist = Math.sqrt(Math.pow(e.clientX - pointerStartX, 2) + Math.pow(e.clientY - pointerStartY, 2));
-        if (dist > 5) return;
+    // C. STANDARD SELECTION
+    const intersects = ray.intersectObjects(scene.children, true);
+    const validHits = intersects.filter(hit => {
+        const o = hit.object;
+        let p = o.parent;
+        while(p) { if(p === schematicGroup || p === faceMarkerGroup) return false; p = p.parent; }
+        return (o.isMesh || o.isLine) && o !== liftCone && o !== schematicGroup && o !== faceMarkerGroup && !o.userData.isGhost;
+    });
 
-        const rect = ren.domElement.getBoundingClientRect();
-        const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
-        ray.setFromCamera(mouse, cam);
-
-        if (window.handleRulerClick && window.handleRulerClick(ray)) return;
-
-        if (textPlaceMode) {
-             if (textGhost && textGhost.visible) {
-                const bend = textGhost.userData.geoParams ? textGhost.userData.geoParams.bend : 0;
-                createTextObject(textGhost.position, textGhost.quaternion, bend);
-             }
-             textPlaceMode = false;
-             scene.remove(textGhost);
-             textGhost = null;
-             document.body.style.cursor = 'default';
-             document.getElementById("auto-save-status").style.opacity = 0;
-             return;
+    if (validHits.length > 0) {
+        let hitObj = validHits[0].object;
+        let parent = hitObj.parent;
+        if(parent && parent.userData && parent.userData.isRuler) {
+            selectObject(parent);
         }
-
-        if (e.target.tagName === 'INPUT') return;
-        if (tCtrl.dragging || tCtrl.axis) return;
-
-        if (alignState !== 'none') {
-            if(handleAlignClick(ray)) return;
+        else if (hitObj.userData.name) {
+            selectObject(hitObj, e.shiftKey);
         }
+    } else {
+        selectObject(null);
+    }
 
-        // --- B. LOFT FACE SELECTION ---
-        if (isFaceLoftMode) {
-            const intersects = ray.intersectObjects(scene.children.filter(o => o.isMesh && o !== liftCone && !o.userData.isRuler && o.visible), false);
-            if (intersects.length > 0) handleFaceSelection(intersects[0]);
-            return;
-        }
-
-        // --- NEW: D. SHELL FACE SELECTION ---
-        if (isShellSelectMode) {
-            // Only allow clicking the selected object
-            const targetObj = selectedObjects[0];
-            const intersects = ray.intersectObject(targetObj, false);
-            if (intersects.length > 0) {
-                window.handleShellFaceClick(intersects[0]);
-            }
-            return;
-        }
-        // ------------------------------------
-
-        // C. STANDARD SELECTION
-        const intersects = ray.intersectObjects(scene.children, true);
-        const validHits = intersects.filter(hit => {
-            const o = hit.object;
-            let p = o.parent;
-            while(p) { if(p === schematicGroup || p === faceMarkerGroup) return false; p = p.parent; }
-            return (o.isMesh || o.isLine) && o !== liftCone && o !== schematicGroup && o !== faceMarkerGroup;
-        });
-
-        if (validHits.length > 0) {
-            let hitObj = validHits[0].object;
-            let parent = hitObj.parent;
-            if(parent && parent.userData && parent.userData.isRuler) {
-                selectObject(parent);
-            }
-            else if (hitObj.userData.name) {
-                selectObject(hitObj, e.shiftKey);
-            }
-        } else {
-            selectObject(null);
-        }
     // --- NEW: D. SHELL FACE SELECTION (Toggle Logic) ---
-        if (isShellSelectMode) {
-            // 1. Check if we clicked an EXISTING MARKER (Deselect)
-            const markerIntersects = ray.intersectObjects(shellMarkers, false);
-            if (markerIntersects.length > 0) {
-                // Remove the marker
-                const marker = markerIntersects[0].object;
-                scene.remove(marker);
-                faceMarkerGroup.remove(marker); // Ensure removed from group
-                
-                // Remove from array
-                shellMarkers = shellMarkers.filter(m => m !== marker);
-                
-                // Clean up memory
-                marker.geometry.dispose();
-                marker.material.dispose();
+    if (isShellSelectMode) {
+        // 1. Check if we clicked an EXISTING MARKER (Deselect)
+        const markerIntersects = ray.intersectObjects(shellMarkers, false);
+        if (markerIntersects.length > 0) {
+            // Remove the marker
+            const marker = markerIntersects[0].object;
+            scene.remove(marker);
+            faceMarkerGroup.remove(marker); // Ensure removed from group
+            
+            // Remove from array
+            shellMarkers = shellMarkers.filter(m => m !== marker);
+            
+            // Clean up memory
+            marker.geometry.dispose();
+            marker.material.dispose();
 
-                updateShellStatus();
-                return;
-            }
-
-            // 2. Check if we clicked the OBJECT (Select)
-            const targetObj = selectedObjects[0];
-            const intersects = ray.intersectObject(targetObj, false);
-            if (intersects.length > 0) {
-                window.handleShellFaceClick(intersects[0]);
-            }
+            updateShellStatus();
             return;
         }
-        // ------------------------------------
-    };
+
+        // 2. Check if we clicked the OBJECT (Select)
+        const targetObj = selectedObjects[0];
+        const intersects = ray.intersectObject(targetObj, false);
+        if (intersects.length > 0) {
+            window.handleShellFaceClick(intersects[0]);
+        }
+        return;
+    }
+    // ------------------------------------
+};
 function updateShellStatus() {
         const status = document.getElementById("auto-save-status");
         if (shellMarkers.length === 0) {

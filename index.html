@@ -5245,8 +5245,32 @@ window.handleExtrudeHover = (ray, e) => {
         // This effectively ignores sideways movement and only cares about "In vs Out"
         const projection = mouseDelta.dot(extrudeData.screenDir);
 
-        // Adjust Sensitivity (0.5mm per pixel of useful drag)
+        // Adjust Sensitivity 
         let height = projection * 0.5;
+        if(Math.abs(height) < 0.5) height = 0.1;
+
+        extrudeData.currentHeight = height;
+
+        // --- IMPROVEMENT START: Offset for Clean Cuts ---
+        // If cutting (negative height), we want the shape to overlap slightly
+        // to prevent z-fighting on the surface.
+        // We temporarily modify the geometry creation logic or shift the ghost.
+        
+        let displayHeight = height;
+        
+        // Regenerate Ghost
+        const newGeo = createExtrusionGeo(extrudeData.mesh, extrudeData.indices, displayHeight, extrudeData.localNormal);
+        extrudeData.ghost.geometry.dispose();
+        extrudeData.ghost.geometry = newGeo;
+        
+        // If cutting, nudge the ghost slightly "in" so it cuts cleanly through the surface
+        if (height < 0) {
+            const nudge = extrudeData.localNormal.clone().multiplyScalar(-0.01);
+            extrudeData.ghost.position.copy(extrudeData.mesh.position).add(nudge.applyQuaternion(extrudeData.mesh.quaternion));
+        } else {
+            extrudeData.ghost.position.copy(extrudeData.mesh.position);
+        }
+        // --- IMPROVEMENT END ---
 
         // Snap to zero if close
         if(Math.abs(height) < 0.5) height = 0.1;

@@ -5055,11 +5055,12 @@ window.dExtrude = () => {
 };
 
 // HELPER: Create Extrusion with Taper AND Skew (Offset)
-function createExtrusionGeo(mesh, indices, height, localNormal, taperScale = 1.0, skewOffset = new THREE.Vector3(0,0,0)) {
+// HELPER: Create Extrusion (Supports Height, Taper, Skew, and Start Offset)
+// startOffset allows the shape to start "in the air" to ensure clean cuts.
+function createExtrusionGeo(mesh, indices, height, localNormal, taperScale = 1.0, skewOffset = new THREE.Vector3(0,0,0), startOffset = 0) {
     const posAttr = mesh.geometry.attributes.position;
     const vertexMap = new Map();
     
-    // 1. Get Unique Vertices & Calculate Centroid
     const uniqueIndices = [...new Set(indices)];
     const center = new THREE.Vector3();
     
@@ -5068,9 +5069,9 @@ function createExtrusionGeo(mesh, indices, height, localNormal, taperScale = 1.0
         vertexMap.set(idx, v);
         center.add(v);
     });
-    center.divideScalar(uniqueIndices.length); // Centroid
+    center.divideScalar(uniqueIndices.length); 
 
-    // 2. Identify Walls
+    // Wall Detection
     const edges = new Map(); 
     for (let i = 0; i < indices.length; i += 3) {
         const addEdge = (v1, v2) => {
@@ -5084,21 +5085,25 @@ function createExtrusionGeo(mesh, indices, height, localNormal, taperScale = 1.0
         addEdge(indices[i+2], indices[i]);
     }
 
-    // 3. Build Geometry
     const newPos = [];
-    // The main movement direction
+    
+    // Vectors
     const shiftVector = localNormal.clone().multiplyScalar(height);
+    const startVector = localNormal.clone().multiplyScalar(startOffset);
 
-    // Helper: Calculate Top Position (Taper + Skew + Height)
+    // Helper: Calculate Top Position
     const getTopPos = (baseVec) => {
-        // Taper: Move relative to center
         const dir = new THREE.Vector3().subVectors(baseVec, center);
-        
-        // Final = Center + (Dir * Scale) + HeightShift + SkewShift
         return center.clone()
-            .add(dir.multiplyScalar(taperScale))
-            .add(shiftVector)
-            .add(skewOffset);
+            .add(dir.multiplyScalar(taperScale)) // Taper
+            .add(shiftVector)                    // Height
+            .add(skewOffset);                    // Skew
+    };
+
+    // Helper: Calculate Bottom Position (With Offset for cutting)
+    const getBottomPos = (baseVec) => {
+        // We simply move the base vertex "Out" along the normal
+        return baseVec.clone().add(startVector);
     };
 
     // A. Top Cap
@@ -5107,11 +5112,11 @@ function createExtrusionGeo(mesh, indices, height, localNormal, taperScale = 1.0
         newPos.push(v.x, v.y, v.z);
     }
 
-    // B. Bottom Cap (Reversed)
+    // B. Bottom Cap (Reversed Winding)
     for (let i = 0; i < indices.length; i += 3) {
-        const v1 = vertexMap.get(indices[i]);
-        const v2 = vertexMap.get(indices[i+1]);
-        const v3 = vertexMap.get(indices[i+2]);
+        const v1 = getBottomPos(vertexMap.get(indices[i]));
+        const v2 = getBottomPos(vertexMap.get(indices[i+1]));
+        const v3 = getBottomPos(vertexMap.get(indices[i+2]));
         newPos.push(v3.x, v3.y, v3.z);
         newPos.push(v2.x, v2.y, v2.z);
         newPos.push(v1.x, v1.y, v1.z);
@@ -5119,10 +5124,10 @@ function createExtrusionGeo(mesh, indices, height, localNormal, taperScale = 1.0
 
     // C. Walls
     edges.forEach(edge => {
-        const vA = vertexMap.get(edge.a);
-        const vB = vertexMap.get(edge.b);
-        const vA_Top = getTopPos(vA);
-        const vB_Top = getTopPos(vB);
+        const vA = getBottomPos(vertexMap.get(edge.a));
+        const vB = getBottomPos(vertexMap.get(edge.b));
+        const vA_Top = getTopPos(vertexMap.get(edge.a));
+        const vB_Top = getTopPos(vertexMap.get(edge.b));
 
         // Quad 1
         newPos.push(vA.x, vA.y, vA.z);
@@ -5295,18 +5300,15 @@ window.handleExtrudeHover = (ray, e) => {
 function updateExtrudeGhost() {
     const { mesh, indices, currentHeight, localNormal, currentScale, currentSkew, ghost } = extrudeData;
     
-    // VISUAL FEEDBACK FOR CUT
-    let displayHeight = currentHeight;
     let color = 0xffff00; // Yellow (Add)
-    
+    let startOffset = 0;
+
     if (currentHeight < 0) {
         color = 0xff0000; // Red (Cut)
-        // If cutting, we visually extend it backwards slightly so the user sees it piercing
-        // But the createGeo function handles the shape, we just need to shift the mesh to overlap
-        // We do nothing special to the geometry params here, just color
+        startOffset = 0.5; // Visually show it sticking out
     }
     
-    const newGeo = createExtrusionGeo(mesh, indices, displayHeight, localNormal, currentScale, currentSkew);
+    const newGeo = createExtrusionGeo(mesh, indices, currentHeight, localNormal, currentScale, currentSkew, startOffset);
     ghost.geometry.dispose();
     ghost.geometry = newGeo;
     ghost.material.color.setHex(color);
@@ -5328,45 +5330,34 @@ function finishExtrude() {
             bBase.scale.copy(mesh.scale);
             bBase.updateMatrixWorld();
 
-            // --- THE CUT FIX ---
-            // If cutting, we need to ensure the volume starts OUTSIDE the original mesh.
-            // We can't just move the brush, because that moves the bottom of the cut too.
-            // WE MUST RE-GENERATE THE GHOST GEOMETRY TO BE LONGER.
-            
-            let finalGhost = ghost;
+            // --- THE FIX ---
+            let finalGeo;
             
             if (currentHeight < 0) {
-                // 1. Calculate Backtrack Amount (0.5mm outside)
-                const backtrackAmt = 0.5;
+                // CUT MODE: 
+                // Generate geometry that starts +1.0mm OUTSIDE the object (startOffset)
+                // and goes to the desired depth. 
+                // We don't change 'currentHeight' logic, just where it starts.
                 
-                // 2. We make the height deeper by this amount so the bottom stays in same place
-                // (e.g. Cut -10mm becomes -10.5mm)
-                const deeperHeight = currentHeight - backtrackAmt;
-                
-                // 3. Generate deeper geometry
-                const deepGeo = createExtrusionGeo(
-                    mesh, extrudeData.indices, deeperHeight, extrudeData.localNormal, 
-                    extrudeData.currentScale, extrudeData.currentSkew
+                finalGeo = createExtrusionGeo(
+                    mesh, 
+                    extrudeData.indices, 
+                    currentHeight, // Target depth (e.g. -10)
+                    extrudeData.localNormal,
+                    extrudeData.currentScale,
+                    extrudeData.currentSkew,
+                    1.0 // <--- START OFFSET: Start 1mm "in the air"
                 );
-                
-                finalGhost = new THREE.Mesh(deepGeo, ghost.material);
-                finalGhost.position.copy(ghost.position);
-                finalGhost.rotation.copy(ghost.rotation);
-                finalGhost.scale.copy(ghost.scale);
-                
-                // 4. Shift the mesh OUTWARDS (backtracking) along normal
-                // This places the start of the cut in the air, and the end at the correct depth.
-                const backtrackVec = extrudeData.localNormal.clone().multiplyScalar(backtrackAmt); // Positive direction
-                const worldBacktrack = backtrackVec.applyQuaternion(mesh.quaternion);
-                
-                finalGhost.position.add(worldBacktrack);
-                finalGhost.updateMatrixWorld();
+            } else {
+                // ADD MODE: Start exactly at 0
+                finalGeo = ghost.geometry;
             }
 
-            const bExtrude = new Brush(prepareCSG(finalGhost.geometry));
-            bExtrude.position.copy(finalGhost.position);
-            bExtrude.rotation.copy(finalGhost.rotation);
-            bExtrude.scale.copy(finalGhost.scale);
+            const bExtrude = new Brush(prepareCSG(finalGeo));
+            // IMPORTANT: Use the ghost's transform, as the geometry is built in Local Space
+            bExtrude.position.copy(ghost.position);
+            bExtrude.rotation.copy(ghost.rotation);
+            bExtrude.scale.copy(ghost.scale);
             bExtrude.updateMatrixWorld();
 
             let result;
@@ -5389,8 +5380,8 @@ function finishExtrude() {
             mesh.userData.name = mesh.userData.name + (currentHeight<0?"(Cut)":"(Ext)");
 
         } catch (e) {
-            console.error(e);
-            alert("Boolean failed.");
+            console.error("Extrude Failed", e);
+            alert("Boolean failed. Try checking the browser console for errors.");
         }
 
         scene.remove(extrudeData.ghost);

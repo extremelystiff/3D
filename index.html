@@ -5277,10 +5277,6 @@ window.handleExtrudeHover = (ray, e) => {
 
         extrudeData.currentHeight = height;
 
-        // --- 2. UPDATE GHOST ---
-        const newGeo = createExtrusionGeo(extrudeData.mesh, extrudeData.indices, height, extrudeData.localNormal);
-        extrudeData.ghost.geometry.dispose();
-        extrudeData.ghost.geometry = newGeo;
         
         // --- 3. UI FEEDBACK ---
         const label = height >= 0 ? "Extrude (Add)" : "Cut (Sub)";

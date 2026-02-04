@@ -5057,41 +5057,71 @@ window.dExtrude = () => {
 // HELPER: Create Extrusion with Taper AND Skew (Offset)
 // HELPER: Create Extrusion (Supports Height, Taper, Skew, and Start Offset)
 // startOffset allows the shape to start "in the air" to ensure clean cuts.
+// HELPER: Create Extrusion (Position-Based Topology)
+// Fixes "Spikes" and "Internal Walls" on complex shapes
 function createExtrusionGeo(mesh, indices, height, localNormal, taperScale = 1.0, skewOffset = new THREE.Vector3(0,0,0), startOffset = 0) {
     const posAttr = mesh.geometry.attributes.position;
-    const vertexMap = new Map();
     
-    const uniqueIndices = [...new Set(indices)];
-    const center = new THREE.Vector3();
-    
-    uniqueIndices.forEach(idx => {
-        const v = new THREE.Vector3().fromBufferAttribute(posAttr, idx);
-        vertexMap.set(idx, v);
-        center.add(v);
-    });
-    center.divideScalar(uniqueIndices.length); 
-
-    // Wall Detection
-    const edges = new Map(); 
-    for (let i = 0; i < indices.length; i += 3) {
-        const addEdge = (v1, v2) => {
-            const key = `${v1}_${v2}`;
-            const revKey = `${v2}_${v1}`;
-            if (edges.has(revKey)) edges.delete(revKey);
-            else edges.set(key, { a: v1, b: v2 });
-        };
-        addEdge(indices[i], indices[i+1]); 
-        addEdge(indices[i+1], indices[i+2]); 
-        addEdge(indices[i+2], indices[i]);
+    // 1. Gather Vertices & Map Indices to Positions
+    // We convert the index array into a direct array of Vector3s to make logic easier
+    const triVerts = []; 
+    for(let i=0; i<indices.length; i++) {
+        triVerts.push(new THREE.Vector3().fromBufferAttribute(posAttr, indices[i]));
     }
 
-    const newPos = [];
+    // 2. Calculate Centroid (Using Unique Positions Only)
+    // This prevents the taper from leaning towards corners with more triangles
+    const uniquePosMap = new Set();
+    const center = new THREE.Vector3();
+    let uniqueCount = 0;
     
-    // Vectors
+    // Helper to round positions to merge splits
+    const getPosKey = (v) => `${v.x.toFixed(4)}_${v.y.toFixed(4)}_${v.z.toFixed(4)}`;
+
+    triVerts.forEach(v => {
+        const k = getPosKey(v);
+        if(!uniquePosMap.has(k)) {
+            uniquePosMap.add(k);
+            center.add(v);
+            uniqueCount++;
+        }
+    });
+    if(uniqueCount > 0) center.divideScalar(uniqueCount);
+
+    // 3. Identify Boundary Edges (Position Based)
+    // If an edge (A->B) appears once, it's a border.
+    // If it appears twice (A->B and B->A), it's internal.
+    const boundaryEdges = new Map(); 
+
+    for (let i = 0; i < triVerts.length; i += 3) {
+        const vA = triVerts[i];
+        const vB = triVerts[i+1];
+        const vC = triVerts[i+2];
+
+        const processEdge = (v1, v2) => {
+            const k1 = getPosKey(v1);
+            const k2 = getPosKey(v2);
+            const key = `${k1}|${k2}`;
+            const revKey = `${k2}|${k1}`;
+
+            if (boundaryEdges.has(revKey)) {
+                boundaryEdges.delete(revKey); // Shared internal edge -> Remove
+            } else {
+                boundaryEdges.set(key, { start: v1, end: v2 }); // Candidate border
+            }
+        };
+
+        processEdge(vA, vB);
+        processEdge(vB, vC);
+        processEdge(vC, vA);
+    }
+
+    // 4. Build Geometry
+    const newPos = [];
     const shiftVector = localNormal.clone().multiplyScalar(height);
     const startVector = localNormal.clone().multiplyScalar(startOffset);
 
-    // Helper: Calculate Top Position
+    // Helper: Calculate Top Position (Deep End)
     const getTopPos = (baseVec) => {
         const dir = new THREE.Vector3().subVectors(baseVec, center);
         return center.clone()
@@ -5100,34 +5130,34 @@ function createExtrusionGeo(mesh, indices, height, localNormal, taperScale = 1.0
             .add(skewOffset);                    // Skew
     };
 
-    // Helper: Calculate Bottom Position (With Offset for cutting)
+    // Helper: Calculate Bottom Position (Surface End + StartOffset)
     const getBottomPos = (baseVec) => {
-        // We simply move the base vertex "Out" along the normal
         return baseVec.clone().add(startVector);
     };
 
-    // A. Top Cap
-    for (let i = 0; i < indices.length; i++) {
-        const v = getTopPos(vertexMap.get(indices[i]));
+    // A. Top Cap (Tapered)
+    // We iterate the original triangles to maintain the surface mesh structure
+    for (let i = 0; i < triVerts.length; i++) {
+        const v = getTopPos(triVerts[i]);
         newPos.push(v.x, v.y, v.z);
     }
 
-    // B. Bottom Cap (Reversed Winding)
-    for (let i = 0; i < indices.length; i += 3) {
-        const v1 = getBottomPos(vertexMap.get(indices[i]));
-        const v2 = getBottomPos(vertexMap.get(indices[i+1]));
-        const v3 = getBottomPos(vertexMap.get(indices[i+2]));
+    // B. Bottom Cap (Original Surface, Reversed)
+    for (let i = 0; i < triVerts.length; i += 3) {
+        const v1 = getBottomPos(triVerts[i]);
+        const v2 = getBottomPos(triVerts[i+1]);
+        const v3 = getBottomPos(triVerts[i+2]);
         newPos.push(v3.x, v3.y, v3.z);
         newPos.push(v2.x, v2.y, v2.z);
         newPos.push(v1.x, v1.y, v1.z);
     }
 
-    // C. Walls
-    edges.forEach(edge => {
-        const vA = getBottomPos(vertexMap.get(edge.a));
-        const vB = getBottomPos(vertexMap.get(edge.b));
-        const vA_Top = getTopPos(vertexMap.get(edge.a));
-        const vB_Top = getTopPos(vertexMap.get(edge.b));
+    // C. Walls (Based on the clean outer boundary)
+    boundaryEdges.forEach(edge => {
+        const vA = getBottomPos(edge.start);
+        const vB = getBottomPos(edge.end);
+        const vA_Top = getTopPos(edge.start);
+        const vB_Top = getTopPos(edge.end);
 
         // Quad 1
         newPos.push(vA.x, vA.y, vA.z);
@@ -5141,7 +5171,7 @@ function createExtrusionGeo(mesh, indices, height, localNormal, taperScale = 1.0
 
     let geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(newPos, 3));
-    geo = mergeVertices(geo, 0.001);
+    geo = mergeVertices(geo, 0.001); // Weld the new shape together
     geo.computeVertexNormals();
     return geo;
 }

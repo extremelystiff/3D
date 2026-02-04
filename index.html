@@ -5036,6 +5036,9 @@ function loadSnapshot(compressedData) {
 // --- EXTRUDE (PUSH/PULL) TOOL (IMPROVED) ---
 
 
+// --- EXTRUDE TOOL: HEIGHT -> TAPER -> SKEW (DIRECTION) ---
+
+
 window.dExtrude = () => {
     if(selectedObjects.length > 0) selectObject(null);
     extrudeState = 0;
@@ -5051,23 +5054,8 @@ window.dExtrude = () => {
     status.style.opacity = 1;
 };
 
-// 1. HELPER: Project 3D Vector to 2D Screen Space
-// This allows us to know which way "Out" is on your screen
-function getScreenDirection(position, worldNormal, camera, renderer) {
-    const p1 = position.clone();
-    const p2 = position.clone().add(worldNormal.clone().multiplyScalar(10));
-    p1.project(camera); p2.project(camera);
-    const x1 = (p1.x * .5 + .5) * renderer.domElement.clientWidth;
-    const y1 = (p1.y * -.5 + .5) * renderer.domElement.clientHeight;
-    const x2 = (p2.x * .5 + .5) * renderer.domElement.clientWidth;
-    const y2 = (p2.y * -.5 + .5) * renderer.domElement.clientHeight;
-    return new THREE.Vector2(x2 - x1, y2 - y1).normalize();
-}
-
-// HELPER: Create a true extrusion by building walls along boundary edges
-// This supports holes, concave shapes, and complex topology.
-// HELPER: Create Extrusion with Taper (Scale) support
-function createExtrusionGeo(mesh, indices, height, localNormal, taperScale = 1.0) {
+// HELPER: Create Extrusion with Taper AND Skew (Offset)
+function createExtrusionGeo(mesh, indices, height, localNormal, taperScale = 1.0, skewOffset = new THREE.Vector3(0,0,0)) {
     const posAttr = mesh.geometry.attributes.position;
     const vertexMap = new Map();
     
@@ -5080,42 +5068,46 @@ function createExtrusionGeo(mesh, indices, height, localNormal, taperScale = 1.0
         vertexMap.set(idx, v);
         center.add(v);
     });
-    center.divideScalar(uniqueIndices.length); // Average position (Centroid)
+    center.divideScalar(uniqueIndices.length); // Centroid
 
-    // 2. Identify Boundary Edges (Wall Building Logic)
+    // 2. Identify Walls
     const edges = new Map(); 
     for (let i = 0; i < indices.length; i += 3) {
-        const a = indices[i];
-        const b = indices[i+1];
-        const c = indices[i+2];
         const addEdge = (v1, v2) => {
             const key = `${v1}_${v2}`;
             const revKey = `${v2}_${v1}`;
             if (edges.has(revKey)) edges.delete(revKey);
             else edges.set(key, { a: v1, b: v2 });
         };
-        addEdge(a, b); addEdge(b, c); addEdge(c, a);
+        addEdge(indices[i], indices[i+1]); 
+        addEdge(indices[i+1], indices[i+2]); 
+        addEdge(indices[i+2], indices[i]);
     }
 
     // 3. Build Geometry
     const newPos = [];
+    // The main movement direction
     const shiftVector = localNormal.clone().multiplyScalar(height);
 
-    // Helper: Calculate Tapered Top Position
-    // NewPos = Centroid + (DirFromCentroid * Scale) + HeightShift
+    // Helper: Calculate Top Position (Taper + Skew + Height)
     const getTopPos = (baseVec) => {
+        // Taper: Move relative to center
         const dir = new THREE.Vector3().subVectors(baseVec, center);
-        return center.clone().add(dir.multiplyScalar(taperScale)).add(shiftVector);
+        
+        // Final = Center + (Dir * Scale) + HeightShift + SkewShift
+        return center.clone()
+            .add(dir.multiplyScalar(taperScale))
+            .add(shiftVector)
+            .add(skewOffset);
     };
 
-    // A. Top Cap (Tapered)
+    // A. Top Cap
     for (let i = 0; i < indices.length; i++) {
         const v = getTopPos(vertexMap.get(indices[i]));
         newPos.push(v.x, v.y, v.z);
     }
 
-    // B. Bottom Cap (Original)
-    // Reverse winding for bottom face
+    // B. Bottom Cap (Reversed)
     for (let i = 0; i < indices.length; i += 3) {
         const v1 = vertexMap.get(indices[i]);
         const v2 = vertexMap.get(indices[i+1]);
@@ -5125,19 +5117,18 @@ function createExtrusionGeo(mesh, indices, height, localNormal, taperScale = 1.0
         newPos.push(v1.x, v1.y, v1.z);
     }
 
-    // C. Walls (Connecting Base to Tapered Top)
+    // C. Walls
     edges.forEach(edge => {
         const vA = vertexMap.get(edge.a);
         const vB = vertexMap.get(edge.b);
         const vA_Top = getTopPos(vA);
         const vB_Top = getTopPos(vB);
 
-        // Tri 1
+        // Quad 1
         newPos.push(vA.x, vA.y, vA.z);
         newPos.push(vB.x, vB.y, vB.z);
         newPos.push(vB_Top.x, vB_Top.y, vB_Top.z);
-
-        // Tri 2
+        // Quad 2
         newPos.push(vB_Top.x, vB_Top.y, vB_Top.z);
         newPos.push(vA_Top.x, vA_Top.y, vA_Top.z);
         newPos.push(vA.x, vA.y, vA.z);
@@ -5150,21 +5141,51 @@ function createExtrusionGeo(mesh, indices, height, localNormal, taperScale = 1.0
     return geo;
 }
 
+// Helper: Get Screen Vector
+function getScreenDirection(position, worldNormal, camera, renderer) {
+    const p1 = position.clone();
+    const p2 = position.clone().add(worldNormal.clone().multiplyScalar(10));
+    p1.project(camera); p2.project(camera);
+    const x1 = (p1.x * .5 + .5) * renderer.domElement.clientWidth;
+    const y1 = (p1.y * -.5 + .5) * renderer.domElement.clientHeight;
+    const x2 = (p2.x * .5 + .5) * renderer.domElement.clientWidth;
+    const y2 = (p2.y * -.5 + .5) * renderer.domElement.clientHeight;
+    return new THREE.Vector2(x2 - x1, y2 - y1).normalize();
+}
+
+// Helper: Calculate Tangent Basis for Skewing
+function getTangentBasis(normal) {
+    // Arbitrary consistent tangent vectors on the surface plane
+    const c1 = new THREE.Vector3().crossVectors(normal, new THREE.Vector3(0,0,1));
+    const c2 = new THREE.Vector3().crossVectors(normal, new THREE.Vector3(0,1,0));
+    const tangent = (c1.lengthSq() > c2.lengthSq()) ? c1 : c2;
+    tangent.normalize();
+    const bitangent = new THREE.Vector3().crossVectors(normal, tangent).normalize();
+    return { u: tangent, v: bitangent };
+}
+
 window.handleExtrudeClick = (ray) => {
-    // 0. EXIT if not in mode
     if (typeof extrudeState === 'undefined' || extrudeState === -1) return false;
     
-    // --- STAGE 2: COMMIT (Finish Taper) ---
-    if (extrudeState === 2) {
+    // --- STAGE 3: COMMIT (Finish Skew) ---
+    if (extrudeState === 3) {
         finishExtrude();
+        return true;
+    }
+
+    // --- STAGE 2: LOCK TAPER (Start Skew) ---
+    if (extrudeState === 2) {
+        extrudeState = 3;
+        extrudeData.startMouseSkew = null;
+        document.getElementById("auto-save-status").innerText = "Step 4: Drag to change ANGLE/SKEW (Click to Finish)";
         return true;
     }
 
     // --- STAGE 1: LOCK HEIGHT (Start Taper) ---
     if (extrudeState === 1) {
-        extrudeState = 2; // Move to Taper mode
-        extrudeData.startMouseTaper = null; // Reset mouse for taper
-        document.getElementById("auto-save-status").innerText = "Step 3: Drag LEFT/RIGHT to Taper (Click to Finish)";
+        extrudeState = 2; 
+        extrudeData.startMouseTaper = null;
+        document.getElementById("auto-save-status").innerText = "Step 3: Drag LEFT/RIGHT to Taper";
         return true;
     }
 
@@ -5181,21 +5202,25 @@ window.handleExtrudeClick = (ray) => {
             const worldNormal = hit.face.normal.clone().applyQuaternion(mesh.quaternion).normalize();
             const localNormal = hit.face.normal.clone().normalize(); 
             const screenDir = getScreenDirection(hit.point, worldNormal, cam, ren);
+            const basis = getTangentBasis(localNormal); // For Skewing
 
             extrudeData = {
                 mesh: mesh,
                 localNormal: localNormal,
+                worldNormal: worldNormal,
                 screenDir: screenDir,
+                basis: basis,
                 indices: surfaceData.indices,
                 startMouse: null,
                 startMouseTaper: null,
+                startMouseSkew: null,
                 currentHeight: 0,
                 currentScale: 1.0,
+                currentSkew: new THREE.Vector3(0,0,0),
                 ghost: null
             };
 
-            // Init Ghost
-            const geo = createExtrusionGeo(mesh, surfaceData.indices, 0.1, localNormal, 1.0);
+            const geo = createExtrusionGeo(mesh, surfaceData.indices, 0.1, localNormal);
             const mat = new THREE.MeshStandardMaterial({ 
                 color: 0xffff00, transparent: true, opacity: 0.8, roughness: 0.2 
             });
@@ -5209,8 +5234,8 @@ window.handleExtrudeClick = (ray) => {
             scene.add(ghost);
             extrudeData.ghost = ghost;
 
-            extrudeState = 1; // Move to Drag Height Mode
-            document.getElementById("auto-save-status").innerText = "Step 2: Drag ALONG face arrow for Height";
+            extrudeState = 1;
+            document.getElementById("auto-save-status").innerText = "Step 2: Drag ALONG arrow for Height";
             
             return true;
         }
@@ -5221,82 +5246,75 @@ window.handleExtrudeClick = (ray) => {
 
 window.handleExtrudeHover = (ray, e) => {
     if (!extrudeData || !extrudeData.ghost) return;
+    const currentMouse = new THREE.Vector2(e.clientX, e.clientY);
 
-    // --- STAGE 1: HEIGHT DRAG ---
+    // --- STAGE 1: HEIGHT ---
     if (extrudeState === 1) {
-        if(!extrudeData.startMouse) {
-            extrudeData.startMouse = new THREE.Vector2(e.clientX, e.clientY);
-            return;
-        }
-        
-        const currentMouse = new THREE.Vector2(e.clientX, e.clientY);
-        const mouseDelta = new THREE.Vector2().subVectors(currentMouse, extrudeData.startMouse);
-        
-        // Project drag onto the visual normal vector
-        let projection = mouseDelta.dot(extrudeData.screenDir);
-        let height = projection * 0.5; // Sensitivity
-        if(Math.abs(height) < 0.1) height = 0.1; // Min snap
+        if(!extrudeData.startMouse) { extrudeData.startMouse = currentMouse.clone(); return; }
+        const delta = new THREE.Vector2().subVectors(currentMouse, extrudeData.startMouse);
+        let projection = delta.dot(extrudeData.screenDir);
+        let height = projection * 0.5; 
+        if(Math.abs(height) < 0.1) height = 0.1;
         
         extrudeData.currentHeight = height;
         updateExtrudeGhost();
         
         const type = height > 0 ? "Add" : "Cut";
-        document.getElementById("auto-save-status").innerText = `Height: ${height.toFixed(1)}mm (${type}) - Click to Set`;
+        document.getElementById("auto-save-status").innerText = `Height: ${height.toFixed(1)}mm (${type})`;
     }
 
-    // --- STAGE 2: TAPER DRAG ---
+    // --- STAGE 2: TAPER ---
     else if (extrudeState === 2) {
-        if(!extrudeData.startMouseTaper) {
-            extrudeData.startMouseTaper = new THREE.Vector2(e.clientX, e.clientY);
-            return;
-        }
-
-        const currentMouse = new THREE.Vector2(e.clientX, e.clientY);
-        // Taper is just Left/Right drag (X axis relative to screen start)
+        if(!extrudeData.startMouseTaper) { extrudeData.startMouseTaper = currentMouse.clone(); return; }
         const deltaX = (currentMouse.x - extrudeData.startMouseTaper.x) * 0.01;
-        
-        // Base scale is 1.0. Right adds, Left subtracts.
         let scale = 1.0 + deltaX;
-        if(scale < 0.1) scale = 0.1; // Prevent inversion/crash
+        if(scale < 0.1) scale = 0.1;
         
         extrudeData.currentScale = scale;
         updateExtrudeGhost();
+        document.getElementById("auto-save-status").innerText = `Taper: ${(scale*100).toFixed(0)}%`;
+    }
 
-        document.getElementById("auto-save-status").innerText = `Taper: ${(scale*100).toFixed(0)}% - Click to Finish`;
+    // --- STAGE 3: SKEW (ANGLE) ---
+    else if (extrudeState === 3) {
+        if(!extrudeData.startMouseSkew) { extrudeData.startMouseSkew = currentMouse.clone(); return; }
+        const dx = (currentMouse.x - extrudeData.startMouseSkew.x) * 0.2; // Sensitivity
+        const dy = (currentMouse.y - extrudeData.startMouseSkew.y) * -0.2; // Invert Y
+
+        // Map 2D mouse to 3D surface plane (Tangent/Bitangent)
+        const skew = new THREE.Vector3()
+            .add(extrudeData.basis.u.clone().multiplyScalar(dx))
+            .add(extrudeData.basis.v.clone().multiplyScalar(dy));
+            
+        extrudeData.currentSkew = skew;
+        updateExtrudeGhost();
+        document.getElementById("auto-save-status").innerText = `Skew: X:${dx.toFixed(1)} Y:${dy.toFixed(1)}`;
     }
 };
 
 function updateExtrudeGhost() {
-    const { mesh, indices, currentHeight, localNormal, currentScale, ghost } = extrudeData;
+    const { mesh, indices, currentHeight, localNormal, currentScale, currentSkew, ghost } = extrudeData;
     
-    // VISUAL FIX FOR CUTTING:
-    // If cutting, we temporarily extend the ghost slightly backwards 
-    // so it looks like it's penetrating the object.
+    // VISUAL FEEDBACK FOR CUT
     let displayHeight = currentHeight;
-    let offset = new THREE.Vector3(0,0,0);
+    let color = 0xffff00; // Yellow (Add)
     
-    // Create Geo
-    const newGeo = createExtrusionGeo(mesh, indices, displayHeight, localNormal, currentScale);
+    if (currentHeight < 0) {
+        color = 0xff0000; // Red (Cut)
+        // If cutting, we visually extend it backwards slightly so the user sees it piercing
+        // But the createGeo function handles the shape, we just need to shift the mesh to overlap
+        // We do nothing special to the geometry params here, just color
+    }
+    
+    const newGeo = createExtrusionGeo(mesh, indices, displayHeight, localNormal, currentScale, currentSkew);
     ghost.geometry.dispose();
     ghost.geometry = newGeo;
-
-    // Color Feedback
-    if (currentHeight < 0) {
-        ghost.material.color.setHex(0xff0000); // Red for Cut
-        // Nudge position slightly into the object to prevent z-fighting
-        const nudge = localNormal.clone().multiplyScalar(-0.05);
-        // Rotate nudge to world space
-        nudge.applyQuaternion(mesh.quaternion);
-        ghost.position.copy(mesh.position).add(nudge);
-    } else {
-        ghost.material.color.setHex(0xffff00); // Yellow for Add
-        ghost.position.copy(mesh.position);
-    }
+    ghost.material.color.setHex(color);
 }
 
 function finishExtrude() {
     const status = document.getElementById("auto-save-status");
-    status.innerText = "Computing...";
+    status.innerText = "Computing Boolean...";
     
     setTimeout(() => {
         try {
@@ -5310,27 +5328,45 @@ function finishExtrude() {
             bBase.scale.copy(mesh.scale);
             bBase.updateMatrixWorld();
 
-            // CRITICAL FIX FOR CUTTING:
-            // If cutting, we must start the subtraction slightly *outside* the face
-            // to ensure we don't leave a thin skin (coplanar face issue).
-            // We move the ghost -0.1mm along the normal (outwards)
-            // and increase its height by +0.1mm to compensate.
+            // --- THE CUT FIX ---
+            // If cutting, we need to ensure the volume starts OUTSIDE the original mesh.
+            // We can't just move the brush, because that moves the bottom of the cut too.
+            // WE MUST RE-GENERATE THE GHOST GEOMETRY TO BE LONGER.
+            
+            let finalGhost = ghost;
             
             if (currentHeight < 0) {
-                // Shift ghost slightly OUT
-                const nudgeLocal = extrudeData.localNormal.clone().multiplyScalar(-0.1);
-                const nudgeWorld = nudgeLocal.clone().applyQuaternion(ghost.quaternion);
-                ghost.position.add(nudgeWorld);
+                // 1. Calculate Backtrack Amount (0.5mm outside)
+                const backtrackAmt = 0.5;
                 
-                // We don't need to stretch geometry because the boolean subtraction
-                // will just eat the extra bit we pulled out.
-                ghost.updateMatrixWorld();
+                // 2. We make the height deeper by this amount so the bottom stays in same place
+                // (e.g. Cut -10mm becomes -10.5mm)
+                const deeperHeight = currentHeight - backtrackAmt;
+                
+                // 3. Generate deeper geometry
+                const deepGeo = createExtrusionGeo(
+                    mesh, extrudeData.indices, deeperHeight, extrudeData.localNormal, 
+                    extrudeData.currentScale, extrudeData.currentSkew
+                );
+                
+                finalGhost = new THREE.Mesh(deepGeo, ghost.material);
+                finalGhost.position.copy(ghost.position);
+                finalGhost.rotation.copy(ghost.rotation);
+                finalGhost.scale.copy(ghost.scale);
+                
+                // 4. Shift the mesh OUTWARDS (backtracking) along normal
+                // This places the start of the cut in the air, and the end at the correct depth.
+                const backtrackVec = extrudeData.localNormal.clone().multiplyScalar(backtrackAmt); // Positive direction
+                const worldBacktrack = backtrackVec.applyQuaternion(mesh.quaternion);
+                
+                finalGhost.position.add(worldBacktrack);
+                finalGhost.updateMatrixWorld();
             }
 
-            const bExtrude = new Brush(prepareCSG(ghost.geometry));
-            bExtrude.position.copy(ghost.position);
-            bExtrude.rotation.copy(ghost.rotation);
-            bExtrude.scale.copy(ghost.scale);
+            const bExtrude = new Brush(prepareCSG(finalGhost.geometry));
+            bExtrude.position.copy(finalGhost.position);
+            bExtrude.rotation.copy(finalGhost.rotation);
+            bExtrude.scale.copy(finalGhost.scale);
             bExtrude.updateMatrixWorld();
 
             let result;
@@ -5340,7 +5376,6 @@ function finishExtrude() {
                  result = ev.evaluate(bBase, bExtrude, SUBTRACTION);
             }
 
-            // Map back to Local Space
             mesh.updateMatrixWorld();
             const inverseMat = mesh.matrixWorld.clone().invert();
             result.geometry.applyMatrix4(inverseMat);
@@ -5351,17 +5386,16 @@ function finishExtrude() {
             mesh.material = mat;
 
             if(mesh.userData.geoParams) delete mesh.userData.geoParams;
-            mesh.userData.name = mesh.userData.name + (currentHeight<0 ? " (Cut)" : " (Ext)");
+            mesh.userData.name = mesh.userData.name + (currentHeight<0?"(Cut)":"(Ext)");
 
         } catch (e) {
-            console.error("Extrude Failed", e);
-            alert("Operation failed. Try avoiding overlapping complex cuts.");
+            console.error(e);
+            alert("Boolean failed.");
         }
 
-        // Cleanup
         scene.remove(extrudeData.ghost);
         extrudeData = null;
-        extrudeState = -1; // Reset to idle
+        extrudeState = -1;
         isExtrudeMode = false;
         
         document.body.style.cursor = 'default';

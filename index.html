@@ -5059,23 +5059,21 @@ window.dExtrude = () => {
 // startOffset allows the shape to start "in the air" to ensure clean cuts.
 // HELPER: Create Extrusion (Position-Based Topology)
 // Fixes "Spikes" and "Internal Walls" on complex shapes
+// HELPER: Create Extrusion (Position-Based Topology) with Normal Fix
 function createExtrusionGeo(mesh, indices, height, localNormal, taperScale = 1.0, skewOffset = new THREE.Vector3(0,0,0), startOffset = 0) {
     const posAttr = mesh.geometry.attributes.position;
     
     // 1. Gather Vertices & Map Indices to Positions
-    // We convert the index array into a direct array of Vector3s to make logic easier
     const triVerts = []; 
     for(let i=0; i<indices.length; i++) {
         triVerts.push(new THREE.Vector3().fromBufferAttribute(posAttr, indices[i]));
     }
 
     // 2. Calculate Centroid (Using Unique Positions Only)
-    // This prevents the taper from leaning towards corners with more triangles
     const uniquePosMap = new Set();
     const center = new THREE.Vector3();
     let uniqueCount = 0;
     
-    // Helper to round positions to merge splits
     const getPosKey = (v) => `${v.x.toFixed(4)}_${v.y.toFixed(4)}_${v.z.toFixed(4)}`;
 
     triVerts.forEach(v => {
@@ -5088,9 +5086,7 @@ function createExtrusionGeo(mesh, indices, height, localNormal, taperScale = 1.0
     });
     if(uniqueCount > 0) center.divideScalar(uniqueCount);
 
-    // 3. Identify Boundary Edges (Position Based)
-    // If an edge (A->B) appears once, it's a border.
-    // If it appears twice (A->B and B->A), it's internal.
+    // 3. Identify Boundary Edges
     const boundaryEdges = new Map(); 
 
     for (let i = 0; i < triVerts.length; i += 3) {
@@ -5136,7 +5132,6 @@ function createExtrusionGeo(mesh, indices, height, localNormal, taperScale = 1.0
     };
 
     // A. Top Cap (Tapered)
-    // We iterate the original triangles to maintain the surface mesh structure
     for (let i = 0; i < triVerts.length; i++) {
         const v = getTopPos(triVerts[i]);
         newPos.push(v.x, v.y, v.z);
@@ -5152,7 +5147,7 @@ function createExtrusionGeo(mesh, indices, height, localNormal, taperScale = 1.0
         newPos.push(v1.x, v1.y, v1.z);
     }
 
-    // C. Walls (Based on the clean outer boundary)
+    // C. Walls
     boundaryEdges.forEach(edge => {
         const vA = getBottomPos(edge.start);
         const vB = getBottomPos(edge.end);
@@ -5168,6 +5163,30 @@ function createExtrusionGeo(mesh, indices, height, localNormal, taperScale = 1.0
         newPos.push(vA_Top.x, vA_Top.y, vA_Top.z);
         newPos.push(vA.x, vA.y, vA.z);
     });
+
+    // --- THE FIX FOR SUBTRACTION ---
+    // If height is negative, the winding order is inverted (Inside-Out).
+    // We must flip the triangles so the normals face OUTWARD.
+    if (height < 0) {
+        for (let i = 0; i < newPos.length; i += 9) {
+            // Swap Vertex 2 and Vertex 3 (x,y,z block)
+            // Vert 2 Indices: i+3, i+4, i+5
+            // Vert 3 Indices: i+6, i+7, i+8
+            
+            const tempX = newPos[i+3];
+            const tempY = newPos[i+4];
+            const tempZ = newPos[i+5];
+            
+            newPos[i+3] = newPos[i+6];
+            newPos[i+4] = newPos[i+7];
+            newPos[i+5] = newPos[i+8];
+            
+            newPos[i+6] = tempX;
+            newPos[i+7] = tempY;
+            newPos[i+8] = tempZ;
+        }
+    }
+    // -------------------------------
 
     let geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(newPos, 3));

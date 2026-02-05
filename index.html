@@ -1153,18 +1153,27 @@ function handleAlignClick(ray) {
 
 
     // --- UTILS ---
-    function prepareCSG(geometry) {
-        if (!geometry) return null;
-        const geo = geometry.clone();
-        if (geo.attributes.color) geo.deleteAttribute('color');
-        if (!geo.attributes.normal) geo.computeVertexNormals();
-        if (!geo.attributes.uv) {
-            const count = geo.attributes.position.count;
-            geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(count * 2), 2));
-        }
-        return geo;
+function prepareCSG(geometry) {
+    if (!geometry) return null;
+    let geo = geometry.clone();
+    geo = mergeVertices(geo, 0.0005);  // 0.5 micron – catches most near-dups before CSG
+    if (geo.attributes.color) geo.deleteAttribute('color');
+    if (!geo.attributes.normal) geo.computeVertexNormals();
+    if (!geo.attributes.uv) {
+        const count = geo.attributes.position.count;
+        geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(count * 2), 2));
     }
+    return geo;
+}
 
+    function cleanCSGResult(resultBrush) {
+    if (!resultBrush || !resultBrush.geometry) return resultBrush;
+    let geo = mergeVertices(resultBrush.geometry.clone(), 0.0001);  // Ultra-tight post-merge
+    geo.computeVertexNormals();  // Fix shading artifacts
+    resultBrush.geometry.dispose();
+    resultBrush.geometry = geo;
+    return resultBrush;
+}
     // Binary <-> Base64 helpers
     function uint8ToBase64(u8Arr) {
         const CHUNK_SIZE = 0x8000;
@@ -3761,6 +3770,7 @@ window.dMerge = () => {
         };
 
         // Remove old objects
+        res = cleanCSGResult(res);
         marked.forEach(e => scene.remove(e));
         scene.add(mesh);
         selectObject(mesh);
@@ -4036,6 +4046,7 @@ window.dShell = () => {
             }
 
             // Cleanup
+            result = cleanCSGResult(result);
             isShellSelectMode = false;
             shellMarkers.forEach(m => { scene.remove(m); m.geometry.dispose(); });
             shellMarkers = [];
@@ -5415,7 +5426,7 @@ function finishExtrude() {
             } else {
                  result = ev.evaluate(bBase, bExtrude, SUBTRACTION);
             }
-
+            result = cleanCSGResult(result);
             mesh.updateMatrixWorld();
             const inverseMat = mesh.matrixWorld.clone().invert();
             result.geometry.applyMatrix4(inverseMat);

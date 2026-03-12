@@ -10,7 +10,23 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 
 <style>
-    body, html { margin: 0; padding: 0; overflow: hidden; height: 100%; background: #1a1a2e; font-family: 'Segoe UI', system-ui, sans-serif; }
+    :root {
+        --ui-bg: #22334d;
+        --ui-bg-deep: #1a2638;
+        --ui-panel: rgba(42, 56, 82, 0.92);
+        --ui-panel-strong: rgba(54, 72, 104, 0.94);
+        --ui-border: rgba(188, 214, 255, 0.2);
+        --ui-border-strong: rgba(188, 214, 255, 0.35);
+        --ui-text: #eef4ff;
+        --ui-text-soft: #c8d5eb;
+        --ui-text-muted: #98aaca;
+        --ui-accent: #78b7ff;
+        --ui-accent-strong: #5aa7ff;
+        --ui-accent-soft: rgba(120, 183, 255, 0.2);
+        --ui-accent-ring: rgba(120, 183, 255, 0.28);
+    }
+
+    body, html { margin: 0; padding: 0; overflow: hidden; height: 100%; background: var(--ui-bg-deep); font-family: 'Segoe UI', system-ui, sans-serif; }
     
     /* FPS Counter Styling */
     #fps-display {
@@ -66,8 +82,8 @@
         left: 20px;
         width: 60px;
         height: 60px;
-        background: rgba(30, 30, 46, 0.9);
-        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: var(--ui-panel-strong);
+        border: 1px solid var(--ui-border);
         border-radius: 50%;
         z-index: 100;
         cursor: grab;
@@ -84,7 +100,7 @@
         width: 50px;
         height: 50px;
         border-radius: 50%;
-        background: linear-gradient(135deg, #2d2d44 0%, #1a1a2e 100%);
+        background: linear-gradient(135deg, #4d678d 0%, #263854 100%);
         position: relative;
     }
     
@@ -110,10 +126,10 @@
     
     #camera-compass .compass-labels span {
         position: absolute;
-        color: #888;
+        color: var(--ui-text-muted);
     }
     
-    #camera-compass .compass-labels .north { top: 2px; left: 50%; transform: translateX(-50%); color: #ff4444; }
+    #camera-compass .compass-labels .north { top: 2px; left: 50%; transform: translateX(-50%); color: #ff6b6b; }
     #camera-compass .compass-labels .south { bottom: 2px; left: 50%; transform: translateX(-50%); }
     #camera-compass .compass-labels .east { right: 4px; top: 50%; transform: translateY(-50%); }
     #camera-compass .compass-labels .west { left: 4px; top: 50%; transform: translateY(-50%); }
@@ -123,7 +139,7 @@
         position: absolute; top: 0; left: 0;
         width: 100vw; height: 100vh;
         z-index: 1;
-        background: linear-gradient(135deg, #2d2d44 0%, #1a1a2e 50%, #16213e 100%);
+        background: linear-gradient(135deg, #506b92 0%, #2c405e 50%, #22324a 100%);
     }
     #designer-canvas { width: 100%; height: 100%; display: block; outline: none; }
 
@@ -134,15 +150,15 @@
     
     .float-panel {
         position: absolute;
-        background: rgba(30, 30, 46, 0.92);
+        background: var(--ui-panel);
         backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        border: 1px solid var(--ui-border);
         border-radius: 12px;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
         padding: 10px;
         z-index: 100;
         pointer-events: auto;
-        color: #e0e0e0;
+        color: var(--ui-text);
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
     
@@ -154,12 +170,12 @@
     .float-toolbar { 
         top: 20px; 
         left: 20px; 
-        width: 54px; 
+        width: 224px; 
         display: flex; 
         flex-direction: column; 
-        gap: 2px; 
-        align-items: center;
-        padding: 8px 6px;
+        gap: 8px; 
+        align-items: stretch;
+        padding: 10px;
         max-height: calc(100vh - 120px);
         overflow-y: auto;
         overflow-x: hidden;
@@ -169,8 +185,8 @@
         width: 100%;
         display: flex;
         flex-direction: column;
-        gap: 2px;
-        align-items: center;
+        gap: 6px;
+        align-items: stretch;
     }
     
     /* Collapsible toolbar sections */
@@ -179,23 +195,24 @@
     }
     
     .toolbar-section .toolbar-label {
-        font-size: 0.5rem;
+        font-size: 0.68rem;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        color: #6c757d;
+        color: var(--ui-text-muted);
         margin-top: 4px;
-        margin-bottom: 2px;
+        margin-bottom: 4px;
         cursor: pointer;
-        padding: 2px 4px;
+        padding: 6px 8px;
         border-radius: 4px;
         width: 100%;
-        text-align: center;
+        text-align: left;
+        background: rgba(255,255,255,0.04);
     }
     
     .toolbar-section .toolbar-label:hover {
         background: rgba(255,255,255,0.1);
-        color: #aaa;
+        color: var(--ui-text);
     }
     
     .toolbar-section .toolbar-label::after {
@@ -209,16 +226,15 @@
     
     .toolbar-buttons {
         display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 2px;
+        flex-direction: column;
+        gap: 4px;
         width: 100%;
     }
     
     .toolbar-section .btn-tool {
-        width: 34px;
-        height: 34px;
-        padding: 0;
+        width: 100%;
+        height: 40px;
+        padding: 0 10px;
     }
     
     .toolbar-label {
@@ -370,16 +386,35 @@
         align-items: center; 
         justify-content: center; 
         border-radius: 8px;
-        background: rgba(255, 255, 255, 0.08);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        color: #a0a0a0;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid var(--ui-border);
+        color: var(--ui-text-soft);
         transition: all 0.15s ease;
+        justify-content: flex-start;
+        gap: 10px;
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+
+    .btn-tool .tool-label {
+        display: inline-flex;
+        align-items: center;
+        white-space: nowrap;
+        font-size: 0.82rem;
+        line-height: 1;
+    }
+
+    .btn-tool i {
+        font-size: 1rem;
+        min-width: 18px;
+        text-align: center;
     }
     
     .btn-tool:hover {
-        background: rgba(255, 255, 255, 0.15);
+        background: rgba(255, 255, 255, 0.18);
         color: #ffffff;
         transform: translateY(-1px);
+        border-color: var(--ui-border-strong);
     }
     
     .btn-tool:active {
@@ -387,10 +422,10 @@
     }
     
     .active-tool { 
-        background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%) !important; 
+        background: linear-gradient(135deg, var(--ui-accent) 0%, var(--ui-accent-strong) 100%) !important; 
         color: white !important; 
-        border-color: #0d6efd !important;
-        box-shadow: 0 4px 12px rgba(13, 110, 253, 0.4);
+        border-color: var(--ui-accent) !important;
+        box-shadow: 0 4px 12px rgba(90, 167, 255, 0.35);
     }
     
     .divider { 
@@ -406,7 +441,7 @@
     .tinker-input {
         pointer-events: auto; 
         background: rgba(30, 30, 46, 0.95);
-        border: 1px solid #0d6efd; 
+        border: 1px solid var(--ui-accent); 
         border-radius: 6px; 
         padding: 4px 0;
         font-size: 12px; 
@@ -417,7 +452,7 @@
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         font-family: 'JetBrains Mono', monospace;
     }
-    .dim-pos { color: #0d6efd; border-color: #0d6efd; }
+    .dim-pos { color: var(--ui-accent); border-color: var(--ui-accent); }
     .dim-size { color: #e0e0e0; border-color: #6c757d; }
     .rot-label { 
         background: rgba(0, 0, 0, 0.85); 
@@ -438,7 +473,7 @@
         display: flex; 
         align-items: center; 
         background: transparent;
-        color: #b0b0b0;
+        color: var(--ui-text-soft);
         transition: all 0.15s ease;
     }
     
@@ -448,8 +483,8 @@
     }
     
     .object-list-item.selected { 
-        background: rgba(13, 110, 253, 0.2); 
-        border-left: 3px solid #0d6efd; 
+        background: var(--ui-accent-soft); 
+        border-left: 3px solid var(--ui-accent); 
         font-weight: 600;
         color: #ffffff;
     }
@@ -504,21 +539,21 @@
     
     /* Form Controls - Dark Theme */
     .form-control, .form-select {
-        background: rgba(255, 255, 255, 0.08) !important;
-        border: 1px solid rgba(255, 255, 255, 0.15) !important;
-        color: #e0e0e0 !important;
+        background: rgba(255, 255, 255, 0.1) !important;
+        border: 1px solid var(--ui-border) !important;
+        color: var(--ui-text) !important;
         border-radius: 8px !important;
     }
     
     .form-control:focus, .form-select:focus {
         background: rgba(255, 255, 255, 0.12) !important;
-        border-color: #0d6efd !important;
-        box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25) !important;
+        border-color: var(--ui-accent) !important;
+        box-shadow: 0 0 0 2px var(--ui-accent-ring) !important;
         color: #ffffff !important;
     }
     
     .form-control::placeholder {
-        color: #6c757d !important;
+        color: var(--ui-text-muted) !important;
     }
     
     .form-select option {
@@ -528,7 +563,7 @@
     
     /* Range Inputs */
     .form-range {
-        accent-color: #0d6efd;
+        accent-color: var(--ui-accent);
     }
     
     /* Checkboxes */
@@ -538,18 +573,18 @@
     }
     
     .form-check-input:checked {
-        background-color: #0d6efd;
-        border-color: #0d6efd;
+        background-color: var(--ui-accent);
+        border-color: var(--ui-accent);
     }
     
     .form-check-input:focus {
-        box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
+        box-shadow: 0 0 0 2px var(--ui-accent-ring);
     }
     
     /* Buttons - Dark Theme */
     .btn-outline-dark {
-        color: #a0a0a0 !important;
-        border-color: rgba(255, 255, 255, 0.2) !important;
+        color: var(--ui-text-soft) !important;
+        border-color: var(--ui-border) !important;
     }
     
     .btn-outline-dark:hover {
@@ -559,21 +594,21 @@
     }
     
     .btn-outline-primary {
-        color: #0d6efd !important;
-        border-color: rgba(13, 110, 253, 0.5) !important;
+        color: var(--ui-accent) !important;
+        border-color: rgba(120, 183, 255, 0.5) !important;
     }
     
     .btn-outline-primary:hover {
-        background: rgba(13, 110, 253, 0.2) !important;
+        background: rgba(120, 183, 255, 0.18) !important;
     }
     
     .btn-primary {
-        background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+        background: linear-gradient(135deg, var(--ui-accent) 0%, var(--ui-accent-strong) 100%);
         border: none;
     }
     
     .btn-primary:hover {
-        background: linear-gradient(135deg, #0a58ca 0%, #084298 100%);
+        background: linear-gradient(135deg, #68afff 0%, #4d98f5 100%);
     }
     
     .btn-danger {
@@ -647,7 +682,8 @@
 /* --- MOBILE & LANDSCAPE OPTIMIZATIONS --- */
     @media (max-width: 950px) {
         /* General Scaling for Touch */
-        .btn-tool { width: 44px; height: 44px; }
+        .btn-tool { width: 44px; height: 44px; justify-content: center; padding: 0; gap: 0; }
+        .btn-tool .tool-label { display: none; }
 
         /* 1. TOP HEADER: Allow horizontal scroll if buttons overflow */
         .float-header {
@@ -674,6 +710,36 @@
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
             transition: transform 0.3s ease;
+            width: 54px;
+            padding: 8px 6px;
+            gap: 2px;
+            align-items: center;
+        }
+
+        .toolbar-section {
+            gap: 2px;
+            align-items: center;
+        }
+
+        .toolbar-section .toolbar-label {
+            font-size: 0.5rem;
+            text-align: center;
+            padding: 2px 4px;
+            margin-bottom: 2px;
+            background: transparent;
+        }
+
+        .toolbar-buttons {
+            flex-direction: row;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 2px;
+        }
+
+        .toolbar-section .btn-tool {
+            width: 34px;
+            height: 34px;
+            padding: 0;
         }
 
         /* 3. PROPERTIES PANEL: Scale Down & Reposition */
@@ -859,7 +925,7 @@
     </div>
 </div>
     <!-- Auto Save Indicator -->
-    <div id="auto-save-status" style="position:absolute; bottom:20px; left:50%; transform:translateX(-50%); color:#fff; background:rgba(13, 110, 253, 0.9); padding:6px 16px; border-radius:20px; opacity:0; pointer-events:none; transition: opacity 0.5s; font-size: 0.75rem; font-weight: 500; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">Saved</div>
+    <div id="auto-save-status" style="position:absolute; bottom:20px; left:50%; transform:translateX(-50%); color:#fff; background:rgba(120, 183, 255, 0.9); padding:6px 16px; border-radius:20px; opacity:0; pointer-events:none; transition: opacity 0.5s; font-size: 0.75rem; font-weight: 500; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">Saved</div>
 
     <!-- Header Controls -->
     <div class="float-panel float-header">
@@ -922,6 +988,9 @@
             <button id="btn-ruler" class="btn btn-sm btn-outline-dark border-0" onclick="window.toggleRuler()" title="Toggle Ruler (M)">
                 <i class="bi bi-ruler"></i>
             </button>
+            <button id="btn-ruler-mode" class="btn btn-sm btn-outline-dark border-0" onclick="window.toggleRulerMode()" title="Mode: Endpoint">
+                <i class="bi bi-arrows-collapse"></i>
+            </button>
             <button id="btn-ruler-snap" class="btn btn-sm btn-outline-dark border-0" onclick="window.startRulerSnap()" title="Align Ruler to Object">
                 <i class="bi bi-magnet"></i>
             </button>
@@ -975,81 +1044,81 @@
         </div>
         
         <!-- ADD SECTION -->
-        <div class="toolbar-section collapsed" id="section-add">
+        <div class="toolbar-section" id="section-add">
             <div class="toolbar-label" onclick="this.parentElement.classList.toggle('collapsed')">Add</div>
             <div class="toolbar-buttons">
-                <button class="btn btn-light border btn-tool" onclick="window.dAdd('cube')" title="Cube"><i class="bi bi-box"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.dAdd('cyl')" title="Cylinder"><i class="bi bi-database"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.dAdd('sph')" title="Sphere"><i class="bi bi-circle"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.dAdd('cone')" title="Cone"><i class="bi bi-cone-striped"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.dAdd('torus')" title="Torus"><i class="bi bi-circle-half"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.dAdd('wedge')" title="Wedge"><i class="bi bi-caret-up-fill"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.dAdd('thread')" title="Thread"><i class="bi bi-gear-wide-connected"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.dStartText()" title="3D Text"><i class="bi bi-type"></i></button>
+                <button class="btn btn-light border btn-tool" onclick="window.dAdd('cube')" title="Cube"><i class="bi bi-box"></i><span class="tool-label">Cube</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.dAdd('cyl')" title="Cylinder"><i class="bi bi-database"></i><span class="tool-label">Cylinder</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.dAdd('sph')" title="Sphere"><i class="bi bi-circle"></i><span class="tool-label">Sphere</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.dAdd('cone')" title="Cone"><i class="bi bi-cone-striped"></i><span class="tool-label">Cone</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.dAdd('torus')" title="Torus"><i class="bi bi-circle-half"></i><span class="tool-label">Torus</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.dAdd('wedge')" title="Wedge"><i class="bi bi-caret-up-fill"></i><span class="tool-label">Wedge</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.dAdd('thread')" title="Thread"><i class="bi bi-gear-wide-connected"></i><span class="tool-label">Thread</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.dStartText()" title="3D Text"><i class="bi bi-type"></i><span class="tool-label">3D Text</span></button>
             </div>
         </div>
         
         <!-- PARAMETRIC SHAPES SECTION -->
-        <div class="toolbar-section collapsed" id="section-parametric">
+        <div class="toolbar-section" id="section-parametric">
             <div class="toolbar-label" onclick="this.parentElement.classList.toggle('collapsed')">Parametric</div>
             <div class="toolbar-buttons">
-                <button class="btn btn-light border btn-tool" onclick="window.dAdd('icosahedron')" title="Icosa"><i class="bi bi-hexagon"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.dAdd('dodecahedron')" title="Dodeca"><i class="bi bi-hexagon-fill"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.dAdd('octahedron')" title="Octa"><i class="bi bi-diamond"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.dAdd('tetrahedron')" title="Tetra"><i class="bi bi-triangle"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.dAdd('torusKnot')" title="Knot"><i class="bi bi-diagram-3"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.dAdd('capsule')" title="Capsule"><i class="bi bi-capsule"></i></button>
+                <button class="btn btn-light border btn-tool" onclick="window.dAdd('icosahedron')" title="Icosa"><i class="bi bi-hexagon"></i><span class="tool-label">Icosa</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.dAdd('dodecahedron')" title="Dodeca"><i class="bi bi-hexagon-fill"></i><span class="tool-label">Dodeca</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.dAdd('octahedron')" title="Octa"><i class="bi bi-diamond"></i><span class="tool-label">Octa</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.dAdd('tetrahedron')" title="Tetra"><i class="bi bi-triangle"></i><span class="tool-label">Tetra</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.dAdd('torusKnot')" title="Knot"><i class="bi bi-diagram-3"></i><span class="tool-label">Knot</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.dAdd('capsule')" title="Capsule"><i class="bi bi-capsule"></i><span class="tool-label">Capsule</span></button>
             </div>
         </div>
         
         <div class="divider"></div>
         
         <!-- EDIT SECTION -->
-        <div class="toolbar-section collapsed" id="section-edit">
+        <div class="toolbar-section" id="section-edit">
             <div class="toolbar-label" onclick="this.parentElement.classList.toggle('collapsed')">Edit</div>
             <div class="toolbar-buttons">
-                <button class="btn btn-light border btn-tool" onclick="window.setMode('translate')" data-mode="translate" title="Move"><i class="bi bi-arrows-move"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.setMode('rotate')" data-mode="rotate" title="Rotate"><i class="bi bi-arrow-repeat"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.setMode('scale')" data-mode="scale" title="Scale"><i class="bi bi-arrows-angle-expand"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.startAlignTool()" title="Snap"><i class="bi bi-magnet"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="document.getElementById('mirror-panel').style.display='block'" title="Mirror"><i class="bi bi-symmetry-vertical"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.dExtrude()" title="Extrude"><i class="bi bi-box-arrow-up"></i></button>
+                <button class="btn btn-light border btn-tool" onclick="window.setMode('translate')" data-mode="translate" title="Move"><i class="bi bi-arrows-move"></i><span class="tool-label">Move</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.setMode('rotate')" data-mode="rotate" title="Rotate"><i class="bi bi-arrow-repeat"></i><span class="tool-label">Rotate</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.setMode('scale')" data-mode="scale" title="Scale"><i class="bi bi-arrows-angle-expand"></i><span class="tool-label">Scale</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.startAlignTool()" title="Snap"><i class="bi bi-magnet"></i><span class="tool-label">Snap</span></button>
+                <button class="btn btn-light border btn-tool" onclick="document.getElementById('mirror-panel').style.display='block'" title="Mirror"><i class="bi bi-symmetry-vertical"></i><span class="tool-label">Mirror</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.dExtrude()" title="Extrude"><i class="bi bi-box-arrow-up"></i><span class="tool-label">Extrude</span></button>
             </div>
         </div>
         
         <div class="divider"></div>
         
         <!-- TOOLS SECTION -->
-        <div class="toolbar-section collapsed" id="section-tools">
+        <div class="toolbar-section" id="section-tools">
             <div class="toolbar-label" onclick="this.parentElement.classList.toggle('collapsed')">Tools</div>
             <div class="toolbar-buttons">
-                <button class="btn btn-light border btn-tool" onclick="window.dDuplicate()" title="Duplicate"><i class="bi bi-files"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.dLoft()" title="Loft"><i class="bi bi-bezier2"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.dShell()" title="Shell"><i class="bi bi-nut"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.dDrop()" title="Drop"><i class="bi bi-arrow-bar-down"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.dVacuum()" title="Vacuum"><i class="bi bi-cloud-download"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.dShrinkWrap()" title="Shrink"><i class="bi bi-bandaid"></i></button>
+                <button class="btn btn-light border btn-tool" onclick="window.dDuplicate()" title="Duplicate"><i class="bi bi-files"></i><span class="tool-label">Duplicate</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.dLoft()" title="Loft"><i class="bi bi-bezier2"></i><span class="tool-label">Loft</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.dShell()" title="Shell"><i class="bi bi-nut"></i><span class="tool-label">Shell</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.dDrop()" title="Drop"><i class="bi bi-arrow-bar-down"></i><span class="tool-label">Drop</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.dVacuum()" title="Vacuum"><i class="bi bi-cloud-download"></i><span class="tool-label">Vacuum</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.dShrinkWrap()" title="Shrink"><i class="bi bi-bandaid"></i><span class="tool-label">Shrink</span></button>
             </div>
         </div>
         
         <!-- MODIFIERS SECTION -->
-        <div class="toolbar-section collapsed" id="section-modifiers">
+        <div class="toolbar-section" id="section-modifiers">
             <div class="toolbar-label" onclick="this.parentElement.classList.toggle('collapsed')">Modify</div>
             <div class="toolbar-buttons">
-                <button class="btn btn-light border btn-tool" onclick="window.applyModifier('bevel')" title="Bevel"><i class="bi bi-corner-round"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.applyModifier('bend')" title="Bend"><i class="bi bi-arrow-down-up"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.applyModifier('twist')" title="Twist"><i class="bi bi-arrow-clockwise"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.applyModifier('taper')" title="Taper"><i class="bi bi-triangle-fill"></i></button>
+                <button class="btn btn-light border btn-tool" onclick="window.applyModifier('bevel')" title="Bevel"><i class="bi bi-corner-round"></i><span class="tool-label">Bevel</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.applyModifier('bend')" title="Bend"><i class="bi bi-arrow-down-up"></i><span class="tool-label">Bend</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.applyModifier('twist')" title="Twist"><i class="bi bi-arrow-clockwise"></i><span class="tool-label">Twist</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.applyModifier('taper')" title="Taper"><i class="bi bi-triangle-fill"></i><span class="tool-label">Taper</span></button>
             </div>
         </div>
         
         <!-- CONSTRAINTS SECTION -->
-        <div class="toolbar-section collapsed" id="section-constraints">
+        <div class="toolbar-section" id="section-constraints">
             <div class="toolbar-label" onclick="this.parentElement.classList.toggle('collapsed')">Joints</div>
             <div class="toolbar-buttons">
-                <button class="btn btn-light border btn-tool" onclick="window.createConstraint('hinge')" title="Hinge Joint"><i class="bi bi-door-open"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.createConstraint('ball')" title="Ball Joint"><i class="bi bi-circle"></i></button>
-                <button class="btn btn-light border btn-tool" onclick="window.createConstraint('slider')" title="Slider Joint"><i class="bi bi-arrows-expand"></i></button>
+                <button class="btn btn-light border btn-tool" onclick="window.createConstraint('hinge')" title="Hinge Joint"><i class="bi bi-door-open"></i><span class="tool-label">Hinge</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.createConstraint('ball')" title="Ball Joint"><i class="bi bi-circle"></i><span class="tool-label">Ball</span></button>
+                <button class="btn btn-light border btn-tool" onclick="window.createConstraint('slider')" title="Slider Joint"><i class="bi bi-arrows-expand"></i><span class="tool-label">Slider</span></button>
             </div>
             <div class="toolbar-buttons mt-1">
                 <button class="btn btn-sm btn-outline-dark" onclick="window.clearAllConstraints()" title="Clear All">Clear</button>
@@ -1059,10 +1128,10 @@
         <div class="divider"></div>
         
         <!-- IMPORT -->
-        <div class="toolbar-section collapsed" id="section-import">
+        <div class="toolbar-section" id="section-import">
             <div class="toolbar-label" onclick="this.parentElement.classList.toggle('collapsed')">Import</div>
             <div class="toolbar-buttons">
-                <button class="btn btn-primary border btn-tool" onclick="document.getElementById('file-upload').click()" title="Import"><i class="bi bi-upload"></i></button>
+                <button class="btn btn-primary border btn-tool" onclick="document.getElementById('file-upload').click()" title="Import"><i class="bi bi-upload"></i><span class="tool-label">Import</span></button>
                 <input type="file" id="file-upload" multiple accept=".stl,.obj,.mtl,.jpg,.png,.glb,.gltf,.usdz" style="display:none" onchange="window.dImportFile(this)">
             </div>
         </div>
@@ -2149,23 +2218,37 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
             paramSlider('Chamfer', 'chamfer', 0, 5, 0.1)
         ],
         generate: (p) => {
-            const shape = new THREE.Shape();
-            const bevel = p.chamfer || 0;
-            const r = Math.max(0.1, p.rb - bevel);
-            shape.absarc(0, 0, r, 0, Math.PI * 2, false);
-            
-            const extrudeSettings = {
-                depth: p.h - (bevel * 2),
-                bevelEnabled: bevel > 0,
-                bevelThickness: bevel,
-                bevelSize: bevel,
-                bevelSegments: 4,
-                curveSegments: p.s
-            };
-            
-            const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-            geo.center();
-            return geo;
+            try {
+                // Check if tapered (top radius != bottom radius)
+                if (Math.abs(p.rt - p.rb) > 0.1) {
+                    // Tapered: Use standard CylinderGeometry
+                    const g = new THREE.CylinderGeometry(p.rt, p.rb, p.h, p.s);
+                    g.rotateX(Math.PI/2);
+                    return g;
+                }
+                
+                // Straight cylinder: Use ExtrudeGeometry
+                const shape = new THREE.Shape();
+                const bevel = p.chamfer || 0;
+                const r = Math.max(0.1, p.rb - bevel);
+                shape.absarc(0, 0, r, 0, Math.PI * 2, false);
+                
+                const extrudeSettings = {
+                    depth: p.h - (bevel * 2),
+                    bevelEnabled: bevel > 0,
+                    bevelThickness: bevel,
+                    bevelSize: bevel,
+                    bevelSegments: 4,
+                    curveSegments: p.s
+                };
+                
+                const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+                geo.center();
+                return geo;
+            } catch (e) {
+                console.error('Error generating cylinder geometry:', e);
+                return null;
+            }
         }
     });
 
@@ -5744,11 +5827,11 @@ window.createRuler = function() {
 
     // A. Visual Lines (The L-Shape)
     const len = 200; // Longer ruler
-    const material = new THREE.LineBasicMaterial({ color: 0x0d6efd, linewidth: 2, depthTest: false, transparent: true, opacity: 0.8 });
+    const material = new THREE.LineBasicMaterial({ color: 0x78b7ff, linewidth: 2, depthTest: false, transparent: true, opacity: 0.8 });
 
     // X Axis (Blue)
     const xGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(len,0,0)]);
-    const xLine = new THREE.Line(xGeo, new THREE.LineBasicMaterial({ color: 0x0077ff, linewidth: 2, depthTest:false }));
+    const xLine = new THREE.Line(xGeo, new THREE.LineBasicMaterial({ color: 0x78b7ff, linewidth: 2, depthTest:false }));
     rulerGroup.add(xLine);
 
     // Y Axis (Green-ish)
@@ -5762,7 +5845,7 @@ window.createRuler = function() {
     rulerGroup.add(zLine);
 
     // Grid (The "Plane")
-    const grid = new THREE.GridHelper(len*2, 20, 0x0077ff, 0xcccccc);
+    const grid = new THREE.GridHelper(len*2, 20, 0x78b7ff, 0xd7e6ff);
     grid.rotation.x = Math.PI/2; // Rotate to lie on XY plane
     grid.position.set(len/2, len/2, 0); // Offset center
     grid.material.opacity = 0.15;
@@ -5778,7 +5861,7 @@ window.createRuler = function() {
     rulerGroup.add(arcLine);
 
     // Add Origin Sphere (Click target)
-    const sphere = new THREE.Mesh(new THREE.SphereGeometry(2), new THREE.MeshBasicMaterial({ color: 0x0d6efd }));
+    const sphere = new THREE.Mesh(new THREE.SphereGeometry(2), new THREE.MeshBasicMaterial({ color: 0x78b7ff }));
     rulerGroup.add(sphere);
 
     // Default Position
@@ -6690,7 +6773,12 @@ const onPointerMove = e => {
 
         // Check if type is registered in parametric registry first
         if (parametricRegistry.has(p.type)) {
-            newGeo = parametricRegistry.generateGeometry(p.type, p);
+            try {
+                newGeo = parametricRegistry.generateGeometry(p.type, p);
+            } catch (e) {
+                console.error('Error in parametricRegistry.generateGeometry:', e);
+                return;
+            }
         }
         // Fall back to legacy switch for backward compatibility
         else if (p.type === 'box') {
@@ -6726,12 +6814,14 @@ const onPointerMove = e => {
     window.updateSmoothness = (val) => {
         if(selectedObjects.length !== 1) return;
         const obj = selectedObjects[0];
+        console.log('updateSmoothness called with:', val, 'obj.geoParams:', obj.userData.geoParams);
 
         // Only for merged objects or non-parametric meshes
         if(obj.userData.geoParams) {
             // Parametric: Update the 'r' or 'chamfer' param
             obj.userData.geoParams.r = val; // For Box
             obj.userData.geoParams.chamfer = val; // For Extrusions
+            console.log('After update, geoParams:', obj.userData.geoParams);
             regenerateGeometry(obj);
         } else {
             // Merged: Smooth Shading Logic
@@ -6829,17 +6919,21 @@ function updateParametricUI(obj) {
         const addSlider = (label, key, min, max, step) => {
             const div = document.createElement("div");
             div.className = "d-flex justify-content-between align-items-center mb-1";
+            div.style.zIndex = "10";
+            div.style.position = "relative";
             div.innerHTML = `
                 <span class="small text-muted">${label}</span>
-                <input type="range" class="form-range w-50" min="${min}" max="${max}" step="${step}" value="${p[key]}">
+                <input type="range" class="form-range w-50" style="pointer-events:auto;" min="${min}" max="${max}" step="${step}" value="${p[key]}">
                 <span class="small fw-bold" style="width:25px; text-align:right;">${p[key]}</span>
             `;
             const range = div.querySelector("input");
             const valSpan = div.querySelectorAll("span")[1];
 
             range.oninput = (e) => {
-                valSpan.innerText = e.target.value;
-                p[key] = parseFloat(e.target.value);
+                const newVal = parseFloat(e.target.value);
+                valSpan.innerText = newVal;
+                p[key] = newVal;
+                console.log('Slider changed:', label, key, newVal, 'geoParams:', p);
                 regenerateGeometry(obj);
             };
             // Save state on release
@@ -7948,15 +8042,20 @@ window.toggleRulerMode = () => {
 
     // Update UI Button
     const btn = document.getElementById('btn-ruler-mode');
+    if(!btn) return;
     const icon = btn.querySelector('i');
 
     if(rulerMode === 'midpoint') {
         btn.title = "Mode: Midpoint";
         icon.className = "bi bi-align-center"; // Bootstrap icon for center
+        btn.classList.remove('btn-outline-dark');
+        btn.classList.add('btn-primary');
         btn.classList.add("text-primary");
     } else {
         btn.title = "Mode: Endpoint";
         icon.className = "bi bi-arrows-collapse"; // Bootstrap icon for edges
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-outline-dark');
         btn.classList.remove("text-primary");
     }
 

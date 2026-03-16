@@ -27,7 +27,7 @@
     }
 
     body, html { margin: 0; padding: 0; overflow: hidden; height: 100%; background: var(--ui-bg-deep); font-family: 'Segoe UI', system-ui, sans-serif; }
-    
+
     /* FPS Counter Styling */
     #fps-display {
         position: absolute;
@@ -45,7 +45,7 @@
         display: none;
         border: 1px solid rgba(0, 255, 0, 0.3);
     }
-    
+
     #collision-indicator {
         position: absolute;
         top: 10px;
@@ -62,19 +62,19 @@
         display: none;
         border: 1px solid rgba(0, 255, 0, 0.3);
     }
-    
+
     #collision-indicator.collision-active {
         background: rgba(200, 0, 0, 0.9);
         color: #ff6666;
         border-color: rgba(255, 100, 100, 0.5);
         animation: pulse-collision 1s infinite;
     }
-    
+
     @keyframes pulse-collision {
         0%, 100% { opacity: 1; }
         50% { opacity: 0.7; }
     }
-    
+
     /* Camera Compass */
     #camera-compass {
         position: absolute;
@@ -91,11 +91,11 @@
         align-items: center;
         justify-content: center;
     }
-    
+
     #camera-compass:active {
         cursor: grabbing;
     }
-    
+
     #camera-compass .compass-inner {
         width: 50px;
         height: 50px;
@@ -103,7 +103,7 @@
         background: linear-gradient(135deg, #4d678d 0%, #263854 100%);
         position: relative;
     }
-    
+
     #camera-compass .compass-needle {
         position: absolute;
         top: 50%;
@@ -115,7 +115,7 @@
         transform: translate(-50%, -100%);
         border-radius: 2px;
     }
-    
+
     #camera-compass .compass-labels {
         position: absolute;
         width: 100%;
@@ -123,17 +123,17 @@
         font-size: 8px;
         font-weight: bold;
     }
-    
+
     #camera-compass .compass-labels span {
         position: absolute;
         color: var(--ui-text-muted);
     }
-    
+
     #camera-compass .compass-labels .north { top: 2px; left: 50%; transform: translateX(-50%); color: #ff6b6b; }
     #camera-compass .compass-labels .south { bottom: 2px; left: 50%; transform: translateX(-50%); }
     #camera-compass .compass-labels .east { right: 4px; top: 50%; transform: translateY(-50%); }
     #camera-compass .compass-labels .west { left: 4px; top: 50%; transform: translateY(-50%); }
-    
+
     /* Full Screen Editor */
     #designer-area {
         position: absolute; top: 0; left: 0;
@@ -147,7 +147,7 @@
     .float-panel input, .float-panel select, .float-panel textarea {
         pointer-events: auto;
     }
-    
+
     .float-panel {
         position: absolute;
         background: var(--ui-panel);
@@ -161,26 +161,26 @@
         color: var(--ui-text);
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
-    
+
     .float-panel:hover {
         box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.15);
     }
 
     /* Toolbar (Left) - Enhanced */
-    .float-toolbar { 
-        top: 20px; 
-        left: 20px; 
-        width: 224px; 
-        display: flex; 
-        flex-direction: column; 
-        gap: 8px; 
+    .float-toolbar {
+        top: 20px;
+        left: 20px;
+        width: 224px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
         align-items: stretch;
         padding: 10px;
         max-height: calc(100vh - 120px);
         overflow-y: auto;
         overflow-x: hidden;
     }
-    
+
     .toolbar-section {
         width: 100%;
         display: flex;
@@ -188,12 +188,12 @@
         gap: 6px;
         align-items: stretch;
     }
-    
+
     /* Collapsible toolbar sections */
     .toolbar-section.collapsed .toolbar-buttons {
         display: none;
     }
-    
+
     .toolbar-section .toolbar-label {
         font-size: 0.68rem;
         font-weight: 700;
@@ -209,34 +209,34 @@
         text-align: left;
         background: rgba(255,255,255,0.04);
     }
-    
+
     .toolbar-section .toolbar-label:hover {
         background: rgba(255,255,255,0.1);
         color: var(--ui-text);
     }
-    
+
     .toolbar-section .toolbar-label::after {
         content: ' ▼';
         font-size: 0.4rem;
     }
-    
+
     .toolbar-section.collapsed .toolbar-label::after {
         content: ' ▶';
     }
-    
+
     .toolbar-buttons {
         display: flex;
         flex-direction: column;
         gap: 4px;
         width: 100%;
     }
-    
+
     .toolbar-section .btn-tool {
         width: 100%;
         height: 40px;
         padding: 0 10px;
     }
-    
+
     .toolbar-label {
         font-size: 0.55rem;
         font-weight: 700;
@@ -248,28 +248,124 @@
     }
 
     /* Top Header - Modern Pill Style */
-    .float-header { 
-        top: 20px; 
-        left: 50%; 
-        transform: translateX(-50%); 
-        display: flex; 
-        gap: 6px; 
-        padding: 8px 14px; 
+    .float-header {
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 6px;
+        padding: 8px 14px;
         align-items: center;
         border-radius: 50px;
     }
-    
+
     .header-group {
         display: flex;
         gap: 4px;
         align-items: center;
     }
-    
+
     .header-divider {
         width: 1px;
         height: 24px;
         background: rgba(255, 255, 255, 0.15);
         margin: 0 8px;
+    }
+
+    /* File Dropdown Menu */
+    .file-dropdown {
+        position: relative;
+        display: inline-block;
+    }
+
+    .file-dropdown-toggle {
+        background: transparent;
+        border: none;
+        color: var(--ui-text-soft);
+        padding: 6px 12px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.15s ease;
+    }
+
+    .file-dropdown-toggle:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: #ffffff;
+    }
+
+    .file-dropdown-toggle::after {
+        content: '▼';
+        font-size: 0.6rem;
+        margin-left: 4px;
+    }
+
+    .file-dropdown-menu {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        min-width: 220px;
+        background: var(--ui-panel-strong);
+        border: 1px solid var(--ui-border);
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        padding: 6px 0;
+        margin-top: 4px;
+    }
+
+    .file-dropdown.open .file-dropdown-menu {
+        display: block;
+    }
+
+    .file-dropdown-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 16px;
+        color: var(--ui-text-soft);
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: all 0.1s ease;
+        border: none;
+        background: none;
+        width: 100%;
+        text-align: left;
+    }
+
+    .file-dropdown-item:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: #ffffff;
+    }
+
+    .file-dropdown-item i {
+        font-size: 1rem;
+        width: 20px;
+        text-align: center;
+    }
+
+    .file-dropdown-divider {
+        height: 1px;
+        background: var(--ui-border);
+        margin: 6px 0;
+    }
+
+    .file-dropdown-item .shortcut {
+        margin-left: auto;
+        font-size: 0.75rem;
+        color: var(--ui-text-muted);
+    }
+
+    /* Hide default header groups when in dropdown mode */
+    .header-left-groups {
+        display: flex;
+        align-items: center;
+        gap: 4px;
     }
 
     /* Object List (Bottom Right) - Enhanced */
@@ -306,12 +402,12 @@
     #constraint-list::-webkit-scrollbar {
         width: 6px;
     }
-    
+
     #constraint-list::-webkit-scrollbar-track {
         background: rgba(255, 255, 255, 0.05);
         border-radius: 3px;
     }
-    
+
     #constraint-list::-webkit-scrollbar-thumb {
         background: rgba(255, 255, 255, 0.2);
         border-radius: 3px;
@@ -337,16 +433,16 @@
         list-style: none;
         padding: 0;
     }
-    
+
     #object-list::-webkit-scrollbar {
         width: 6px;
     }
-    
+
     #object-list::-webkit-scrollbar-track {
         background: rgba(255, 255, 255, 0.05);
         border-radius: 3px;
     }
-    
+
     #object-list::-webkit-scrollbar-thumb {
         background: rgba(255, 255, 255, 0.2);
         border-radius: 3px;
@@ -357,34 +453,34 @@
         width: 100%;
         margin-bottom: 5px;
     }
-    
+
     /* Properties (Top Right) */
-    .float-props { 
-        top: 20px; 
-        right: 20px; 
-        width: 260px; 
+    .float-props {
+        top: 20px;
+        right: 20px;
+        width: 260px;
         display: none;
     }
 
     /* Export Modal */
-    .float-export { 
-        top: 50%; 
-        left: 50%; 
-        transform: translate(-50%, -50%); 
-        width: 320px; 
-        display: none; 
+    .float-export {
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 320px;
+        display: none;
         padding: 24px;
         border-radius: 16px;
     }
 
     /* UI Elements - Modern Buttons */
-    .btn-tool { 
-        width: 38px; 
-        height: 38px; 
-        padding: 0; 
-        display: flex; 
-        align-items: center; 
-        justify-content: center; 
+    .btn-tool {
+        width: 38px;
+        height: 38px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         border-radius: 8px;
         background: rgba(255, 255, 255, 0.1);
         border: 1px solid var(--ui-border);
@@ -409,86 +505,86 @@
         min-width: 18px;
         text-align: center;
     }
-    
+
     .btn-tool:hover {
         background: rgba(255, 255, 255, 0.18);
         color: #ffffff;
         transform: translateY(-1px);
         border-color: var(--ui-border-strong);
     }
-    
+
     .btn-tool:active {
         transform: translateY(0);
     }
-    
-    .active-tool { 
-        background: linear-gradient(135deg, var(--ui-accent) 0%, var(--ui-accent-strong) 100%) !important; 
-        color: white !important; 
+
+    .active-tool {
+        background: linear-gradient(135deg, var(--ui-accent) 0%, var(--ui-accent-strong) 100%) !important;
+        color: white !important;
         border-color: var(--ui-accent) !important;
         box-shadow: 0 4px 12px rgba(90, 167, 255, 0.35);
     }
-    
-    .divider { 
-        width: 80%; 
-        height: 1px; 
-        background: rgba(255, 255, 255, 0.1); 
-        margin: 6px 0; 
+
+    .divider {
+        width: 80%;
+        height: 1px;
+        background: rgba(255, 255, 255, 0.1);
+        margin: 6px 0;
     }
 
     /* Measurement Labels */
     .label-overlay { pointer-events: none; z-index: 50; font-family: sans-serif; overflow: hidden; }
     .tinker-label-container { pointer-events: auto; padding: 2px; }
     .tinker-input {
-        pointer-events: auto; 
+        pointer-events: auto;
         background: rgba(30, 30, 46, 0.95);
-        border: 1px solid var(--ui-accent); 
-        border-radius: 6px; 
+        border: 1px solid var(--ui-accent);
+        border-radius: 6px;
         padding: 4px 0;
-        font-size: 12px; 
-        font-weight: 600; 
-        color: #fff; 
+        font-size: 12px;
+        font-weight: 600;
+        color: #fff;
         width: 55px;
-        text-align: center; 
+        text-align: center;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         font-family: 'JetBrains Mono', monospace;
     }
     .dim-pos { color: var(--ui-accent); border-color: var(--ui-accent); }
     .dim-size { color: #e0e0e0; border-color: #6c757d; }
-    .rot-label { 
-        background: rgba(0, 0, 0, 0.85); 
-        color: #ffc107; 
-        padding: 6px 10px; 
-        border-radius: 6px; 
-        font-weight: 600; 
+    .rot-label {
+        background: rgba(0, 0, 0, 0.85);
+        color: #ffc107;
+        padding: 6px 10px;
+        border-radius: 6px;
+        font-weight: 600;
         font-size: 12px;
         font-family: 'JetBrains Mono', monospace;
     }
 
     /* List Items - Enhanced */
-    .object-list-item { 
-        font-size: 0.8rem; 
-        padding: 10px 12px; 
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05); 
-        cursor: pointer; 
-        display: flex; 
-        align-items: center; 
+    .object-list-item {
+        font-size: 0.8rem;
+        padding: 10px 12px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
         background: transparent;
         color: var(--ui-text-soft);
         transition: all 0.15s ease;
     }
-    
-    .object-list-item:hover { 
-        background: rgba(255, 255, 255, 0.08); 
+
+    .object-list-item:hover {
+        background: rgba(255, 255, 255, 0.08);
         color: #ffffff;
     }
-    
-    .object-list-item.selected { 
-        background: var(--ui-accent-soft); 
-        border-left: 3px solid var(--ui-accent); 
+
+    .object-list-item.selected {
+        background: var(--ui-accent-soft);
+        border-left: 3px solid var(--ui-accent);
         font-weight: 600;
         color: #ffffff;
     }
-    
+
     .object-type-icon {
         margin-right: 8px;
         opacity: 0.7;
@@ -496,33 +592,33 @@
     }
 
     .color-picker { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
-    .color-option { 
-        width: 22px; 
-        height: 22px; 
-        border-radius: 6px; 
-        cursor: pointer; 
+    .color-option {
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+        cursor: pointer;
         border: 2px solid transparent;
         transition: all 0.15s ease;
     }
     .color-option:hover {
         transform: scale(1.15);
     }
-    .color-option.selected { 
-        border-color: #fff; 
+    .color-option.selected {
+        border-color: #fff;
         transform: scale(1.2);
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     }
-    
+
     .cursor-cross { cursor: crosshair !important; }
     .cursor-grab { cursor: grab !important; }
-    
+
     /* Status Indicator - Enhanced */
     #auto-save-status {
         font-family: 'JetBrains Mono', monospace;
         font-size: 0.75rem;
         letter-spacing: 0.3px;
     }
-    
+
     /* Panel Headers */
     .panel-title {
         font-weight: 600;
@@ -532,11 +628,11 @@
         align-items: center;
         gap: 6px;
     }
-    
+
     .panel-title i {
         opacity: 0.7;
     }
-    
+
     /* Form Controls - Dark Theme */
     .form-control, .form-select {
         background: rgba(255, 255, 255, 0.1) !important;
@@ -544,129 +640,129 @@
         color: var(--ui-text) !important;
         border-radius: 8px !important;
     }
-    
+
     .form-control:focus, .form-select:focus {
         background: rgba(255, 255, 255, 0.12) !important;
         border-color: var(--ui-accent) !important;
         box-shadow: 0 0 0 2px var(--ui-accent-ring) !important;
         color: #ffffff !important;
     }
-    
+
     .form-control::placeholder {
         color: var(--ui-text-muted) !important;
     }
-    
+
     .form-select option {
         background: #1e1e2e;
         color: #e0e0e0;
     }
-    
+
     /* Range Inputs */
     .form-range {
         accent-color: var(--ui-accent);
     }
-    
+
     /* Checkboxes */
     .form-check-input {
         background-color: rgba(255, 255, 255, 0.1);
         border-color: rgba(255, 255, 255, 0.3);
     }
-    
+
     .form-check-input:checked {
         background-color: var(--ui-accent);
         border-color: var(--ui-accent);
     }
-    
+
     .form-check-input:focus {
         box-shadow: 0 0 0 2px var(--ui-accent-ring);
     }
-    
+
     /* Buttons - Dark Theme */
     .btn-outline-dark {
         color: var(--ui-text-soft) !important;
         border-color: var(--ui-border) !important;
     }
-    
+
     .btn-outline-dark:hover {
         background: rgba(255, 255, 255, 0.1) !important;
         color: #ffffff !important;
         border-color: rgba(255, 255, 255, 0.3) !important;
     }
-    
+
     .btn-outline-primary {
         color: var(--ui-accent) !important;
         border-color: rgba(120, 183, 255, 0.5) !important;
     }
-    
+
     .btn-outline-primary:hover {
         background: rgba(120, 183, 255, 0.18) !important;
     }
-    
+
     .btn-primary {
         background: linear-gradient(135deg, var(--ui-accent) 0%, var(--ui-accent-strong) 100%);
         border: none;
     }
-    
+
     .btn-primary:hover {
         background: linear-gradient(135deg, #68afff 0%, #4d98f5 100%);
     }
-    
+
     .btn-danger {
         background: linear-gradient(135deg, #dc3545 0%, #bb2d3b 100%);
         border: none;
     }
-    
+
     .btn-warning {
         background: linear-gradient(135deg, #ffc107 0%, #ffb300 100%);
         border: none;
         color: #000 !important;
     }
-    
+
     .btn-secondary {
         background: rgba(255, 255, 255, 0.1);
         border: 1px solid rgba(255, 255, 255, 0.2);
         color: #e0e0e0;
     }
-    
+
     .btn-secondary:hover {
         background: rgba(255, 255, 255, 0.15);
         color: #ffffff;
     }
-    
+
     /* Close Button */
     .btn-close {
         filter: invert(1) brightness(0.7);
         opacity: 0.7;
     }
-    
+
     .btn-close:hover {
         opacity: 1;
     }
-    
+
     /* Text Utilities */
     .text-muted {
         color: #6c757d !important;
     }
-    
+
     .small {
         font-size: 0.8rem;
     }
-    
+
     /* Border Utilities */
     .border-top, .border-bottom {
         border-color: rgba(255, 255, 255, 0.1) !important;
     }
-    
+
     /* Progress Bar */
     .progress {
         background: rgba(255, 255, 255, 0.1);
         border-radius: 10px;
     }
-    
+
     .progress-bar {
         border-radius: 10px;
     }
-    
+
     /* Keyboard Shortcut Badge */
     .kbd-shortcut {
         display: inline-block;
@@ -763,7 +859,7 @@
             max-height: 40vh;
             transition: height 0.3s ease;
         }
-        
+
         /* 5. CONSTRAINTS PANEL: Mobile */
         #panel-constraints {
             bottom: 10px;
@@ -771,7 +867,7 @@
             width: 180px;
             max-height: 30vh;
         }
-        
+
         #panel-constraints.minimized {
             height: 44px !important;
             overflow: hidden !important;
@@ -779,7 +875,7 @@
         #panel-constraints.minimized #content-constraints {
             display: none;
         }
-        
+
         .float-list.minimized {
             height: 44px !important;
             overflow: hidden !important;
@@ -791,7 +887,7 @@
         .float-props.minimized #content-props {
             display: none;
         }
-        
+
         /* --- PREVENT IPHONE TEXT SELECTION --- */
         #auto-save-status,
         #fps-display,
@@ -814,7 +910,7 @@
             padding-right: env(safe-area-inset-right);
         }
     }
-    
+
     /* --- HELP PANEL STYLES --- */
     .help-grid {
         display: grid;
@@ -822,7 +918,7 @@
         gap: 8px;
         margin-top: 10px;
     }
-    
+
     .help-item {
         display: flex;
         align-items: center;
@@ -832,13 +928,13 @@
         border-radius: 6px;
         font-size: 0.75rem;
     }
-    
+
     .help-item i {
         color: #0d6efd;
         width: 16px;
         text-align: center;
     }
-    
+
     .help-shortcut {
         color: #6c757d;
         font-family: 'JetBrains Mono', monospace;
@@ -863,8 +959,11 @@
 }
 </script>
 
-<!-- 3. Polyfills -->
+<!-- Polyfills -->
 <script async src="https://ga.jspm.io/npm:es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+
+<!-- OCCT Import JS for STEP file support -->
+<script src="https://unpkg.com/occt-import-js@0.0.23/dist/occt-import-js.js"></script>
 </head>
 <body>
 
@@ -929,6 +1028,38 @@
 
     <!-- Header Controls -->
     <div class="float-panel float-header">
+        <!-- File Dropdown -->
+        <div class="file-dropdown" id="file-dropdown">
+            <button class="file-dropdown-toggle" onclick="toggleFileDropdown()">
+                <i class="bi bi-file-earmark"></i> File
+            </button>
+            <div class="file-dropdown-menu">
+                <input type="file" id="file-upload" multiple accept=".stl,.obj,.mtl,.jpg,.png,.glb,.gltf,.usdz,.step,.stp" style="display:none" onchange="window.dImportFile(this)">
+                <button class="file-dropdown-item" onclick="document.getElementById('file-upload').click(); closeFileDropdown();">
+                    <i class="bi bi-upload"></i> Import...
+                    <span class="shortcut">Ctrl+O</span>
+                </button>
+                <button class="file-dropdown-item" onclick="document.getElementById('file-upload-step').click(); closeFileDropdown();">
+                    <i class="bi bi-box-seam"></i> Import STEP...
+                </button>
+                <input type="file" id="file-upload-step" multiple accept=".step,.stp" style="display:none" onchange="window.dImportFile(this)">
+                <div class="file-dropdown-divider"></div>
+                <button class="file-dropdown-item" onclick="window.downloadExport('json'); closeFileDropdown();">
+                    <i class="bi bi-file-earmark-json"></i> Export .tinker
+                    <span class="shortcut">Ctrl+S</span>
+                </button>
+                <button class="file-dropdown-item" onclick="document.getElementById('export-panel').style.display='block'; closeFileDropdown();">
+                    <i class="bi bi-download"></i> Export 3D Model...
+                </button>
+                <div class="file-dropdown-divider"></div>
+                <button class="file-dropdown-item" onclick="if(confirm('Clear Scene?')) window.dDelAll(); closeFileDropdown();">
+                    <i class="bi bi-trash"></i> Clear Scene
+                </button>
+            </div>
+        </div>
+
+        <div class="header-divider"></div>
+
         <!-- Undo/Redo Group -->
         <div class="header-group">
             <button class="btn btn-sm btn-outline-dark border-0" onclick="window.undo()" title="Undo (Ctrl+Z)">
@@ -938,9 +1069,9 @@
                 <i class="bi bi-arrow-clockwise"></i>
             </button>
         </div>
-        
+
         <div class="header-divider"></div>
-        
+
         <!-- View Controls -->
         <div class="header-group">
             <button class="btn btn-sm btn-outline-dark border-0" onclick="window.setView('front')" title="Front View">
@@ -965,9 +1096,9 @@
                 <i class="bi bi-box-arrow-in-up-right"></i>
             </button>
         </div>
-        
+
         <div class="header-divider"></div>
-        
+
         <!-- Zoom Controls -->
         <div class="header-group">
             <button class="btn btn-sm btn-outline-dark border-0" onclick="window.zoomOut()" title="Zoom Out">
@@ -980,9 +1111,9 @@
                 <i class="bi bi-arrows-fullscreen"></i>
             </button>
         </div>
-        
+
         <div class="header-divider"></div>
-        
+
         <!-- Tools Group -->
         <div class="header-group">
             <button id="btn-ruler" class="btn btn-sm btn-outline-dark border-0" onclick="window.toggleRuler()" title="Toggle Ruler (M)">
@@ -998,9 +1129,9 @@
                 <i class="bi bi-crosshair"></i>
             </button>
         </div>
-        
+
         <div class="header-divider"></div>
-        
+
         <!-- Collision Detection -->
         <div class="header-group">
             <button id="btn-collision-toggle" class="btn btn-sm btn-outline-dark border-0" onclick="window.toggleCollisionDetection()" title="Toggle Collision Detection">
@@ -1010,9 +1141,9 @@
                 <i class="bi bi-arrow-down-circle"></i>
             </button>
         </div>
-        
+
         <div class="header-divider"></div>
-        
+
         <!-- Actions Group -->
         <div class="header-group">
             <button class="btn btn-sm btn-outline-dark border-0" onclick="document.getElementById('settings-panel').style.display='block'; window.updateStorageUI()" title="Settings">
@@ -1020,18 +1151,6 @@
             </button>
             <button class="btn btn-sm btn-outline-dark border-0" onclick="document.getElementById('help-panel').style.display='block'" title="Help & Shortcuts">
                 <i class="bi bi-question-circle"></i>
-            </button>
-            <button class="btn btn-sm btn-outline-dark border-0 fw-bold" onclick="document.getElementById('export-panel').style.display='block'" title="Export">
-                <i class="bi bi-download"></i>
-            </button>
-        </div>
-        
-        <div class="header-divider"></div>
-        
-        <!-- Danger Zone -->
-        <div class="header-group">
-            <button class="btn btn-sm btn-outline-danger border-0" onclick="if(confirm('Clear Scene?')) window.dDelAll()" title="Clear Scene">
-                <i class="bi bi-trash"></i>
             </button>
         </div>
     </div>
@@ -1042,7 +1161,7 @@
         <div class="d-md-none mb-2" onclick="window.toggleToolbar()" style="cursor:pointer; opacity: 0.7;">
             <i class="bi bi-three-dots-vertical"></i>
         </div>
-        
+
         <!-- ADD SECTION -->
         <div class="toolbar-section" id="section-add">
             <div class="toolbar-label" onclick="this.parentElement.classList.toggle('collapsed')">Add</div>
@@ -1057,7 +1176,7 @@
                 <button class="btn btn-light border btn-tool" onclick="window.dStartText()" title="3D Text"><i class="bi bi-type"></i><span class="tool-label">3D Text</span></button>
             </div>
         </div>
-        
+
         <!-- PARAMETRIC SHAPES SECTION -->
         <div class="toolbar-section" id="section-parametric">
             <div class="toolbar-label" onclick="this.parentElement.classList.toggle('collapsed')">Parametric</div>
@@ -1070,9 +1189,9 @@
                 <button class="btn btn-light border btn-tool" onclick="window.dAdd('capsule')" title="Capsule"><i class="bi bi-capsule"></i><span class="tool-label">Capsule</span></button>
             </div>
         </div>
-        
+
         <div class="divider"></div>
-        
+
         <!-- EDIT SECTION -->
         <div class="toolbar-section" id="section-edit">
             <div class="toolbar-label" onclick="this.parentElement.classList.toggle('collapsed')">Edit</div>
@@ -1085,9 +1204,9 @@
                 <button class="btn btn-light border btn-tool" onclick="window.dExtrude()" title="Extrude"><i class="bi bi-box-arrow-up"></i><span class="tool-label">Extrude</span></button>
             </div>
         </div>
-        
+
         <div class="divider"></div>
-        
+
         <!-- TOOLS SECTION -->
         <div class="toolbar-section" id="section-tools">
             <div class="toolbar-label" onclick="this.parentElement.classList.toggle('collapsed')">Tools</div>
@@ -1100,7 +1219,7 @@
                 <button class="btn btn-light border btn-tool" onclick="window.dShrinkWrap()" title="Shrink"><i class="bi bi-bandaid"></i><span class="tool-label">Shrink</span></button>
             </div>
         </div>
-        
+
         <!-- MODIFIERS SECTION -->
         <div class="toolbar-section" id="section-modifiers">
             <div class="toolbar-label" onclick="this.parentElement.classList.toggle('collapsed')">Modify</div>
@@ -1111,7 +1230,7 @@
                 <button class="btn btn-light border btn-tool" onclick="window.applyModifier('taper')" title="Taper"><i class="bi bi-triangle-fill"></i><span class="tool-label">Taper</span></button>
             </div>
         </div>
-        
+
         <!-- CONSTRAINTS SECTION -->
         <div class="toolbar-section" id="section-constraints">
             <div class="toolbar-label" onclick="this.parentElement.classList.toggle('collapsed')">Joints</div>
@@ -1124,17 +1243,8 @@
                 <button class="btn btn-sm btn-outline-dark" onclick="window.clearAllConstraints()" title="Clear All">Clear</button>
             </div>
         </div>
-        
+
         <div class="divider"></div>
-        
-        <!-- IMPORT -->
-        <div class="toolbar-section" id="section-import">
-            <div class="toolbar-label" onclick="this.parentElement.classList.toggle('collapsed')">Import</div>
-            <div class="toolbar-buttons">
-                <button class="btn btn-primary border btn-tool" onclick="document.getElementById('file-upload').click()" title="Import"><i class="bi bi-upload"></i><span class="tool-label">Import</span></button>
-                <input type="file" id="file-upload" multiple accept=".stl,.obj,.mtl,.jpg,.png,.glb,.gltf,.usdz" style="display:none" onchange="window.dImportFile(this)">
-            </div>
-        </div>
     </div>
 
     <!-- Object List (Bottom Right) -->
@@ -1199,7 +1309,7 @@
                      <div class="color-picker" id="color-picker"></div>
                 </div>
             </div>
-            
+
             <!-- DYNAMIC SHAPE PARAMETERS -->
             <div id="shape-params" class="mb-3 pt-2 border-top" style="display:none; background:rgba(255,255,255,0.05); padding:8px; border-radius:8px;"></div>
 
@@ -1250,14 +1360,14 @@
             <input type="file" id="project-upload" accept="*" style="display:none" onchange="window.loadProjectFile(this)">
         </div>
     </div>
-    
+
     <!-- Help Panel -->
     <div class="float-panel float-export" id="help-panel" style="display:none; width: 340px;">
         <div class="d-flex justify-content-between mb-3 border-bottom pb-2">
             <span class="panel-title"><i class="bi bi-question-circle"></i> Help & Shortcuts</span>
             <button class="btn-close" onclick="document.getElementById('help-panel').style.display='none'"></button>
         </div>
-        
+
         <div class="help-grid">
             <div class="help-item"><i class="bi bi-arrows-move"></i> Move <span class="help-shortcut">G</span></div>
             <div class="help-item"><i class="bi bi-arrow-repeat"></i> Rotate <span class="help-shortcut">R</span></div>
@@ -1268,7 +1378,7 @@
             <div class="help-item"><i class="bi bi-arrow-counterclockwise"></i> Undo <span class="help-shortcut">Ctrl+Z</span></div>
             <div class="help-item"><i class="bi bi-arrow-clockwise"></i> Redo <span class="help-shortcut">Ctrl+Y</span></div>
         </div>
-        
+
         <div class="mt-3 pt-2 border-top">
             <div class="small text-muted mb-2">Tips:</div>
             <ul class="small ps-3 mb-0" style="color: #888; font-size: 0.75rem;">
@@ -1362,7 +1472,7 @@
                 <label class="form-check-label small">Wireframe Mode</label>
             </div>
         </div>
-        
+
         <!-- Performance Settings -->
         <div class="mb-3">
             <label class="small text-muted mb-2">Performance</label>
@@ -1418,6 +1528,10 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
     import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
     import { USDZLoader } from "three/addons/loaders/USDZLoader.js";
     import { MTLLoader } from "three/addons/loaders/MTLLoader.js";
+    
+    // occtImportJs is loaded via script tag
+    // Make it available globally
+    window.occtImportJs = window.occtimportjs;
 
     import { FontLoader } from 'three/addons/loaders/FontLoader.js';
     import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
@@ -1522,7 +1636,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
          * @param {Object} config - Configuration object
          */
         register(type, config) {
-            const { 
+            const {
                 name,           // Display name
                 icon,            // Bootstrap icon class
                 category = 'Basic', // Category for grouping
@@ -1893,9 +2007,9 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                 return `
                     <div class="mb-2">
                         <label class="form-label small">Angle: ${constraint.currentValue?.toFixed(1) || 0}°</label>
-                        <input type="range" class="form-range" 
-                            min="${constraint.params.minAngle}" max="${constraint.params.maxAngle}" 
-                            value="${constraint.currentValue || 0}" 
+                        <input type="range" class="form-range"
+                            min="${constraint.params.minAngle}" max="${constraint.params.maxAngle}"
+                            value="${constraint.currentValue || 0}"
                             onchange="window.updateConstraintValue('${constraint.id}', this.value)">
                     </div>
                 `;
@@ -1965,23 +2079,23 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                 return `
                     <div class="mb-2">
                         <label class="form-label small">Swing 1: ${constraint.currentValue?.swing1?.toFixed(1) || 0}°</label>
-                        <input type="range" class="form-range" 
-                            min="${constraint.params.swing1Min}" max="${constraint.params.swing1Max}" 
-                            value="${constraint.currentValue?.swing1 || 0}" 
+                        <input type="range" class="form-range"
+                            min="${constraint.params.swing1Min}" max="${constraint.params.swing1Max}"
+                            value="${constraint.currentValue?.swing1 || 0}"
                             onchange="window.updateConstraintValue('${constraint.id}', { swing1: parseFloat(this.value) })">
                     </div>
                     <div class="mb-2">
                         <label class="form-label small">Swing 2: ${constraint.currentValue?.swing2?.toFixed(1) || 0}°</label>
-                        <input type="range" class="form-range" 
-                            min="${constraint.params.swing2Min}" max="${constraint.params.swing2Max}" 
-                            value="${constraint.currentValue?.swing2 || 0}" 
+                        <input type="range" class="form-range"
+                            min="${constraint.params.swing2Min}" max="${constraint.params.swing2Max}"
+                            value="${constraint.currentValue?.swing2 || 0}"
                             onchange="window.updateConstraintValue('${constraint.id}', { swing2: parseFloat(this.value) })">
                     </div>
                     <div class="mb-2">
                         <label class="form-label small">Twist: ${constraint.currentValue?.twist?.toFixed(1) || 0}°</label>
-                        <input type="range" class="form-range" 
-                            min="${constraint.params.twistMin}" max="${constraint.params.twistMax}" 
-                            value="${constraint.currentValue?.twist || 0}" 
+                        <input type="range" class="form-range"
+                            min="${constraint.params.twistMin}" max="${constraint.params.twistMax}"
+                            value="${constraint.currentValue?.twist || 0}"
                             onchange="window.updateConstraintValue('${constraint.id}', { twist: parseFloat(this.value) })">
                     </div>
                 `;
@@ -2045,7 +2159,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                 // Limits
                 const limitGeo = new THREE.BoxGeometry(0.08, 0.08, 0.08);
                 const limitMat = new THREE.MeshBasicMaterial({ color: 0xff4444 });
-                
+
                 const minLimit = new THREE.Mesh(limitGeo, limitMat);
                 if (axis === 'x') minLimit.position.x = minDist;
                 else if (axis === 'y') minLimit.position.y = minDist;
@@ -2071,9 +2185,9 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                 return `
                     <div class="mb-2">
                         <label class="form-label small">Distance: ${constraint.currentValue?.toFixed(2) || 0}</label>
-                        <input type="range" class="form-range" 
-                            min="${constraint.params.minDistance}" max="${constraint.params.maxDistance}" 
-                            step="0.1" value="${constraint.currentValue || 0}" 
+                        <input type="range" class="form-range"
+                            min="${constraint.params.minDistance}" max="${constraint.params.maxDistance}"
+                            step="0.1" value="${constraint.currentValue || 0}"
                             onchange="window.updateConstraintValue('${constraint.id}', parseFloat(this.value))">
                     </div>
                 `;
@@ -2226,13 +2340,13 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                     g.rotateX(Math.PI/2);
                     return g;
                 }
-                
+
                 // Straight cylinder: Use ExtrudeGeometry
                 const shape = new THREE.Shape();
                 const bevel = p.chamfer || 0;
                 const r = Math.max(0.1, p.rb - bevel);
                 shape.absarc(0, 0, r, 0, Math.PI * 2, false);
-                
+
                 const extrudeSettings = {
                     depth: p.h - (bevel * 2),
                     bevelEnabled: bevel > 0,
@@ -2241,7 +2355,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                     bevelSegments: 4,
                     curveSegments: p.s
                 };
-                
+
                 const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
                 geo.center();
                 return geo;
@@ -2270,7 +2384,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
             const bevel = p.chamfer || 0;
             const r = Math.max(0.1, p.rb - bevel);
             shape.absarc(0, 0, r, 0, Math.PI * 2, false);
-            
+
             const extrudeSettings = {
                 depth: p.h - (bevel * 2),
                 bevelEnabled: bevel > 0,
@@ -2279,7 +2393,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                 bevelSegments: 4,
                 curveSegments: p.s
             };
-            
+
             const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
             geo.center();
             return geo;
@@ -2342,7 +2456,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
     // ============================================================
     window.ParametricFunctions = {
         registry: parametricRegistry,
-        
+
         /**
          * Register a custom parametric function from external code
          * @param {string} type - Unique identifier
@@ -2351,17 +2465,17 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
         register: (type, config) => {
             parametricRegistry.register(type, config);
         },
-        
+
         /**
          * Get all registered types
          */
         getTypes: () => Array.from(parametricRegistry.getAll().keys()),
-        
+
         /**
          * Get a specific parametric function
          */
         get: (type) => parametricRegistry.get(type),
-        
+
         /**
          * Helper functions for creating param definitions
          */
@@ -2375,7 +2489,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
     // ============================================================
     // MODIFIER SYSTEM - Apply geometric transformations to objects
     // ============================================================
-    
+
     /**
      * ModifierRegistry - Manages geometric modifiers
      */
@@ -2385,7 +2499,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
         }
 
         register(name, config) {
-            const { 
+            const {
                 icon,           // Bootstrap icon
                 apply,          // Function to apply modifier
                 getUI,          // Function to generate UI
@@ -2414,47 +2528,47 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
     modifierRegistry.register('bevel', {
         icon: 'bi-corner-round',
         defaultParams: { amount: 1, segments: 3, type: 'round' },
-        
+
         apply: (mesh, params) => {
             const { amount, segments, type } = params;
-            
+
             const geo = mesh.geometry;
-            
+
             // Get bounding box to understand object scale
             if (!geo.boundingBox) geo.computeBoundingBox();
             const box = geo.boundingBox;
             const size = new THREE.Vector3();
             box.getSize(size);
-            
+
             // Store original positions if not stored
             if (!mesh.userData.originalPositions) {
                 mesh.userData.originalPositions = geo.attributes.position.array.slice();
             }
-            
+
             const original = mesh.userData.originalPositions;
             const pos = geo.attributes.position;
             const vertex = new THREE.Vector3();
-            
+
             // Normalize factor based on object size
             const maxSize = Math.max(size.x, size.y, size.z);
             const normalizeFactor = maxSize / 2;
-            
+
             for (let i = 0; i < pos.count; i++) {
                 vertex.fromArray(original, i * 3);
-                
+
                 // Get the maximum component to determine which face/edge this vertex is on
                 const absX = Math.abs(vertex.x);
                 const absY = Math.abs(vertex.y);
                 const absZ = Math.abs(vertex.z);
                 const maxComp = Math.max(absX, absY, absZ);
-                
+
                 // Calculate distance from center
                 const distFromCenter = Math.sqrt(vertex.x*vertex.x + vertex.y*vertex.y + vertex.z*vertex.z);
-                
+
                 if (type === 'round') {
                     // Round: Smooth the corners by moving vertices inward based on their distance
                     const cornerFactor = 1 - (amount / maxSize);
-                    
+
                     // Only apply to vertices near corners (where all components are significant)
                     if (absX > size.x * 0.3 && absY > size.y * 0.3 && absZ > size.z * 0.3) {
                         // This is a corner vertex
@@ -2482,20 +2596,20 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                         vertex.z *= (1 - chamferAmount);
                     }
                 }
-                
+
                 pos.setXYZ(i, vertex.x, vertex.y, vertex.z);
             }
-            
+
             pos.needsUpdate = true;
             geo.computeVertexNormals();
-            
+
             mesh.userData.modifierParams = { ...params, applied: true };
             return mesh;
         },
 
         getUI: (mesh, params, onChange) => {
             const container = document.createElement('div');
-            
+
             // Use button group instead of select for better mobile support
             const typeButtons = `
                 <div class="mb-2">
@@ -2506,27 +2620,27 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                     </div>
                 </div>
             `;
-            
+
             const amountSlider = `
                 <div class="d-flex justify-content-between align-items-center mb-1">
                     <span class="small text-muted">Amount</span>
-                    <input type="range" class="form-range w-50" min="0" max="10" step="0.5" 
+                    <input type="range" class="form-range w-50" min="0" max="10" step="0.5"
                         value="${params.amount}" id="mod-bevel-amount">
                     <span class="small fw-bold" style="width:25px">${params.amount}</span>
                 </div>
             `;
-            
+
             const segSlider = `
                 <div class="d-flex justify-content-between align-items-center mb-1">
                     <span class="small text-muted">Segments</span>
-                    <input type="range" class="form-range w-50" min="1" max="8" step="1" 
+                    <input type="range" class="form-range w-50" min="1" max="8" step="1"
                         value="${params.segments}" id="mod-bevel-segments">
                     <span class="small fw-bold" style="width:25px">${params.segments}</span>
                 </div>
             `;
-            
+
             container.innerHTML = typeButtons + amountSlider + segSlider;
-            
+
             // Event listeners - button group
             container.querySelector('#mod-bevel-round').onclick = () => {
                 params.type = 'round';
@@ -2540,19 +2654,19 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                 container.querySelector('#mod-bevel-round').className = 'btn btn-outline-secondary btn-sm';
                 onChange();
             };
-            
+
             container.querySelector('#mod-bevel-amount').oninput = (e) => {
                 params.amount = parseFloat(e.target.value);
                 e.target.nextElementSibling.innerText = params.amount;
             };
             container.querySelector('#mod-bevel-amount').onchange = onChange;
-            
+
             container.querySelector('#mod-bevel-segments').oninput = (e) => {
                 params.segments = parseInt(e.target.value);
                 e.target.nextElementSibling.innerText = params.segments;
             };
             container.querySelector('#mod-bevel-segments').onchange = onChange;
-            
+
             return container;
         }
     });
@@ -2561,33 +2675,33 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
     modifierRegistry.register('bend', {
         icon: 'bi-arrow-down-up',
         defaultParams: { angle: 45, axis: 'x', segments: 16 },
-        
+
         apply: (mesh, params) => {
             const { angle, axis, segments } = params;
             const angleRad = (angle * Math.PI) / 180;
-            
+
             const geo = mesh.geometry;
             const pos = geo.attributes.position;
             const vertex = new THREE.Vector3();
-            
+
             // Store original positions if not stored
             if (!mesh.userData.originalPositions) {
                 mesh.userData.originalPositions = pos.array.slice();
             }
-            
+
             const original = mesh.userData.originalPositions;
-            
+
             for (let i = 0; i < pos.count; i++) {
                 vertex.fromArray(original, i * 3);
-                
+
                 let offset = 0;
-                
+
                 // Bend along specified axis
                 if (axis === 'x') {
                     offset = vertex.y;
                     const bendFactor = offset / 20; // Normalize
                     const rotAngle = angleRad * bendFactor;
-                    
+
                     const newY = vertex.y * Math.cos(rotAngle) - vertex.z * Math.sin(rotAngle);
                     const newZ = vertex.y * Math.sin(rotAngle) + vertex.z * Math.cos(rotAngle);
                     vertex.y = newY;
@@ -2596,7 +2710,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                     offset = vertex.x;
                     const bendFactor = offset / 20;
                     const rotAngle = angleRad * bendFactor;
-                    
+
                     const newX = vertex.x * Math.cos(rotAngle) + vertex.z * Math.sin(rotAngle);
                     const newZ = -vertex.x * Math.sin(rotAngle) + vertex.z * Math.cos(rotAngle);
                     vertex.x = newX;
@@ -2605,26 +2719,26 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                     offset = vertex.x;
                     const bendFactor = offset / 20;
                     const rotAngle = angleRad * bendFactor;
-                    
+
                     const newX = vertex.x * Math.cos(rotAngle) - vertex.y * Math.sin(rotAngle);
                     const newY = vertex.x * Math.sin(rotAngle) + vertex.y * Math.cos(rotAngle);
                     vertex.x = newX;
                     vertex.y = newY;
                 }
-                
+
                 pos.setXYZ(i, vertex.x, vertex.y, vertex.z);
             }
-            
+
             pos.needsUpdate = true;
             geo.computeVertexNormals();
-            
+
             mesh.userData.modifierParams = { ...params, applied: true };
             return mesh;
         },
 
         getUI: (mesh, params, onChange) => {
             const container = document.createElement('div');
-            
+
             // Use button group instead of select for better mobile support
             const axisButtons = `
                 <div class="mb-2">
@@ -2636,18 +2750,18 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                     </div>
                 </div>
             `;
-            
+
             const angleSlider = `
                 <div class="d-flex justify-content-between align-items-center mb-1">
                     <span class="small text-muted">Angle (°)</span>
-                    <input type="range" class="form-range w-50" min="-180" max="180" step="5" 
+                    <input type="range" class="form-range w-50" min="-180" max="180" step="5"
                         value="${params.angle}" id="mod-bend-angle">
                     <span class="small fw-bold" style="width:35px">${params.angle}°</span>
                 </div>
             `;
-            
+
             container.innerHTML = axisButtons + angleSlider;
-            
+
             // Button event handlers
             container.querySelector('#mod-bend-x').onclick = () => {
                 params.axis = 'x';
@@ -2670,13 +2784,13 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                 container.querySelector('#mod-bend-y').className = 'btn btn-outline-secondary btn-sm';
                 onChange();
             };
-            
+
             container.querySelector('#mod-bend-angle').oninput = (e) => {
                 params.angle = parseFloat(e.target.value);
                 e.target.nextElementSibling.innerText = params.angle + '°';
             };
             container.querySelector('#mod-bend-angle').onchange = onChange;
-            
+
             return container;
         }
     });
@@ -2685,27 +2799,27 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
     modifierRegistry.register('twist', {
         icon: 'bi-arrow-clockwise',
         defaultParams: { angle: 90, axis: 'z', segments: 16 },
-        
+
         apply: (mesh, params) => {
             const { angle, axis } = params;
             const angleRad = (angle * Math.PI) / 180;
-            
+
             const geo = mesh.geometry;
             const pos = geo.attributes.position;
             const vertex = new THREE.Vector3();
-            
+
             if (!mesh.userData.originalPositions) {
                 mesh.userData.originalPositions = pos.array.slice();
             }
-            
+
             const original = mesh.userData.originalPositions;
-            
+
             for (let i = 0; i < pos.count; i++) {
                 vertex.fromArray(original, i * 3);
-                
+
                 let height = 0;
                 let twistAngle = 0;
-                
+
                 // Get height along twist axis
                 if (axis === 'x') {
                     height = vertex.x;
@@ -2729,20 +2843,20 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                     vertex.x = newX;
                     vertex.y = newY;
                 }
-                
+
                 pos.setXYZ(i, vertex.x, vertex.y, vertex.z);
             }
-            
+
             pos.needsUpdate = true;
             geo.computeVertexNormals();
-            
+
             mesh.userData.modifierParams = { ...params, applied: true };
             return mesh;
         },
 
         getUI: (mesh, params, onChange) => {
             const container = document.createElement('div');
-            
+
             // Use button group instead of select for better mobile support
             const axisButtons = `
                 <div class="mb-2">
@@ -2754,18 +2868,18 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                     </div>
                 </div>
             `;
-            
+
             const angleSlider = `
                 <div class="d-flex justify-content-between align-items-center mb-1">
                     <span class="small text-muted">Twist (°)</span>
-                    <input type="range" class="form-range w-50" min="-720" max="720" step="15" 
+                    <input type="range" class="form-range w-50" min="-720" max="720" step="15"
                         value="${params.angle}" id="mod-twist-angle">
                     <span class="small fw-bold" style="width:40px">${params.angle}°</span>
                 </div>
             `;
-            
+
             container.innerHTML = axisButtons + angleSlider;
-            
+
             // Button event handlers
             container.querySelector('#mod-twist-x').onclick = () => {
                 params.axis = 'x';
@@ -2788,13 +2902,13 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                 container.querySelector('#mod-twist-y').className = 'btn btn-outline-secondary btn-sm';
                 onChange();
             };
-            
+
             container.querySelector('#mod-twist-angle').oninput = (e) => {
                 params.angle = parseFloat(e.target.value);
                 e.target.nextElementSibling.innerText = params.angle + '°';
             };
             container.querySelector('#mod-twist-angle').onchange = onChange;
-            
+
             return container;
         }
     });
@@ -2803,25 +2917,25 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
     modifierRegistry.register('taper', {
         icon: 'bi-triangle-fill',
         defaultParams: { amount: 0, axis: 'z', skew: 0 },
-        
+
         apply: (mesh, params) => {
             const { amount, axis, skew } = params;
-            
+
             const geo = mesh.geometry;
             const pos = geo.attributes.position;
             const vertex = new THREE.Vector3();
-            
+
             if (!mesh.userData.originalPositions) {
                 mesh.userData.originalPositions = pos.array.slice();
             }
-            
+
             const original = mesh.userData.originalPositions;
-            
+
             for (let i = 0; i < pos.count; i++) {
                 vertex.fromArray(original, i * 3);
-                
+
                 let heightFactor = 0;
-                
+
                 // Get height along taper axis
                 if (axis === 'x') {
                     heightFactor = vertex.x / 20;
@@ -2830,10 +2944,10 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                 } else if (axis === 'z') {
                     heightFactor = vertex.z / 20;
                 }
-                
+
                 // Apply taper
                 const taperScale = 1 - (heightFactor * amount / 100);
-                
+
                 // Apply to perpendicular axes
                 if (axis === 'x') {
                     vertex.y *= taperScale;
@@ -2849,20 +2963,20 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                     vertex.y *= taperScale;
                     vertex.x += heightFactor * skew;
                 }
-                
+
                 pos.setXYZ(i, vertex.x, vertex.y, vertex.z);
             }
-            
+
             pos.needsUpdate = true;
             geo.computeVertexNormals();
-            
+
             mesh.userData.modifierParams = { ...params, applied: true };
             return mesh;
         },
 
         getUI: (mesh, params, onChange) => {
             const container = document.createElement('div');
-            
+
             // Use button group instead of select for better mobile support
             const axisButtons = `
                 <div class="mb-2">
@@ -2874,27 +2988,27 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                     </div>
                 </div>
             `;
-            
+
             const taperSlider = `
                 <div class="d-flex justify-content-between align-items-center mb-1">
                     <span class="small text-muted">Taper %</span>
-                    <input type="range" class="form-range w-50" min="-50" max="50" step="1" 
+                    <input type="range" class="form-range w-50" min="-50" max="50" step="1"
                         value="${params.amount}" id="mod-taper-amount">
                     <span class="small fw-bold" style="width:35px">${params.amount}%</span>
                 </div>
             `;
-            
+
             const skewSlider = `
                 <div class="d-flex justify-content-between align-items-center mb-1">
                     <span class="small text-muted">Skew</span>
-                    <input type="range" class="form-range w-50" min="-20" max="20" step="0.5" 
+                    <input type="range" class="form-range w-50" min="-20" max="20" step="0.5"
                         value="${params.skew}" id="mod-taper-skew">
                     <span class="small fw-bold" style="width:30px">${params.skew}</span>
                 </div>
             `;
-            
+
             container.innerHTML = axisButtons + taperSlider + skewSlider;
-            
+
             // Button event handlers
             container.querySelector('#mod-taper-x').onclick = () => {
                 params.axis = 'x';
@@ -2917,19 +3031,19 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                 container.querySelector('#mod-taper-y').className = 'btn btn-outline-secondary btn-sm';
                 onChange();
             };
-            
+
             container.querySelector('#mod-taper-amount').oninput = (e) => {
                 params.amount = parseFloat(e.target.value);
                 e.target.nextElementSibling.innerText = params.amount + '%';
             };
             container.querySelector('#mod-taper-amount').onchange = onChange;
-            
+
             container.querySelector('#mod-taper-skew').oninput = (e) => {
                 params.skew = parseFloat(e.target.value);
                 e.target.nextElementSibling.innerText = params.skew;
             };
             container.querySelector('#mod-taper-skew').onchange = onChange;
-            
+
             return container;
         }
     });
@@ -2972,9 +3086,9 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
         }
         const parentObj = selectedObjects[0];
         const childObj = selectedObjects[selectedObjects.length - 1];
-        
+
         const constraint = constraintRegistry.createConstraint(type, parentObj, childObj);
-        
+
         // Add visual helper to scene
         if (constraint.visualHelper) {
             scene.add(constraint.visualHelper);
@@ -2982,10 +3096,10 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
             const mid = new THREE.Vector3().addVectors(parentObj.position, childObj.position).multiplyScalar(0.5);
             constraint.visualHelper.position.copy(mid);
         }
-        
+
         // Update constraint list UI
         window.updateConstraintListUI();
-        
+
         console.log(`Created ${type} constraint between`, parentObj.name, 'and', childObj.name);
     };
 
@@ -3016,7 +3130,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
         if (!listEl) return;
 
         const constraints = constraintRegistry.getAllConstraints();
-        
+
         if (constraints.length === 0) {
             listEl.innerHTML = '<li class="text-muted small p-2">No joints yet</li>';
             return;
@@ -3084,7 +3198,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                     // Update visual helper position
                     if (constraint.visualHelper) {
                         const mid = new THREE.Vector3().addVectors(
-                            constraint.parent.position, 
+                            constraint.parent.position,
                             constraint.child.position
                         ).multiplyScalar(0.5);
                         constraint.visualHelper.position.copy(mid);
@@ -3131,9 +3245,9 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
         collidingObjects.clear();
 
         // Get all mesh objects (excluding helpers, gizmos, etc.)
-        const meshes = scene.children.filter(obj => 
-            obj.isMesh && 
-            !obj.userData.isHelper && 
+        const meshes = scene.children.filter(obj =>
+            obj.isMesh &&
+            !obj.userData.isHelper &&
             !obj.userData.isRuler &&
             obj !== tCtrl &&
             obj !== liftCone
@@ -3190,7 +3304,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
      */
     window.toggleCollisionDetection = function() {
         collisionDetectionEnabled = !collisionDetectionEnabled;
-        
+
         // Update button state
         const btn = document.getElementById('btn-collision-toggle');
         if (btn) {
@@ -3211,7 +3325,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
             collidingObjects.clear();
             updateCollisionIndicator();
         }
-        
+
         console.log('Collision detection:', collisionDetectionEnabled ? 'ON' : 'OFF');
     };
 
@@ -3231,14 +3345,14 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
      */
     function initPhysicsWorld() {
         if (world) return world;
-        
+
         world = new CANNON.World();
         world.gravity.set(0, 0, -9.8); // Gravity along Z axis (towards grid), since grid is on XY plane (Z-up)
         world.broadphase = new CANNON.NaiveBroadphase();
         world.solver.iterations = 20; // Increased for more stable collisions
         world.allowSleep = true;
         world.solver.tolerance = 0.001; // Stricter solver tolerance
-        
+
         // Default material - higher friction for stability
         const defaultMaterial = new CANNON.Material('default');
         const defaultContactMaterial = new CANNON.ContactMaterial(
@@ -3247,7 +3361,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
         );
         world.addContactMaterial(defaultContactMaterial);
         world.defaultContactMaterial = defaultContactMaterial;
-        
+
         console.log('Cannon.js physics world initialized');
         return world;
     }
@@ -3257,10 +3371,10 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
      */
     function createPhysicsBody(mesh) {
         if (!world) initPhysicsWorld();
-        
+
         const geometry = mesh.geometry;
         const shape = createCannonShape(geometry, mesh.userData.geoParams);
-        
+
         if (!shape) {
             console.warn('Could not create physics shape for:', mesh.userData.name);
             return null;
@@ -3280,18 +3394,18 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
             linearDamping: 0.1,
             angularDamping: 0.3
         });
-        
+
         // Initialize velocity to zero to prevent unexpected launching
         body.velocity = new CANNON.Vec3(0, 0, 0);
         body.angularVelocity = new CANNON.Vec3(0, 0, 0);
-        
+
         // Store reference to mesh
         body.userData = { meshUUID: mesh.uuid };
-        
+
         world.addBody(body);
         meshToBody.set(mesh.uuid, body);
         bodyToMesh.set(body.id, mesh);
-        
+
         return body;
     }
 
@@ -3300,7 +3414,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
      */
     function createCannonShape(geometry, geoParams) {
         if (!geometry) return null;
-        
+
         // Use bounding box as fallback
         geometry.computeBoundingBox();
         const box = geometry.boundingBox;
@@ -3309,18 +3423,18 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
 
         // Check geometry type for better shapes
         const geoType = geometry.type;
-        
+
         // Box
         if (geoType === 'BoxGeometry' || geoParams?.type === 'box') {
             return new CANNON.Box(new CANNON.Vec3(size.x/2, size.y/2, size.z/2));
         }
-        
+
         // Sphere
         if (geoType === 'SphereGeometry' || geoParams?.type === 'sphere') {
             const radius = geoParams?.r || size.x / 2;
             return new CANNON.Sphere(radius);
         }
-        
+
         // Cylinder
         if (geoType === 'CylinderGeometry' || geoParams?.type === 'cylinder') {
             const radiusTop = geoParams?.rt || size.x / 2;
@@ -3328,21 +3442,21 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
             const height = geoParams?.h || size.z;
             return new CANNON.Cylinder(radiusTop, radiusBottom, height, 16);
         }
-        
+
         // Cone (treated as cylinder with top radius 0)
         if (geoType === 'ConeGeometry' || geoParams?.type === 'cone') {
             const radius = geoParams?.rb || size.x / 2;
             const height = geoParams?.h || size.z;
             return new CANNON.Cylinder(0, radius, height, 16);
         }
-        
+
         // Torus - use Trimesh for accurate collision
         if (geoType.includes('Torus') || geoParams?.type === 'torus') {
             // Use bounding box for torus (simpler and more stable)
             const radius = Math.max(size.x, size.y) / 2;
             return new CANNON.Sphere(radius * 0.8);
         }
-        
+
         // Default to box
         return new CANNON.Box(new CANNON.Vec3(size.x/2, size.y/2, size.z/2));
     }
@@ -3354,7 +3468,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
     function addGroundPlane() {
         if (!world) initPhysicsWorld();
         if (groundBody) return;
-        
+
         // Use a thick box for better collision detection - harder for objects to penetrate
         groundBody = new CANNON.Body({
             mass: 0, // Static
@@ -3378,7 +3492,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
     // ============================================================
     // ENHANCED PHYSICS: Mass Calculation, Edge Detection & Wireframe Collisions
     // ============================================================
-    
+
     // Material density values (kg/m³) for mass calculation
     const MATERIAL_DENSITIES = {
         wood: 600,
@@ -3390,10 +3504,10 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
         rubber: 1100,
         default: 1000   // Generic material
     };
-    
+
     // Store edge collision data
     const edgeCollisionMeshes = new Map();
-    
+
     /**
      * Calculate enhanced mass based on geometry volume and material density
      */
@@ -3402,10 +3516,10 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
         const geoParams = mesh.userData.geoParams || {};
         const materialType = mesh.userData.materialType || 'default';
         const density = MATERIAL_DENSITIES[materialType] || MATERIAL_DENSITIES.default;
-        
+
         let volume = 0;
         const geoType = geometry.type;
-        
+
         // Calculate volume based on geometry type
         if (geoType === 'BoxGeometry' || geoParams.type === 'box') {
             const w = geoParams.w || 1;
@@ -3441,17 +3555,17 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
             box.getSize(size);
             volume = size.x * size.y * size.z;
         }
-        
+
         // Scale by userData.scale if present
         const scale = mesh.userData.scale || 1;
         volume = volume * Math.pow(scale, 3);
-        
+
         // Calculate mass (kg)
         const mass = volume * density;
-        
+
         return Math.max(mass, 0.01); // Minimum mass to prevent division issues
     }
-    
+
     /**
      * Calculate center of mass for an object
      */
@@ -3459,9 +3573,9 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
         const geometry = mesh.geometry;
         const geoParams = mesh.userData.geoParams || {};
         const geoType = geometry.type;
-        
+
         let centerOfMass = new THREE.Vector3();
-        
+
         // Most geometries have center at origin, but some have offset
         if (geoType === 'CylinderGeometry' || geoType === 'ConeGeometry') {
             // These are centered at origin already
@@ -3474,10 +3588,10 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
             const box = geometry.boundingBox;
             centerOfMass.copy(box.min).add(box.max).multiplyScalar(0.5);
         }
-        
+
         return centerOfMass;
     }
-    
+
     /**
      * Detect edges from geometry for wireframe collision
      */
@@ -3485,7 +3599,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
         // Use Three.js EdgeGeometry for clean edge detection
         const edges = new THREE.EdgesGeometry(geometry, thresholdAngle);
         const edgePositions = edges.attributes.position.array;
-        
+
         // Extract unique edges as pairs of vertices
         const edgePairs = [];
         for (let i = 0; i < edgePositions.length; i += 6) {
@@ -3493,35 +3607,35 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
             const v2 = new THREE.Vector3(edgePositions[i+3], edgePositions[i+4], edgePositions[i+5]);
             edgePairs.push({ start: v1, end: v2 });
         }
-        
+
         return {
             edges: edgePairs,
             vertices: edgePositions,
             edgeGeometry: edges
         };
     }
-    
+
     /**
      * Calculate edge collision data for wireframe collision detection
      */
     function calculateEdgeCollisionData(mesh) {
         const geometry = mesh.geometry.clone();
-        
+
         // Apply mesh transformations
         geometry.applyMatrix4(mesh.matrixWorld);
-        
+
         // Get edges
         const edgeData = detectEdges(geometry, 15);
-        
+
         // Calculate edge segments for collision
         const edgeSegments = [];
         const edgePoints = [];
-        
+
         edgeData.edges.forEach(edge => {
             // Transform to world coordinates
             const worldStart = edge.start.clone();
             const worldEnd = edge.end.clone();
-            
+
             edgePoints.push(worldStart, worldEnd);
             edgeSegments.push({
                 start: worldStart,
@@ -3531,7 +3645,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                 length: worldStart.distanceTo(worldEnd)
             });
         });
-        
+
         // Calculate the convex hull of edges for better collision
         const edgeVertices = [];
         const seen = new Set();
@@ -3547,7 +3661,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                 seen.add(key2);
             }
         });
-        
+
         const collisionData = {
             edgeSegments: edgeSegments,
             edgePoints: edgePoints,
@@ -3556,11 +3670,11 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
             edgeCount: edgeSegments.length,
             edgeGeometry: edgeData.edgeGeometry
         };
-        
+
         edgeCollisionMeshes.set(mesh.uuid, collisionData);
         return collisionData;
     }
-    
+
     /**
      * Check collision between an edge segment and a plane/ground
      * For Z-up system: ground is at Z=0, gravity pulls towards negative Z
@@ -3568,15 +3682,15 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
     function checkEdgeCollision(body, groundZ = 0) {
         const mesh = bodyToMesh.get(body.id);
         if (!mesh) return null;
-        
+
         let edgeData = edgeCollisionMeshes.get(mesh.uuid);
         if (!edgeData) {
             edgeData = calculateEdgeCollisionData(mesh);
         }
-        
+
         // Get body position
         const bodyPos = body.position;
-        
+
         // Transform edge segments to body local space
         const worldEdges = [];
         edgeData.edgeSegments.forEach(seg => {
@@ -3590,9 +3704,9 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                 body.position.y + seg.end.y,
                 body.position.z + seg.end.z
             );
-            
+
             // Check if edge crosses the ground plane (Z = 0 in Z-up system)
-            if ((worldStart.z > groundZ && worldEnd.z < groundZ) || 
+            if ((worldStart.z > groundZ && worldEnd.z < groundZ) ||
                 (worldStart.z < groundZ && worldEnd.z > groundZ)) {
                 // Calculate intersection point
                 const t = (groundZ - worldStart.z) / (worldEnd.z - worldStart.z);
@@ -3601,7 +3715,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                     worldStart.y + t * (worldEnd.y - worldStart.y),
                     groundZ
                 );
-                
+
                 worldEdges.push({
                     intersection: intersection,
                     edgeDirection: seg.direction,
@@ -3611,78 +3725,78 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                 });
             }
         });
-        
+
         return worldEdges.length > 0 ? worldEdges : null;
     }
-    
+
     /**
      * Apply enhanced rolling physics based on edge contact
      * For Z-up system: gravity pulls towards negative Z
      */
     function applyEdgeRollingPhysics(body, collidingEdges) {
         if (!collidingEdges || collidingEdges.length === 0) return;
-        
+
         const mesh = bodyToMesh.get(body.id);
         if (!mesh) return;
-        
+
         // Calculate torque based on edge contact points
         const totalTorque = new CANNON.Vec3(0, 0, 0);
-        
+
         collidingEdges.forEach(edge => {
             // Calculate the moment arm from center of mass to contact point
             const contactPoint = edge.intersection;
             const bodyCenter = new THREE.Vector3(body.position.x, body.position.y, body.position.z);
             const leverArm = new THREE.Vector3().subVectors(contactPoint, bodyCenter);
-            
+
             // Get the edge direction in world space
             const edgeDir = edge.edgeDirection;
-            
+
             // Calculate torque: cross product of lever arm and gravity direction (Z-up: gravity is -Z)
             // This determines how the object should rotate
             const gravityForce = new THREE.Vector3(0, 0, -9.8 * body.mass);
             const torque = new THREE.Vector3().crossVectors(leverArm, gravityForce);
-            
+
             totalTorque.x += torque.x;
             totalTorque.y += torque.y;
             totalTorque.z += torque.z;
         });
-        
+
         // Apply torque to body angular velocity
         const torqueScale = 0.1; // Scale factor for stability
         body.angularVelocity.x += totalTorque.x * torqueScale / body.mass;
         body.angularVelocity.y += totalTorque.y * torqueScale / body.mass;
         body.angularVelocity.z += totalTorque.z * torqueScale / body.mass;
     }
-    
+
     /**
      * Create enhanced physics body with wireframe edge collision
      */
     function createEnhancedPhysicsBody(mesh, useEdgeCollision = true) {
         if (!world) initPhysicsWorld();
-        
+
         const geometry = mesh.geometry;
         const geoParams = mesh.userData.geoParams || {};
-        
+
         // Calculate enhanced mass based on geometry
         const mass = mesh.userData.isStatic ? 0 : calculateEnhancedMass(mesh);
-        
+
         // Get world position and quaternion
         const worldPos = new THREE.Vector3();
         const worldQuat = new THREE.Quaternion();
         mesh.getWorldPosition(worldPos);
         mesh.getWorldQuaternion(worldQuat);
-        
+
         // Create appropriate shape
         let shape = createCannonShape(geometry, geoParams);
-        
+
         // For complex shapes, add edge collision data
         if (useEdgeCollision && !mesh.userData.isStatic) {
             calculateEdgeCollisionData(mesh);
         }
-        
+
         // Calculate center of mass offset
         const com = calculateCenterOfMass(mesh);
-        
+
         const body = new CANNON.Body({
             mass: mass,
             shape: shape,
@@ -3693,47 +3807,47 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
             // Store center of mass for rolling calculations
             centerOfMass: new CANNON.Vec3(com.x, com.y, com.z)
         });
-        
+
         // Store enhanced data
-        body.userData = { 
+        body.userData = {
             meshUUID: mesh.uuid,
             useEdgeCollision: useEdgeCollision,
             materialType: mesh.userData.materialType || 'default'
         };
-        
+
         // Initialize velocity to zero
         body.velocity = new CANNON.Vec3(0, 0, 0);
         body.angularVelocity = new CANNON.Vec3(0, 0, 0);
-        
+
         world.addBody(body);
         meshToBody.set(mesh.uuid, body);
         bodyToMesh.set(body.id, mesh);
-        
+
         console.log(`Created enhanced physics body: mass=${mass.toFixed(3)}kg, edges=${edgeCollisionMeshes.get(mesh.uuid)?.edgeCount || 0}`);
-        
+
         return body;
     }
-    
+
     /**
      * Update physics with enhanced edge collision detection
      */
     function updatePhysicsWithEdges(deltaTime) {
         if (!world || !physicsEnabled) return;
-        
+
         // Step the physics world
         world.step(1/60, deltaTime, 3);
-        
+
         // Process edge collision for each dynamic body
         meshToBody.forEach((body, meshUUID) => {
             if (body.mass <= 0) return; // Skip static bodies
-            
+
             const mesh = scene.getObjectByProperty('uuid', meshUUID);
             if (!mesh) return;
-            
+
             // Check if object is on ground (simple z-check for Z-up system)
             const bodyPos = body.position;
             const groundLevel = 0.05; // Small threshold
-            
+
             // If body is near ground (within 2 units in Z), check edge collisions
             // In Z-up, objects sit at Z=0, gravity pulls to negative Z
             if (Math.abs(bodyPos.z) < 2) { // Within 2 units of ground
@@ -3744,7 +3858,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                 }
             }
         });
-        
+
         // Sync physics bodies to meshes
         meshToBody.forEach((body, meshUUID) => {
             const mesh = scene.getObjectByProperty('uuid', meshUUID);
@@ -3764,7 +3878,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
             }
         });
     }
-    
+
     /**
      * Legacy sync function (kept for compatibility)
      */
@@ -3784,7 +3898,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
             }
         });
     }
-    
+
     /**
      * Get mass information for display
      */
@@ -3793,7 +3907,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
         const materialType = mesh.userData.materialType || 'default';
         const density = MATERIAL_DENSITIES[materialType] || MATERIAL_DENSITIES.default;
         const edgeData = edgeCollisionMeshes.get(mesh.uuid) || calculateEdgeCollisionData(mesh);
-        
+
         return {
             mass: mass,
             density: density,
@@ -3802,17 +3916,17 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
             vertexCount: edgeData?.vertexCount || 0
         };
     }
-    
+
     /**
      * Clear edge collision data
      */
     function clearEdgeCollisionData(meshUUID) {
         edgeCollisionMeshes.delete(meshUUID);
     }
-    
+
     // Helper to visualize edge collision mesh (for debugging)
     const edgeHelpers = new Map();
-    
+
     /**
      * Show edge collision visualization for an object
      */
@@ -3823,44 +3937,44 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
             scene.remove(oldHelper);
             edgeHelpers.delete(mesh.uuid);
         }
-        
+
         if (!show) return;
-        
+
         // Calculate edge data
         const edgeData = calculateEdgeCollisionData(mesh);
         if (!edgeData.edgeGeometry) return;
-        
+
         // Create line segments for visualization
-        const material = new THREE.LineBasicMaterial({ 
-            color: 0x00ff00, 
+        const material = new THREE.LineBasicMaterial({
+            color: 0x00ff00,
             linewidth: 2,
             transparent: true,
             opacity: 0.8
         });
-        
+
         const helper = new THREE.LineSegments(edgeData.edgeGeometry, material);
         helper.position.copy(mesh.position);
         helper.quaternion.copy(mesh.quaternion);
         helper.scale.copy(mesh.scale);
-        
+
         scene.add(helper);
         edgeHelpers.set(mesh.uuid, helper);
     };
-    
+
     // Expose mass calculation functions globally
     window.calculateEnhancedMass = calculateEnhancedMass;
     window.getMassInfo = getMassInfo;
     window.calculateEdgeCollisionData = calculateEdgeCollisionData;
-    
+
     /**
      * Add all objects with gravity enabled to physics world
      */
     function addAllObjectsToPhysics() {
         if (!world) initPhysicsWorld();
         addGroundPlane();
-        
+
         scene.children.forEach(obj => {
-            if (obj.isMesh && !obj.userData.isHelper && !obj.userData.isRuler && 
+            if (obj.isMesh && !obj.userData.isHelper && !obj.userData.isRuler &&
                 obj !== tCtrl && obj !== liftCone) {
                 // Only add objects marked for gravity
                 if (obj.userData.enableGravity && !meshToBody.has(obj.uuid)) {
@@ -3875,13 +3989,13 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
      */
     function updatePhysics(deltaTime) {
         if (!world || !physicsEnabled) return;
-        
+
         // Use enhanced physics with edge collision
         updatePhysicsWithEdges(deltaTime);
-        
+
         // Update labels
         updateTinkerLabels();
-        
+
         // Update collision display if enabled
         if (collisionDetectionEnabled) {
             checkCollisions();
@@ -3928,7 +4042,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
         if (!mesh) return;
         mesh.userData.enableGravity = enable;
         console.log('setObjectGravity called:', mesh.userData.name, 'enableGravity:', enable);
-        
+
         if (enable) {
             // Add to physics world with enhanced physics
             if (!world) initPhysicsWorld();
@@ -3955,25 +4069,25 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                 clearEdgeCollisionData(mesh.uuid);
             }
         }
-        
+
         // Update UI if this is a selected object
         if (selectedObjects.includes(mesh)) {
             updatePropertiesPanel();
         }
     };
-    
+
     /**
      * Update mass display in properties panel
      */
     window.updateMassDisplay = function(mesh) {
         if (!mesh) return;
-        
+
         const massInfo = window.getMassInfo(mesh);
         const massValueEl = document.getElementById('mass-value');
         if (massValueEl) {
             massValueEl.textContent = massInfo.mass.toFixed(2) + ' kg';
         }
-        
+
         // Update physics body if exists
         if (meshToBody.has(mesh.uuid)) {
             const body = meshToBody.get(mesh.uuid);
@@ -3989,13 +4103,13 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
      */
     window.toggleSelectedGravity = function() {
         if (selectedObjects.length === 0) return;
-        
+
         selectedObjects.forEach(obj => {
             if (obj.isMesh && !obj.userData.isRuler) {
                 obj.userData.enableGravity = !obj.userData.enableGravity;
             }
         });
-        
+
         updatePropertiesPanel();
 };
 
@@ -4004,7 +4118,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
      */
     window.removeFromPhysics = function(mesh) {
         if (!mesh || !meshToBody.has(mesh.uuid)) return;
-        
+
         const body = meshToBody.get(mesh.uuid);
         if (body) {
             world.removeBody(body);
@@ -4045,7 +4159,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
             meshToBody.clear();
             bodyToMesh.clear();
             groundBody = null;
-            
+
             if (!world) initPhysicsWorld();
             // Ensure gravity is pointing down (Z-axis for Z-up system)
             world.gravity.set(0, 0, -9.8);
@@ -4384,11 +4498,11 @@ function generateThreadGeometry(params) {
             bar.style.overflowY = 'hidden';
         }
     };
-    
+
     // --- VIEW CONTROLS ---
     window.setView = (view) => {
         if (!cam) return;
-        
+
         const distance = 100;
         const positions = {
             'front':  { x: 0, y: 0, z: distance },
@@ -4399,25 +4513,25 @@ function generateThreadGeometry(params) {
             'left':   { x: -distance, y: 0, z: 0 },
             'iso':    { x: 70, y: 70, z: 70 }
         };
-        
+
         const pos = positions[view];
         if (!pos) return;
-        
+
         const startPos = cam.position.clone();
         const endPos = new THREE.Vector3(pos.x, pos.y, pos.z);
         const duration = 500;
         const startTime = Date.now();
-        
+
         if (ctrl) ctrl.enabled = false;
-        
+
         const animateView = () => {
             const elapsed = Date.now() - startTime;
             const progress = Math.min(elapsed / duration, 1);
             const eased = 1 - (1 - progress) * (1 - progress);
-            
+
             cam.position.lerpVectors(startPos, endPos, eased);
             cam.lookAt(0, 0, 0);
-            
+
             if (progress < 1) {
                 requestAnimationFrame(animateView);
             } else {
@@ -4425,10 +4539,10 @@ function generateThreadGeometry(params) {
                 if (ctrl) ctrl.update();
             }
         };
-        
+
         animateView();
     };
-    
+
     // --- ZOOM CONTROLS ---
     window.zoomIn = () => {
         if (!cam || !ctrl) return;
@@ -4439,7 +4553,7 @@ function generateThreadGeometry(params) {
         if (ctrl) ctrl.update();
         window.requestRender();
     };
-    
+
     window.zoomOut = () => {
         if (!cam || !ctrl) return;
         // Move camera away from target (zoom out)
@@ -4449,7 +4563,7 @@ function generateThreadGeometry(params) {
         if (ctrl) ctrl.update();
         window.requestRender();
     };
-    
+
     window.resetZoom = () => {
         if (!cam || !ctrl) return;
         // Reset to default zoom distance
@@ -4457,90 +4571,90 @@ function generateThreadGeometry(params) {
         cam.getWorldDirection(direction);
         const distance = cam.position.length();
         const targetDistance = 100;
-        
+
         if (distance !== targetDistance) {
             cam.position.normalize().multiplyScalar(targetDistance);
             if (ctrl) ctrl.update();
             window.requestRender();
         }
     };
-    
+
     window.rotateView = (axis, direction) => {
         if (!cam) return;
         const angle = direction * Math.PI / 2;
         const rotMatrix = new THREE.Matrix4();
-        
+
         if (axis === 'x') rotMatrix.makeRotationX(angle);
         else if (axis === 'y') rotMatrix.makeRotationY(angle);
         else if (axis === 'z') rotMatrix.makeRotationZ(angle);
-        
+
         cam.position.applyMatrix4(rotMatrix);
         cam.lookAt(0, 0, 0);
-        
+
         if (ctrl) ctrl.update();
     };
-    
+
     // Compass update and drag functionality
     function updateCompass() {
         const needle = document.getElementById('compass-needle');
         if (!needle || !cam) return;
-        
+
         // Get camera direction
         const dir = new THREE.Vector3();
         cam.getWorldDirection(dir);
-        
+
         // Calculate rotation based on camera position around origin
         const angle = Math.atan2(cam.position.x, cam.position.z);
         needle.style.transform = `translate(-50%, -100%) rotate(${angle * 180 / Math.PI}deg)`;
     }
-    
+
     // Initialize compass drag
     function initCompass() {
         const compass = document.getElementById('camera-compass');
         if (!compass) return;
-        
+
         let isDragging = false;
         let startX, startY;
-        
+
         compass.addEventListener('pointerdown', (e) => {
             isDragging = true;
             startX = e.clientX;
             startY = e.clientY;
             compass.setPointerCapture(e.pointerId);
         });
-        
+
         compass.addEventListener('pointermove', (e) => {
             if (!isDragging || !cam) return;
-            
+
             const deltaX = e.clientX - startX;
             const deltaY = e.clientY - startY;
-            
+
             // Rotate camera based on drag
             const rotSpeed = 0.01;
             const spherical = new THREE.Spherical();
             spherical.setFromVector3(cam.position);
             spherical.theta -= deltaX * rotSpeed;
             spherical.phi -= deltaY * rotSpeed;
-            
+
             // Clamp phi to prevent flipping
             spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
-            
+
             cam.position.setFromSpherical(spherical);
             cam.lookAt(0, 0, 0);
-            
+
             startX = e.clientX;
             startY = e.clientY;
-            
+
             if (ctrl) ctrl.update();
             needsRender = true;
         });
-        
+
         compass.addEventListener('pointerup', (e) => {
             isDragging = false;
             compass.releasePointerCapture(e.pointerId);
         });
     }
-    
+
     function handleAlignHover(ray, mouse) {
         // STEP 2: MOVING THE GHOST
         if (alignState === 'pick-target' && alignGhost) {
@@ -4834,52 +4948,52 @@ function handleAlignClick(ray) {
 
         ctrl = new OrbitControls(cam, ren.domElement);
         ctrl.enableDamping = true;
-        
+
         // Enable zoom with proper settings
         ctrl.enableZoom = false;  // Disable default zoom
-        
+
         // Custom mouse wheel zoom handler
         ren.domElement.addEventListener('wheel', (e) => {
             e.preventDefault();
             if (!cam || !ctrl) return;
-            
+
             // Determine zoom direction and amount - SWAPPED
             const zoomAmount = e.deltaY > 0 ? -8 : 8;  // Scroll down = zoom IN, scroll up = zoom OUT
-            
+
             // Move camera along view direction
             const direction = new THREE.Vector3();
             cam.getWorldDirection(direction);
             cam.position.addScaledVector(direction, zoomAmount);
-            
+
             // Clamp to min/max distance
             const distance = cam.position.length();
             if (distance < 10) cam.position.normalize().multiplyScalar(10);
             if (distance > 500) cam.position.normalize().multiplyScalar(500);
-            
+
             ctrl.update();
             window.requestRender();
         }, { passive: false });
         ctrl.minDistance = 10;
         ctrl.maxDistance = 500;
-        
+
         // Enable pan
         ctrl.enablePan = true;
         ctrl.panSpeed = 0.8;
-        
+
         // Set proper damping
         ctrl.dampingFactor = 0.05;
-        
+
         // Enable rotation
         ctrl.enableRotate = true;
         ctrl.rotateSpeed = 0.8;
-        
+
         // Performance: Low Res during drag
         ctrl.addEventListener('start', () => { ren.setPixelRatio(1); });
         ctrl.addEventListener('end', () => { ren.setPixelRatio(window.devicePixelRatio); });
 
         tCtrl = new TransformControls(cam, ren.domElement);
-        tCtrl.addEventListener("dragging-changed", e => { 
-            ctrl.enabled = !e.value; 
+        tCtrl.addEventListener("dragging-changed", e => {
+            ctrl.enabled = !e.value;
             // Set isBeingDragged flag on the attached object
             if (tCtrl.object) {
                 tCtrl.object.userData.isBeingDragged = e.value;
@@ -4941,25 +5055,35 @@ function handleAlignClick(ray) {
         window.addEventListener('keydown', (e) => {
             // Ignore if typing in an input field
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-            
+
+            // File operations (Ctrl/Cmd key)
+            if ((e.ctrlKey || e.metaKey) && e.key === 'o') {
+                e.preventDefault();
+                document.getElementById('file-upload').click();
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                window.downloadExport('json');
+            }
+
             // Undo/Redo
             if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); window.undo(); }
             if ((e.ctrlKey || e.metaKey) && e.key === 'y') { e.preventDefault(); window.redo(); }
-            
-            // Transform modes
-            if (e.key === 'g' || e.key === 'G') { window.setMode('translate'); }
-            if (e.key === 'r' || e.key === 'R') { window.setMode('rotate'); }
-            if (e.key === 's' || e.key === 'S') { window.setMode('scale'); }
-            
+
+            // Transform modes (only when not holding Ctrl/Cmd)
+            if (!e.ctrlKey && !e.metaKey && (e.key === 'g' || e.key === 'G')) { window.setMode('translate'); }
+            if (!e.ctrlKey && !e.metaKey && (e.key === 'r' || e.key === 'R')) { window.setMode('rotate'); }
+            if (!e.ctrlKey && !e.metaKey && (e.key === 's' || e.key === 'S')) { window.setMode('scale'); }
+
             // Tools
             if (e.key === 'e' || e.key === 'E') { window.dExtrude(); }
             if (e.key === 'd' || e.key === 'D') { window.dDuplicate(); }
             if (e.key === 'm' || e.key === 'M') { window.toggleRuler(); }
-            
+
             // Delete
-            if (e.key === 'Delete' || e.key === 'Backspace') { 
+            if (e.key === 'Delete' || e.key === 'Backspace') {
                 e.preventDefault();
-                window.dDel(); 
+                window.dDel();
             }
         });
 
@@ -4967,8 +5091,8 @@ function handleAlignClick(ray) {
             panel.addEventListener('pointerdown', e => {
                 // Allow events on form elements and interactive elements to propagate
                 const tag = e.target.tagName;
-                if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || 
-                    tag === 'BUTTON' || tag === 'OPTION' || 
+                if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' ||
+                    tag === 'BUTTON' || tag === 'OPTION' ||
                     e.target.classList.contains('form-range') ||
                     e.target.classList.contains('color-option') ||
                     e.target.classList.contains('form-check-input')) {
@@ -4979,8 +5103,8 @@ function handleAlignClick(ray) {
             panel.addEventListener('mousedown', e => {
                 // Allow events on form elements and interactive elements to propagate
                 const tag = e.target.tagName;
-                if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || 
-                    tag === 'BUTTON' || tag === 'OPTION' || 
+                if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' ||
+                    tag === 'BUTTON' || tag === 'OPTION' ||
                     e.target.classList.contains('form-range') ||
                     e.target.classList.contains('color-option') ||
                     e.target.classList.contains('form-check-input')) {
@@ -4991,8 +5115,8 @@ function handleAlignClick(ray) {
             panel.addEventListener('touchstart', e => {
                 // Allow events on form elements and interactive elements to propagate
                 const tag = e.target.tagName;
-                if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || 
-                    tag === 'BUTTON' || tag === 'OPTION' || 
+                if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' ||
+                    tag === 'BUTTON' || tag === 'OPTION' ||
                     e.target.classList.contains('form-range') ||
                     e.target.classList.contains('color-option') ||
                     e.target.classList.contains('form-check-input')) {
@@ -5015,7 +5139,7 @@ function handleAlignClick(ray) {
         function dLoop(newTime) {
             requestAnimationFrame(dLoop);
             ctrl.update();
-            
+
             // Update physics/gravity
             if (physicsEnabled) {
                 if (lastPhysicsTime === 0) lastPhysicsTime = newTime;
@@ -5027,7 +5151,7 @@ function handleAlignClick(ray) {
                 }
                 lastPhysicsTime = newTime;
             }
-            
+
             if (isFpsLocked) {
                 now = newTime;
                 elapsed = now - then;
@@ -6973,7 +7097,7 @@ function updateParametricUI(obj) {
         if (parametricRegistry.has(p.type)) {
             const func = parametricRegistry.get(p.type);
             container.innerHTML += `<div class="small fw-bold mb-1"><i class="${func.icon}"></i> ${func.name} Settings</div>`;
-            
+
             const paramsDef = func.paramsDef;
             if (paramsDef && paramsDef.length > 0) {
                 paramsDef.forEach(paramDef => addParamControl(paramDef));
@@ -7045,34 +7169,34 @@ window.dSz = () => {
             alert("Select exactly 1 object to apply modifier.");
             return;
         }
-        
+
         const obj = selectedObjects[0];
         const mod = modifierRegistry.get(modifierName);
-        
+
         if (!mod) {
             console.error("Modifier not found:", modifierName);
             return;
         }
-        
+
         // Store or get modifier params
         if (!obj.userData.modifierParams) {
             obj.userData.modifierParams = {};
         }
-        
+
         // Initialize or get modifier-specific params
         if (!obj.userData.modifierParams[modifierName]) {
             obj.userData.modifierParams[modifierName] = { ...mod.defaultParams };
         }
-        
+
         const params = obj.userData.modifierParams[modifierName];
-        
+
         // Apply the modifier
         activeModifier = modifierName;
         mod.apply(obj, params);
-        
+
         // Show modifier panel
         showModifierPanel(modifierName, obj, params);
-        
+
         updateTinkerLabels();
         window.requestRender();
         saveState();
@@ -7081,7 +7205,7 @@ window.dSz = () => {
     function showModifierPanel(modifierName, obj, params) {
         // Find or create modifier panel container
         let panel = document.getElementById('modifier-panel');
-        
+
         if (!panel) {
             panel = document.createElement('div');
             panel.id = 'modifier-panel';
@@ -7089,9 +7213,9 @@ window.dSz = () => {
             panel.style.cssText = 'top: 50%; right: 20px; width: 240px; max-height: 40vh; overflow-y: auto;';
             document.body.appendChild(panel);
         }
-        
+
         const mod = modifierRegistry.get(modifierName);
-        
+
         panel.innerHTML = `
             <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
                 <div class="small fw-bold"><i class="${mod.icon}"></i> ${modifierName.charAt(0).toUpperCase() + modifierName.slice(1)}</div>
@@ -7102,46 +7226,46 @@ window.dSz = () => {
                 <button class="btn btn-sm btn-outline-primary w-100" onclick="window.resetModifier()">Reset</button>
             </div>
         `;
-        
+
         panel.style.display = 'block';
         modifierPanel = panel;
-        
+
         const contentDiv = panel.querySelector('#modifier-panel-content');
-        
+
         // Add modifier UI
         const ui = mod.getUI(obj, params, () => {
             mod.apply(obj, params);
             updateTinkerLabels();
             window.requestRender();
         });
-        
+
         contentDiv.appendChild(ui);
     }
 
     window.resetModifier = () => {
         if (selectedObjects.length !== 1) return;
         const obj = selectedObjects[0];
-        
+
         if (obj.userData.originalPositions) {
             // Restore original geometry
             const pos = obj.geometry.attributes.position;
             const original = obj.userData.originalPositions;
-            
+
             for (let i = 0; i < pos.count; i++) {
                 pos.setXYZ(i, original[i*3], original[i*3+1], original[i*3+2]);
             }
             pos.needsUpdate = true;
             obj.geometry.computeVertexNormals();
-            
+
             // Clear modifier params
             delete obj.userData.originalPositions;
             delete obj.userData.modifierParams;
-            
+
             updateTinkerLabels();
             window.requestRender();
             saveState();
         }
-        
+
         // Hide panel
         const panel = document.getElementById('modifier-panel');
         if (panel) panel.style.display = 'none';
@@ -7217,52 +7341,52 @@ const updatePropertiesPanel = () => {
             if (existingGravity) {
                 existingGravity.remove();
             }
-            
+
             let gravityHtml = '';
             // Default to false if enableGravity is undefined
             const hasGravity = n.userData.enableGravity === true;
             console.log('Properties panel - hasGravity:', hasGravity, 'for object:', n.userData.name);
-            
+
             // Store current object globally for checkbox handler
             window._currentPropsObject = n;
-            
+
             gravityHtml += `
                 <div class="form-check mt-2" id="gravity-checkbox-container">
-                    <input class="form-check-input" type="checkbox" id="opt-gravity" ${hasGravity ? 'checked' : ''} 
+                    <input class="form-check-input" type="checkbox" id="opt-gravity" ${hasGravity ? 'checked' : ''}
                         onchange="console.log('Checkbox clicked, this.checked:', this.checked); const obj = window._currentPropsObject; if(obj) window.setObjectGravity(obj, this.checked);">
                     <label class="form-check-label small" for="opt-gravity">
                         <i class="bi bi-arrow-down-circle"></i> Enable Gravity
                     </label>
                 </div>
             `;
-            
+
             // Insert gravity checkbox after the flex container (not inside it)
             const flexContainer = document.getElementById('opt-d-type').closest('.d-flex');
             if (flexContainer) {
                 flexContainer.insertAdjacentHTML('afterend', gravityHtml);
             }
-            
+
             // Add Material Type and Mass Info
             const existingMassInfo = document.getElementById('mass-info-container');
             if (existingMassInfo) {
                 existingMassInfo.remove();
             }
-            
+
             // Get mass info
             const massInfo = window.getMassInfo(n);
             const materialTypes = ['default', 'wood', 'metal', 'steel', 'plastic', 'glass', 'concrete', 'rubber'];
             const currentMaterial = n.userData.materialType || 'default';
-            
+
             let materialOptions = '';
             materialTypes.forEach(mat => {
                 materialOptions += `<option value="${mat}" ${currentMaterial === mat ? 'selected' : ''}>${mat.charAt(0).toUpperCase() + mat.slice(1)}</option>`;
             });
-            
+
             const massInfoHtml = `
                 <div class="mt-2" id="mass-info-container">
                     <div class="mb-2">
                         <label class="small fw-bold">Material (Density)</label>
-                        <select class="form-select form-select-sm" id="opt-material-type" 
+                        <select class="form-select form-select-sm" id="opt-material-type"
                             onchange="const obj = window._currentPropsObject; if(obj) { obj.userData.materialType = this.value; window.updateMassDisplay(obj); }">
                             ${materialOptions}
                         </select>
@@ -7283,7 +7407,7 @@ const updatePropertiesPanel = () => {
                     </div>
                 </div>
             `;
-            
+
             const gravityContainer = document.getElementById('gravity-checkbox-container');
             if (gravityContainer) {
                 gravityContainer.insertAdjacentHTML('afterend', massInfoHtml);
@@ -7594,7 +7718,7 @@ const updatePropertiesPanel = () => {
 
     const updateObjectList = () => {
         const list = document.getElementById("object-list"); list.innerHTML = "";
-        
+
         // Helper to get icon based on object type
         const getObjectIcon = (obj) => {
             const p = obj.userData.geoParams;
@@ -7611,16 +7735,16 @@ const updatePropertiesPanel = () => {
                 default: return 'bi bi-box';
             }
         };
-        
+
         scene.children.filter(e => e.userData.name).forEach(t => {
-            const li = document.createElement("li"); 
+            const li = document.createElement("li");
             li.className = `object-list-item ${selectedObjects.includes(t)?'selected':''}`;
             li.onclick = () => window.selectObjectFromList(t.uuid);
-            
+
             const icon = getObjectIcon(t);
             const isHole = t.userData.isHole;
             const holeStyle = isHole ? 'opacity: 0.5;' : '';
-            
+
             li.innerHTML = `
                 <input type="checkbox" class="form-check-input me-2" ${t.userData.markForMerge?'checked':''} onclick="event.stopPropagation(); window.toggleMergeStatus('${t.uuid}')">
                 <i class="bi ${icon} object-type-icon" style="${holeStyle}"></i>
@@ -8240,14 +8364,18 @@ window.dImportFile = function(input) {
         };
 
         // 4. Find the Main Model File
-        const mainFile = files.find(f => /\.(obj|stl|gltf|glb|usdz)$/i.test(f.name));
-        if (!mainFile) return alert("No model file (.obj, .stl, .glb) found in selection.");
+        const mainFile = files.find(f => /\.(obj|stl|gltf|glb|usdz|step|stp)$/i.test(f.name));
+        if (!mainFile) return alert("No model file (.obj, .stl, .glb, .step) found in selection.");
 
         const ext = mainFile.name.split('.').pop().toLowerCase();
         const url = fileMap[mainFile.name]; // Get the blob URL for the main file
 
         // 5. Load based on extension
-        if (ext === 'obj') {
+        if (ext === 'step' || ext === 'stp') {
+            // Load STEP file using occt-import-js
+            loadSTEPFile(mainFile, url);
+        }
+        else if (ext === 'obj') {
             // Check if there is a matching MTL file in the selection
             const mtlFile = files.find(f => f.name.endsWith('.mtl'));
 
@@ -8305,7 +8433,145 @@ window.dImportFile = function(input) {
         input.value = '';
     };
 
+    // STEP File Loading Function using occt-import-js
+    window.loadSTEPFile = async function(file, url) {
+        try {
+            console.log('Loading STEP file:', file.name);
+            
+            // Initialize OCCT if not already done
+            if (!window.occtInstance) {
+                console.log('Initializing OCCT...');
+                window.occtInstance = await window.occtImportJs();
+                console.log('OCCT initialized');
+            }
+            
+            // Read the file as ArrayBuffer
+            const response = await fetch(url);
+            const buffer = await response.arrayBuffer();
+            const fileBuffer = new Uint8Array(buffer);
+            
+            // Import the STEP file
+            const result = window.occtInstance.ReadStepFile(fileBuffer, null);
+            
+            if (!result.success) {
+                throw new Error('Failed to import STEP file');
+            }
+            
+            console.log('STEP loaded, result:', result);
+            
+            // Process the hierarchical structure - meshes from STEP are already positioned correctly
+            // No need to apply transformations as they're already in world coordinates
+            if (result.root && result.root.children && result.root.children.length > 0) {
+                const child = result.root.children[0];
+                if (child.meshes) {
+                    child.meshes.forEach(meshIndex => {
+                        const meshData = result.meshes[meshIndex];
+                        if (meshData) {
+                            createSTEPMesh(meshData, file.name);
+                        }
+                    });
+                }
+                // Also process any nested children
+                if (child.children) {
+                    processSTEPTreeNoMatrix(child, result.meshes, file.name);
+                }
+            } else if (result.meshes) {
+                // Fallback: just process all meshes directly
+                result.meshes.forEach((meshData, index) => {
+                    createSTEPMesh(meshData, file.name + ' (Part ' + (index + 1) + ')');
+                });
+            }
+            
+        } catch (error) {
+            console.error('Error loading STEP file:', error);
+            alert('Error loading STEP file: ' + error.message);
+        }
+    };
+
+    // Process STEP tree without matrix transformations
+    window.processSTEPTreeNoMatrix = function(node, allMeshes, baseName) {
+        if (!node || !node.children) return;
+        
+        node.children.forEach(childNode => {
+            if (childNode.meshes) {
+                childNode.meshes.forEach(meshIndex => {
+                    const meshData = allMeshes[meshIndex];
+                    if (meshData) {
+                        createSTEPMesh(meshData, baseName);
+                    }
+                });
+            }
+            if (childNode.children) {
+                processSTEPTreeNoMatrix(childNode, allMeshes, baseName);
+            }
+        });
+    };
+
+    // Create a single STEP mesh - positions are already correct from STEP file
+    window.createSTEPMesh = function(meshData, baseName) {
+        // Create Three.js geometry from the mesh data
+        const geometry = new THREE.BufferGeometry();
+        
+        if (meshData.attributes && meshData.attributes.position) {
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(
+                meshData.attributes.position.array, 3
+            ));
+        }
+        
+        if (meshData.attributes && meshData.attributes.normal) {
+            geometry.setAttribute('normal', new THREE.Float32BufferAttribute(
+                meshData.attributes.normal.array, 3
+            ));
+        }
+        
+        if (meshData.index) {
+            geometry.setIndex(new THREE.Uint32BufferAttribute(
+                meshData.index.array, 1
+            ));
+        }
+        
+        geometry.computeVertexNormals();
+        
+        // Get the name
+        const objName = meshData.name ? meshData.name : baseName;
+        
+        // Create material with color from STEP file
+        const material = new THREE.MeshStandardMaterial({
+            color: meshData.color ? 
+                new THREE.Color(meshData.color[0], meshData.color[1], meshData.color[2]) :
+                0x888888,
+            metalness: 0.3,
+            roughness: 0.7
+        });
+        
+        // Create mesh - no transformation needed, positions are from STEP file
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.name = objName;
+        
+        // Add to scene
+        buildAndAddMesh(geometry, objName, null, material);
+    };
+
     window.triggerExport = () => window.downloadExport(document.getElementById("export-format").value);
+
+    // File Dropdown Functions
+    window.toggleFileDropdown = function() {
+        const dropdown = document.getElementById('file-dropdown');
+        dropdown.classList.toggle('open');
+    };
+
+    window.closeFileDropdown = function() {
+        const dropdown = document.getElementById('file-dropdown');
+        dropdown.classList.remove('open');
+    };
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        const dropdown = document.getElementById('file-dropdown');
+        if (dropdown && !dropdown.contains(e.target)) {
+            dropdown.classList.remove('open');
+        }
+    });
 
     window.downloadExport = async fmt => {
             // 0. Project File Export

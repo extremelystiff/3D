@@ -361,6 +361,48 @@
         color: var(--ui-text-muted);
     }
 
+    /* Tooltip for file dropdown items */
+    .file-dropdown-item {
+        position: relative;
+    }
+
+    .file-dropdown-item .tooltip-text {
+        visibility: hidden;
+        width: 220px;
+        background-color: #333;
+        color: #fff;
+        text-align: left;
+        border-radius: 6px;
+        padding: 8px 10px;
+        position: absolute;
+        z-index: 1000;
+        left: 100%;
+        top: 50%;
+        transform: translateY(-50%);
+        margin-left: 10px;
+        opacity: 0;
+        transition: opacity 0.3s;
+        font-size: 0.75rem;
+        font-weight: normal;
+        white-space: normal;
+    }
+
+    .file-dropdown-item:hover .tooltip-text {
+        visibility: visible;
+        opacity: 1;
+    }
+
+    .file-dropdown-item .tooltip-text::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        right: 100%;
+        margin-top: -5px;
+        border-width: 5px;
+        border-style: solid;
+        border-color: transparent #333 transparent transparent;
+    }
+
     /* Hide default header groups when in dropdown mode */
     .header-left-groups {
         display: flex;
@@ -1039,14 +1081,25 @@
                     <i class="bi bi-upload"></i> Import...
                     <span class="shortcut">Ctrl+O</span>
                 </button>
+                <button class="file-dropdown-item" onclick="document.getElementById('file-upload-tinker').click(); closeFileDropdown();">
+                    <i class="bi bi-file-earmark-arrow-in"></i> Import .tinker
+                    <span class="tooltip-text">Import a .tinker project file to restore your saved 3D design with all objects, materials, and positions preserved.</span>
+                </button>
+                <input type="file" id="file-upload-tinker" accept=".tinker" style="display:none" onchange="window.loadProjectFile(this)">
                 <button class="file-dropdown-item" onclick="document.getElementById('file-upload-step').click(); closeFileDropdown();">
                     <i class="bi bi-box-seam"></i> Import STEP...
+                    <span class="tooltip-text">Import a STEP file containing multiple 3D parts. The assembly structure will be preserved with proper positioning.</span>
                 </button>
                 <input type="file" id="file-upload-step" multiple accept=".step,.stp" style="display:none" onchange="window.dImportFile(this)">
                 <div class="file-dropdown-divider"></div>
                 <button class="file-dropdown-item" onclick="window.downloadExport('json'); closeFileDropdown();">
                     <i class="bi bi-file-earmark-json"></i> Export .tinker
+                    <span class="tooltip-text">Export your project as a .tinker file to save and restore your complete 3D design including all objects, materials, and positions.</span>
                     <span class="shortcut">Ctrl+S</span>
+                </button>
+                <button class="file-dropdown-item" onclick="window.downloadExport('step'); closeFileDropdown();">
+                    <i class="bi bi-box-seam-fill"></i> Export STEP...
+                    <span class="tooltip-text">Export all 3D parts on the plate as a STEP file, preserving their assembly positions for CAD software.</span>
                 </button>
                 <button class="file-dropdown-item" onclick="document.getElementById('export-panel').style.display='block'; closeFileDropdown();">
                     <i class="bi bi-download"></i> Export 3D Model...
@@ -8505,11 +8558,65 @@ window.dImportFile = function(input) {
             }
             
             // Fallback: if no meshes were placed, try direct processing
+            // This happens when the STEP file doesn't have proper hierarchy or transformations
             if (placedMeshIds.size === 0 && result.meshes && result.meshes.length > 0) {
-                console.log('No hierarchy processed, using direct mesh processing');
+                console.log('No hierarchy processed, using direct mesh processing with bounding box spacing');
+                
+                // Calculate bounding boxes first to determine spacing
+                let maxDepth = 0;
+                let maxWidth = 0;
+                
+                // First pass: compute bounding boxes to determine proper spacing
+                result.meshes.forEach((meshData, index) => {
+                    if (meshData && meshData.attributes && meshData.attributes.position) {
+                        const positions = meshData.attributes.position.array;
+                        let minX = Infinity, maxX = -Infinity;
+                        let minY = Infinity, maxY = -Infinity;
+                        let minZ = Infinity, maxZ = -Infinity;
+                        
+                        for (let i = 0; i < positions.length; i += 3) {
+                            minX = Math.min(minX, positions[i]);
+                            maxX = Math.max(maxX, positions[i]);
+                            minY = Math.min(minY, positions[i + 1]);
+                            maxY = Math.max(maxY, positions[i + 1]);
+                            minZ = Math.min(minZ, positions[i + 2]);
+                            maxZ = Math.max(maxZ, positions[i + 2]);
+                        }
+                        
+                        const width = maxX - minX;
+                        const depth = maxZ - minZ;
+                        maxWidth = Math.max(maxWidth, width);
+                        maxDepth = Math.max(maxDepth, depth);
+                    }
+                });
+                
+                // Add some padding between parts
+                const spacingX = maxWidth + 10;
+                const spacingZ = maxDepth + 10;
+                
+                // Second pass: create meshes with calculated spacing
+                let currentX = 0;
+                let currentZ = 0;
+                const columns = Math.ceil(Math.sqrt(result.meshes.length));
+                
                 result.meshes.forEach((meshData, index) => {
                     if (meshData) {
-                        createSTEPMeshWithTransform(meshData, file.name + ' (Part ' + (index + 1) + ')', null);
+                        // Try to get transformation from meshData, or calculate position from grid
+                        let transform = null;
+                        
+                        if (meshData.transformation || meshData.matrix) {
+                            transform = meshData.transformation || meshData.matrix;
+                        } else {
+                            // Calculate grid position for this part
+                            const col = index % columns;
+                            const row = Math.floor(index / columns);
+                            
+                            transform = {
+                                position: [col * spacingX, 0, row * spacingZ]
+                            };
+                        }
+                        
+                        createSTEPMeshWithTransform(meshData, file.name + ' (Part ' + (index + 1) + ')', transform);
                     }
                 });
             }
@@ -8564,6 +8671,12 @@ window.dImportFile = function(input) {
 
         geometry.computeVertexNormals();
 
+        // Ensure UVs exist
+        if (!geometry.attributes.uv) {
+            const count = geometry.attributes.position.count;
+            geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(count * 2), 2));
+        }
+
         // Get the name
         const objName = meshData.name ? meshData.name : baseName;
 
@@ -8573,12 +8686,18 @@ window.dImportFile = function(input) {
                 new THREE.Color(meshData.color[0], meshData.color[1], meshData.color[2]) :
                 0x888888,
             metalness: 0.3,
-            roughness: 0.7
+            roughness: 0.7,
+            wireframe: appSettings.wireframe
         });
 
         // Create mesh
         const mesh = new THREE.Mesh(geometry, material);
         mesh.name = objName;
+        mesh.castShadow = appSettings.shadows !== false;
+        mesh.receiveShadow = appSettings.shadows !== false;
+        
+        // Store original transform data in userData
+        mesh.userData = { isHole: false, name: objName, geoParams: null };
 
         // Apply transformation from the STEP file
         // The transformation includes position, rotation (quaternion), and scale
@@ -8602,6 +8721,15 @@ window.dImportFile = function(input) {
                 mesh.scale.set(transform.scale[0] || 1, transform.scale[1] || 1, transform.scale[2] || 1);
             }
             
+            // Handle matrix transformation if present
+            if (transform.matrix) {
+                const mat = new THREE.Matrix4();
+                if (Array.isArray(transform.matrix)) {
+                    mat.fromArray(transform.matrix);
+                }
+                mat.decompose(mesh.position, mesh.quaternion, mesh.scale);
+            }
+            
             console.log('Applied transform to:', objName, { position: mesh.position, quaternion: mesh.quaternion, scale: mesh.scale });
         } else {
             // Default position - place above the ground plane with some spacing for multiple parts
@@ -8609,22 +8737,12 @@ window.dImportFile = function(input) {
             mesh.position.set(0, 0, 10 + meshCount * 20);
         }
 
-        // Add to scene using buildAndAddMesh which handles proper setup
-        buildAndAddMesh(geometry, objName, null, material);
-        
-        // Override the position with our transformed position
-        const lastObj = scene.children[scene.children.length - 1];
-        if (lastObj && lastObj.isMesh && lastObj.userData.name === objName) {
-            if (transform) {
-                lastObj.position.copy(mesh.position);
-                lastObj.quaternion.copy(mesh.quaternion);
-                lastObj.scale.copy(mesh.scale);
-            } else {
-                // Space out multiple parts if no transformation
-                const meshCount = scene.children.filter(c => c.isMesh && c.userData.name && c.userData.name.includes('Part')).length;
-                lastObj.position.set(0, 0, 10 + meshCount * 20);
-            }
-        }
+        // Add mesh directly to scene - do NOT use buildAndAddMesh as it centers geometry
+        scene.add(mesh);
+        selectObject(mesh);
+        updateObjectList();
+        saveState();
+        window.requestRender();
     };
 
     // Create a single STEP mesh - extracts transformation from meshData and applies it
@@ -8664,6 +8782,105 @@ window.dImportFile = function(input) {
                 a.href = URL.createObjectURL(blob);
                 a.download = (document.getElementById("d-name").value || "Project") + ".tinker";
                 a.click();
+                return;
+            }
+
+            // STEP Export
+            if (fmt === 'step') {
+                // Check if OCCT is available
+                if (!window.occtInstance) {
+                    try {
+                        console.log('Initializing OCCT for export...');
+                        window.occtInstance = await window.occtImportJs();
+                        console.log('OCCT initialized for export');
+                    } catch (e) {
+                        alert("STEP export requires the occt-import-js library. Please ensure it's loaded.");
+                        return;
+                    }
+                }
+
+                // Collect all mesh objects from scene
+                const l = selectedObjects.length ? selectedObjects : scene.children.filter(c => c.isMesh && !c.userData.isRuler && c !== liftCone && c.parent !== faceMarkerGroup);
+                if (!l.length) return alert("Nothing to export");
+
+                // Check if the WriteStepFile function exists
+                if (typeof window.occtInstance.WriteStepFile !== 'function') {
+                    alert("STEP export is not fully supported in this build. Please use other export formats (STL, OBJ, GLB) for now.");
+                    return;
+                }
+
+                try {
+                    // Convert each Three.js mesh to OCCT shape
+                    const shapes = [];
+                    
+                    for (const obj of l) {
+                        // Get geometry
+                        const geometry = obj.geometry;
+                        if (!geometry) continue;
+
+                        // Get position attribute
+                        const positionAttr = geometry.attributes.position;
+                        if (!positionAttr) continue;
+
+                        // Get indices if available
+                        let indices = null;
+                        if (geometry.index) {
+                            indices = geometry.index.array;
+                        }
+
+                        // Get color from material
+                        let color = [0.8, 0.8, 0.8];
+                        if (obj.material && obj.material.color) {
+                            color = [obj.material.color.r, obj.material.color.g, obj.material.color.b];
+                        }
+
+                        // Try to create OCCT shape - this may vary based on library version
+                        let occtShape = null;
+                        
+                        // Try different API methods
+                        if (window.occtInstance.Geo2Occt) {
+                            occtShape = window.occtInstance.Geo2Occt(positionAttr.array, indices, color);
+                        } else if (window.occtInstance._createShapeFromBuffers) {
+                            occtShape = window.occtInstance._createShapeFromBuffers(positionAttr.array, indices, color);
+                        }
+
+                        if (occtShape) {
+                            // Get the object's transformation
+                            const name = obj.userData.name || obj.name || "Part";
+                            
+                            // Create transform with position, rotation, and scale
+                            let transform = null;
+                            if (window.occtInstance.mat4) {
+                                transform = new window.occtInstance.mat4();
+                                transform.setPosition(obj.position.x, obj.position.y, obj.position.z);
+                                transform.setRotation(obj.quaternion.x, obj.quaternion.y, obj.quaternion.z, obj.quaternion.w);
+                                transform.setScaling(obj.scale.x, obj.scale.y, obj.scale.z);
+                            }
+                            
+                            shapes.push({ shape: occtShape, name: name, transform: transform });
+                        }
+                    }
+
+                    if (shapes.length === 0) {
+                        return alert("No valid geometries to export to STEP");
+                    }
+
+                    // Create STEP file with assembly
+                    const stepData = window.occtInstance.WriteStepFile(shapes, "TinkerCAD Assembly");
+                    
+                    if (stepData) {
+                        const blob = new Blob([stepData], { type: "application/octet-stream" });
+                        const a = document.createElement('a');
+                        a.href = URL.createObjectURL(blob);
+                        a.download = (document.getElementById("d-name").value || "Design") + ".step";
+                        a.click();
+                    } else {
+                        alert("Failed to generate STEP file");
+                    }
+                } catch (error) {
+                    console.error("STEP export error:", error);
+                    alert("Error exporting STEP file: " + error.message + "\n\nNote: STEP export may require additional library features.");
+                }
                 return;
             }
 

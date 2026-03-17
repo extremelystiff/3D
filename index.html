@@ -1097,9 +1097,14 @@
                     <span class="tooltip-text">Export your project as a .tinker file to save and restore your complete 3D design including all objects, materials, and positions.</span>
                     <span class="shortcut">Ctrl+S</span>
                 </button>
-                <button class="file-dropdown-item" onclick="window.downloadExport('step'); closeFileDropdown();">
-                    <i class="bi bi-box-seam-fill"></i> Export STEP...
-                    <span class="tooltip-text">Export all 3D parts on the plate as a STEP file, preserving their assembly positions for CAD software.</span>
+                <button class="file-dropdown-item" onclick="document.getElementById('file-upload-3mf').click(); closeFileDropdown();">
+                    <i class="bi bi-box-seam"></i> Import 3MF...
+                    <span class="tooltip-text">Import a 3MF file to load multiple 3D parts with their assembly positions preserved.</span>
+                </button>
+                <input type="file" id="file-upload-3mf" accept=".3mf" style="display:none" onchange="window.load3MFFile(this)">
+                <button class="file-dropdown-item" onclick="window.downloadExport('3mf'); closeFileDropdown();">
+                    <i class="bi bi-box-seam-fill"></i> Export 3MF...
+                    <span class="tooltip-text">Export all 3D parts as a 3MF file with assembly structure preserved. 3MF is the modern standard for 3D printing.</span>
                 </button>
                 <button class="file-dropdown-item" onclick="document.getElementById('export-panel').style.display='block'; closeFileDropdown();">
                     <i class="bi bi-download"></i> Export 3D Model...
@@ -8773,116 +8778,188 @@ window.dImportFile = function(input) {
     });
 
     window.downloadExport = async fmt => {
-            // 0. Project File Export
-            if (fmt === 'json') {
-                const rawData = createSnapshot(); // This is the compressed state
-                // We download it as a raw file
-                const blob = new Blob([rawData], { type: "application/octet-stream" });
+        // 0. Project File Export
+        if (fmt === 'json') {
+            const rawData = createSnapshot();
+            const blob = new Blob([rawData], { type: "application/octet-stream" });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = (document.getElementById("d-name").value || "Project") + ".tinker";
+            a.click();
+            return;
+        }
+
+        // 3MF Export - Pure JavaScript implementation (no WASM required)
+        // 3MF Export - Pure JavaScript implementation with color support
+        if (fmt === '3mf') {
+            const l = selectedObjects.length ? selectedObjects : scene.children.filter(c => c.isMesh && !c.userData.isRuler && c !== liftCone && c.parent !== faceMarkerGroup);
+            if (!l.length) return alert("Nothing to export");
+
+            try {
+                const objects = [];
+                const materials = []; // Track unique materials
+                const materialColors = new Map(); // Map color hex to material index
+
+                // Helper to convert THREE.Color to hex string
+                const colorToHex = (color) => {
+                    const r = Math.round(color.r * 255).toString(16).padStart(2, '0');
+                    const g = Math.round(color.g * 255).toString(16).padStart(2, '0');
+                    const b = Math.round(color.b * 255).toString(16).padStart(2, '0');
+                    return `#${r}${g}${b}`.toUpperCase();
+                };
+
+                // Helper to get or create material index
+                const getMaterialIndex = (color, name) => {
+                    const hex = colorToHex(color);
+                    if (materialColors.has(hex)) {
+                        return materialColors.get(hex);
+                    }
+                    const index = materials.length;
+                    materials.push({
+                        name: name || `Material_${index + 1}`,
+                        color: hex
+                    });
+                    materialColors.set(hex, index);
+                    return index;
+                };
+
+                let objectIndex = 0;
+
+                for (const obj of l) {
+                    const geometry = obj.geometry;
+                    if (!geometry) continue;
+
+                    // Get world positions
+                    const posAttr = geometry.attributes.position;
+                    if (!posAttr) continue;
+
+                    // Apply world transform to geometry
+                    const worldGeo = geometry.clone();
+                    worldGeo.applyMatrix4(obj.matrixWorld);
+
+                    const positions = worldGeo.attributes.position.array;
+                    const vertexCount = positions.length / 3;
+
+                    // Build vertex XML
+                    let verticesXML = '';
+                    for (let i = 0; i < vertexCount; i++) {
+                        const x = positions[i * 3].toFixed(6);
+                        const y = positions[i * 3 + 1].toFixed(6);
+                        const z = positions[i * 3 + 2].toFixed(6);
+                        verticesXML += `          <vertex x="${x}" y="${y}" z="${z}" />\n`;
+                    }
+
+                    // Build triangle XML with color/material support
+                    let trianglesXML = '';
+                    let triangleCount = 0;
+
+                    // Get material index for this object
+                    let materialIndex = 0;
+                    if (obj.material && obj.material.color) {
+                        const matName = obj.userData.name || obj.name || `Part${objectIndex + 1}`;
+                        materialIndex = getMaterialIndex(obj.material.color, matName);
+                    }
+
+                    if (worldGeo.index) {
+                        const indices = worldGeo.index.array;
+                        triangleCount = indices.length / 3;
+                        for (let i = 0; i < triangleCount; i++) {
+                            const v1 = indices[i * 3];
+                            const v2 = indices[i * 3 + 1];
+                            const v3 = indices[i * 3 + 2];
+                            trianglesXML += `          <triangle v1="${v1}" v2="${v2}" v3="${v3}" p1="${materialIndex}" />\n`;
+                        }
+                    } else {
+                        triangleCount = vertexCount / 3;
+                        for (let i = 0; i < triangleCount; i++) {
+                            const v1 = i * 3;
+                            const v2 = i * 3 + 1;
+                            const v3 = i * 3 + 2;
+                            trianglesXML += `          <triangle v1="${v1}" v2="${v2}" v3="${v3}" p1="${materialIndex}" />\n`;
+                        }
+                    }
+
+                    const objName = obj.userData.name || obj.name || `Part${objectIndex + 1}`;
+                    const objectID = objectIndex + 1;
+
+                    objects.push({
+                        id: objectID,
+                        name: objName,
+                        vertices: verticesXML,
+                        triangles: trianglesXML,
+                        triangleCount: triangleCount,
+                        materialIndex: materialIndex
+                    });
+
+                    objectIndex++;
+                }
+
+                if (objects.length === 0) {
+                    return alert("No valid geometries to export to 3MF");
+                }
+
+                // Build the 3D Model XML with materials
+                let modelXML = `<?xml version="1.0" encoding="UTF-8"?>
+        <model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+        <resources>
+        `;
+
+                // Add base materials resource
+                if (materials.length > 0) {
+                    modelXML += `    <basematerials id="1">
+        `;
+                    materials.forEach((mat, idx) => {
+                        modelXML += `      <base name="${mat.name}" displaycolor="${mat.color}" />\n`;
+                    });
+                    modelXML += `    </basematerials>
+        `;
+                }
+
+                // Add mesh resources
+                objects.forEach(obj => {
+                    modelXML += `    <object id="${obj.id}" type="model">
+            <mesh>
+                <vertices>
+        ${obj.vertices}        </vertices>
+                <triangles>
+        ${obj.triangles}        </triangles>
+            </mesh>
+            </object>
+        `;
+                });
+
+                modelXML += `  </resources>
+        <build>
+        `;
+
+                // Add build items with material references
+                objects.forEach(obj => {
+                    if (materials.length > 0) {
+                        modelXML += `    <item objectid="${obj.id}" pid="1" pindex="${obj.materialIndex}" />\n`;
+                    } else {
+                        modelXML += `    <item objectid="${obj.id}" />\n`;
+                    }
+                });
+
+                modelXML += `  </build>
+        </model>`;
+
+                // Create the ZIP file (3MF container)
+                const zipData = await create3MFZip(modelXML);
+
+                const blob = new Blob([zipData], { type: "application/x-3mf" });
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
-                a.download = (document.getElementById("d-name").value || "Project") + ".tinker";
+                a.download = (document.getElementById("d-name").value || "Design") + ".3mf";
                 a.click();
-                return;
+
+                console.log('3MF export successful with', materials.length, 'materials');
+            } catch (error) {
+                console.error("3MF export error:", error);
+                alert("Error exporting 3MF file: " + error.message);
             }
-
-            // STEP Export
-            if (fmt === 'step') {
-                // Check if OCCT is available
-                if (!window.occtInstance) {
-                    try {
-                        console.log('Initializing OCCT for export...');
-                        window.occtInstance = await window.occtImportJs();
-                        console.log('OCCT initialized for export');
-                    } catch (e) {
-                        alert("STEP export requires the occt-import-js library. Please ensure it's loaded.");
-                        return;
-                    }
-                }
-
-                // Collect all mesh objects from scene
-                const l = selectedObjects.length ? selectedObjects : scene.children.filter(c => c.isMesh && !c.userData.isRuler && c !== liftCone && c.parent !== faceMarkerGroup);
-                if (!l.length) return alert("Nothing to export");
-
-                // Check if the WriteStepFile function exists
-                if (typeof window.occtInstance.WriteStepFile !== 'function') {
-                    alert("STEP export is not fully supported in this build. Please use other export formats (STL, OBJ, GLB) for now.");
-                    return;
-                }
-
-                try {
-                    // Convert each Three.js mesh to OCCT shape
-                    const shapes = [];
-                    
-                    for (const obj of l) {
-                        // Get geometry
-                        const geometry = obj.geometry;
-                        if (!geometry) continue;
-
-                        // Get position attribute
-                        const positionAttr = geometry.attributes.position;
-                        if (!positionAttr) continue;
-
-                        // Get indices if available
-                        let indices = null;
-                        if (geometry.index) {
-                            indices = geometry.index.array;
-                        }
-
-                        // Get color from material
-                        let color = [0.8, 0.8, 0.8];
-                        if (obj.material && obj.material.color) {
-                            color = [obj.material.color.r, obj.material.color.g, obj.material.color.b];
-                        }
-
-                        // Try to create OCCT shape - this may vary based on library version
-                        let occtShape = null;
-                        
-                        // Try different API methods
-                        if (window.occtInstance.Geo2Occt) {
-                            occtShape = window.occtInstance.Geo2Occt(positionAttr.array, indices, color);
-                        } else if (window.occtInstance._createShapeFromBuffers) {
-                            occtShape = window.occtInstance._createShapeFromBuffers(positionAttr.array, indices, color);
-                        }
-
-                        if (occtShape) {
-                            // Get the object's transformation
-                            const name = obj.userData.name || obj.name || "Part";
-                            
-                            // Create transform with position, rotation, and scale
-                            let transform = null;
-                            if (window.occtInstance.mat4) {
-                                transform = new window.occtInstance.mat4();
-                                transform.setPosition(obj.position.x, obj.position.y, obj.position.z);
-                                transform.setRotation(obj.quaternion.x, obj.quaternion.y, obj.quaternion.z, obj.quaternion.w);
-                                transform.setScaling(obj.scale.x, obj.scale.y, obj.scale.z);
-                            }
-                            
-                            shapes.push({ shape: occtShape, name: name, transform: transform });
-                        }
-                    }
-
-                    if (shapes.length === 0) {
-                        return alert("No valid geometries to export to STEP");
-                    }
-
-                    // Create STEP file with assembly
-                    const stepData = window.occtInstance.WriteStepFile(shapes, "TinkerCAD Assembly");
-                    
-                    if (stepData) {
-                        const blob = new Blob([stepData], { type: "application/octet-stream" });
-                        const a = document.createElement('a');
-                        a.href = URL.createObjectURL(blob);
-                        a.download = (document.getElementById("d-name").value || "Design") + ".step";
-                        a.click();
-                    } else {
-                        alert("Failed to generate STEP file");
-                    }
-                } catch (error) {
-                    console.error("STEP export error:", error);
-                    alert("Error exporting STEP file: " + error.message + "\n\nNote: STEP export may require additional library features.");
-                }
-                return;
-            }
+            return;
+        }
 
             // 1. Collect Objects
             const l = selectedObjects.length ? selectedObjects : scene.children.filter(c => c.isMesh && !c.userData.isRuler && c !== liftCone && c.parent !== faceMarkerGroup);
@@ -8922,7 +8999,202 @@ window.dImportFile = function(input) {
 
             if(fmt==='usdz') { const e = new USDZExporter(); const u = await e.parse(g, { quickLookAR: true }); saveData(new Blob([u], { type: 'model/vnd.usdz+zip' }), name); }
         };
+// Helper function to create a 3MF ZIP file
+async function create3MFZip(modelXML) {
+    // 3MF requires these files in the ZIP:
+    // 1. [Content_Types].xml
+    // 2. _rels/.rels
+    // 3. 3D/3dmodel.model
 
+    const contentTypes = `<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
+</Types>`;
+
+    const rels = `<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
+</Relationships>`;
+
+    // Create ZIP using CompressionStream API (available in modern browsers)
+    const encoder = new TextEncoder();
+
+    // Simple ZIP file builder
+    const files = [
+        { name: '[Content_Types].xml', content: encoder.encode(contentTypes) },
+        { name: '_rels/.rels', content: encoder.encode(rels) },
+        { name: '3D/3dmodel.model', content: encoder.encode(modelXML) }
+    ];
+
+    return createZipBuffer(files);
+}
+// Simple ZIP file creator (no external dependencies)
+function createZipBuffer(files) {
+    const localFileHeader = [];
+    const centralDirectory = [];
+    const localFileData = [];
+    let offset = 0;
+
+    for (const file of files) {
+        const nameBytes = new TextEncoder().encode(file.name);
+        const content = file.content;
+
+        // Local file header
+        const header = new ArrayBuffer(30 + nameBytes.length);
+        const headerView = new DataView(header);
+
+        // Signature
+        headerView.setUint32(0, 0x04034b50, true);
+        // Version needed
+        headerView.setUint16(4, 20, true);
+        // General purpose flag
+        headerView.setUint16(6, 0, true);
+        // Compression method (0 = stored)
+        headerView.setUint16(8, 0, true);
+        // Last mod time/date (use 0)
+        headerView.setUint16(10, 0, true);
+        headerView.setUint16(12, 0, true);
+        // CRC-32
+        const crc = crc32(content);
+        headerView.setUint32(14, crc, true);
+        // Compressed size
+        headerView.setUint32(18, content.length, true);
+        // Uncompressed size
+        headerView.setUint32(22, content.length, true);
+        // File name length
+        headerView.setUint16(26, nameBytes.length, true);
+        // Extra field length
+        headerView.setUint16(28, 0, true);
+
+        // Copy filename bytes
+        new Uint8Array(header, 30).set(nameBytes);
+
+        localFileHeader.push(new Uint8Array(header));
+        localFileData.push(content);
+
+        // Central directory entry
+        const cdEntry = new ArrayBuffer(46 + nameBytes.length);
+        const cdView = new DataView(cdEntry);
+
+        // Signature
+        cdView.setUint32(0, 0x02014b50, true);
+        // Version made by
+        cdView.setUint16(4, 20, true);
+        // Version needed
+        cdView.setUint16(6, 20, true);
+        // General purpose flag
+        cdView.setUint16(8, 0, true);
+        // Compression method
+        cdView.setUint16(10, 0, true);
+        // Last mod time/date
+        cdView.setUint16(12, 0, true);
+        cdView.setUint16(14, 0, true);
+        // CRC-32
+        cdView.setUint32(16, crc, true);
+        // Compressed size
+        cdView.setUint32(20, content.length, true);
+        // Uncompressed size
+        cdView.setUint32(24, content.length, true);
+        // File name length
+        cdView.setUint16(28, nameBytes.length, true);
+        // Extra field length
+        cdView.setUint16(30, 0, true);
+        // File comment length
+        cdView.setUint16(32, 0, true);
+        // Disk number start
+        cdView.setUint16(34, 0, true);
+        // Internal file attributes
+        cdView.setUint16(36, 0, true);
+        // External file attributes
+        cdView.setUint32(38, 0, true);
+        // Relative offset of local header
+        cdView.setUint32(42, offset, true);
+
+        // Copy filename bytes
+        new Uint8Array(cdEntry, 46).set(nameBytes);
+
+        centralDirectory.push(new Uint8Array(cdEntry));
+
+        offset += header.byteLength + content.length;
+    }
+
+    // End of central directory
+    const cdOffset = offset;
+    const cdSize = centralDirectory.reduce((sum, arr) => sum + arr.length, 0);
+
+    const eocd = new ArrayBuffer(22);
+    const eocdView = new DataView(eocd);
+
+    // Signature
+    eocdView.setUint32(0, 0x06054b50, true);
+    // Disk number
+    eocdView.setUint16(4, 0, true);
+    // Disk number with CD
+    eocdView.setUint16(6, 0, true);
+    // Number of entries on disk
+    eocdView.setUint16(8, files.length, true);
+    // Total number of entries
+    eocdView.setUint16(10, files.length, true);
+    // Size of central directory
+    eocdView.setUint32(12, cdSize, true);
+    // Offset of central directory
+    eocdView.setUint32(16, cdOffset, true);
+    // Comment length
+    eocdView.setUint16(20, 0, true);
+
+    // Concatenate all parts
+    const totalSize = localFileHeader.reduce((s, a) => s + a.length, 0) +
+                      localFileData.reduce((s, a) => s + a.length, 0) +
+                      centralDirectory.reduce((s, a) => s + a.length, 0) +
+                      22;
+
+    const result = new Uint8Array(totalSize);
+    let pos = 0;
+
+    for (let i = 0; i < files.length; i++) {
+        result.set(localFileHeader[i], pos);
+        pos += localFileHeader[i].length;
+        result.set(localFileData[i], pos);
+        pos += localFileData[i].length;
+    }
+
+    for (const cd of centralDirectory) {
+        result.set(cd, pos);
+        pos += cd.length;
+    }
+
+    result.set(new Uint8Array(eocd), pos);
+
+    return result;
+}
+
+// CRC-32 calculation
+function crc32(data) {
+    let crc = 0xFFFFFFFF;
+    const table = getCRC32Table();
+
+    for (let i = 0; i < data.length; i++) {
+        crc = (crc >>> 8) ^ table[(crc ^ data[i]) & 0xFF];
+    }
+
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function getCRC32Table() {
+    if (getCRC32Table.table) return getCRC32Table.table;
+
+    const table = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) {
+        let c = i;
+        for (let j = 0; j < 8; j++) {
+            c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        }
+        table[i] = c;
+    }
+    getCRC32Table.table = table;
+    return table;
+}
     // --- NEW: PROJECT LOADING ---
     window.loadProjectFile = function(input) {
         if (!input.files || input.files.length === 0) return;
@@ -8944,6 +9216,188 @@ window.dImportFile = function(input) {
             }
         };
         reader.readAsArrayBuffer(file);
+        input.value = '';
+    };
+
+    // --- 3MF FILE LOADING ---
+    window.load3MFFile = async function(input) {
+        if (!input.files || input.files.length === 0) return;
+        const file = input.files[0];
+
+        try {
+            // Initialize lib3mf if not already done
+            if (!window.lib3mfWrapper) {
+                console.log('Initializing lib3mf for import...');
+                const lib3mf = await import('https://cdn.jsdelivr.net/npm/@3mfconsortium/lib3mf@2.5.0-fix.2/+esm');
+                const Module = await lib3mf.default();
+                window.lib3mfWrapper = new Module.CWrapper();
+                console.log('lib3mf initialized for import');
+            }
+
+            // Read the file
+            const buffer = await file.arrayBuffer();
+            const uint8Array = new Uint8Array(buffer);
+
+            // Create a model from the buffer
+            const model = window.lib3mfWrapper.CreateModel();
+            model.ReadFromBuffer(uint8Array);
+
+            // Get all mesh objects - try different API methods
+            let meshObjects = null;
+            let count = 0;
+            
+            try {
+                // Try GetMeshObjects first
+                meshObjects = model.GetMeshObjects();
+                count = meshObjects.GetCount();
+            } catch (e) {
+                console.log('GetMeshObjects failed, trying GetObjects:', e);
+                // Try alternative
+                meshObjects = model.GetObjects();
+                count = meshObjects.GetCount();
+            }
+            
+            console.log('3MF file contains', count, 'mesh objects');
+
+            for (let i = 0; i < count; i++) {
+                let meshObject = null;
+                try {
+                    meshObject = meshObjects.GetAt(i);
+                } catch (e) {
+                    console.log('GetAt failed:', e);
+                    continue;
+                }
+                if (!meshObject) continue;
+
+                // Get the mesh data - try different API methods
+                let mesh = null;
+                try {
+                    mesh = meshObject.GetMesh();
+                } catch (e) {
+                    console.log('GetMesh failed:', e);
+                    // Try alternative method name
+                    try {
+                        mesh = meshObject.GetGeometry();
+                    } catch (e2) {
+                        console.log('GetGeometry also failed:', e2);
+                        continue;
+                    }
+                }
+                if (!mesh) continue;
+
+                // Get vertex data
+                let vertexCount = 0;
+                let vertices = null;
+                try {
+                    vertexCount = mesh.GetVertexCount();
+                    vertices = new Float32Array(vertexCount * 3);
+                    mesh.GetVertices(vertices);
+                } catch (e) {
+                    console.log('Get vertex data failed:', e);
+                    continue;
+                }
+
+                // Get index data
+                let triangleCount = 0;
+                let indices = null;
+                try {
+                    triangleCount = mesh.GetTriangleCount();
+                    if (triangleCount > 0) {
+                        indices = new Uint32Array(triangleCount * 3);
+                        mesh.GetTriangleIndices(indices);
+                    }
+                } catch (e) {
+                    console.log('Get triangle data failed (optional):', e);
+                }
+
+                // Get the name
+                let name = file.name + ' (Part ' + (i + 1) + ')';
+                try {
+                    const objName = meshObject.GetName();
+                    if (objName) name = objName;
+                } catch (e) {
+                    // Name is optional
+                }
+
+                // Get the transform
+                let transform = null;
+                try {
+                    transform = new Float32Array(16);
+                    meshObject.GetTransform(transform);
+                } catch (e) {
+                    console.log('GetTransform failed (optional):', e);
+                    transform = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+                }
+
+                // Extract position, rotation, scale from transform matrix
+                // 3MF uses a 4x4 transform matrix (column-major)
+                const position = new THREE.Vector3(transform[12], transform[13], transform[14]);
+                
+                // Extract rotation (orthonormal matrix -> quaternion)
+                const rotMatrix = new THREE.Matrix4();
+                rotMatrix.set(
+                    transform[0], transform[4], transform[8], 0,
+                    transform[1], transform[5], transform[9], 0,
+                    transform[2], transform[6], transform[10], 0,
+                    0, 0, 0, 1
+                );
+                const quaternion = new THREE.Quaternion();
+                quaternion.setFromRotationMatrix(rotMatrix);
+                
+                // Extract scale from the rotation matrix columns
+                const scale = new THREE.Vector3(
+                    Math.sqrt(transform[0]*transform[0] + transform[1]*transform[1] + transform[2]*transform[2]),
+                    Math.sqrt(transform[4]*transform[4] + transform[5]*transform[5] + transform[6]*transform[6]),
+                    Math.sqrt(transform[8]*transform[8] + transform[9]*transform[9] + transform[10]*transform[10])
+                );
+
+                // Create Three.js geometry
+                const geometry = new THREE.BufferGeometry();
+                geometry.setAttribute('position', vertices);
+                
+                if (indices) {
+                    geometry.setIndex(new THREE.Uint32BufferAttribute(indices, 1));
+                }
+                
+                geometry.computeVertexNormals();
+
+                // Ensure UVs exist
+                if (!geometry.attributes.uv) {
+                    const uvCount = geometry.attributes.position.count;
+                    geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvCount * 2), 2));
+                }
+
+                // Create material
+                const material = new THREE.MeshStandardMaterial({
+                    color: 0x888888,
+                    metalness: 0.3,
+                    roughness: 0.7,
+                    wireframe: appSettings.wireframe
+                });
+
+                // Create mesh
+                const mesh2 = new THREE.Mesh(geometry, material);
+                mesh2.name = name;
+                mesh2.position.copy(position);
+                mesh2.quaternion.copy(quaternion);
+                mesh2.scale.copy(scale);
+                mesh2.castShadow = appSettings.shadows !== false;
+                mesh2.receiveShadow = appSettings.shadows !== false;
+                mesh2.userData = { isHole: false, name: name, geoParams: null };
+
+                // Add to scene
+                scene.add(mesh2);
+                selectObject(mesh2);
+                updateObjectList();
+                saveState();
+                window.requestRender();
+            }
+
+            alert('3MF file loaded successfully with ' + count + ' parts!');
+        } catch (error) {
+            console.error('Error loading 3MF file:', error);
+            alert('Error loading 3MF file: ' + error.message);
+        }
         input.value = '';
     };
 

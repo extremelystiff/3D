@@ -1528,7 +1528,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
     import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
     import { USDZLoader } from "three/addons/loaders/USDZLoader.js";
     import { MTLLoader } from "three/addons/loaders/MTLLoader.js";
-    
+
     // occtImportJs is loaded via script tag
     // Make it available globally
     window.occtImportJs = window.occtimportjs;
@@ -7556,13 +7556,13 @@ const updatePropertiesPanel = () => {
                 }
 
                 // --- ADDITION: BAKE BUTTON (For all parametric shapes) ---
-                container.innerHTML += `
+                container.insertAdjacentHTML('beforeend', `
                 <div class="border-top pt-2 mt-2">
                     <button class="btn btn-sm btn-outline-secondary w-100" onclick="window.subdivideObject()">
                         <i class="bi bi-grid-3x3"></i> Bake & Subdivide
                     </button>
                     <small class="text-muted" style="font-size:0.65rem">Converts shape to raw mesh</small>
-                </div>`;
+                </div>`);
 
             } else {
                 // --- ADDITION: RAW MESH UI (Imported/Merged) ---
@@ -8437,51 +8437,83 @@ window.dImportFile = function(input) {
     window.loadSTEPFile = async function(file, url) {
         try {
             console.log('Loading STEP file:', file.name);
-            
+
             // Initialize OCCT if not already done
             if (!window.occtInstance) {
                 console.log('Initializing OCCT...');
                 window.occtInstance = await window.occtImportJs();
                 console.log('OCCT initialized');
             }
-            
+
             // Read the file as ArrayBuffer
             const response = await fetch(url);
             const buffer = await response.arrayBuffer();
             const fileBuffer = new Uint8Array(buffer);
-            
+
             // Import the STEP file
             const result = window.occtInstance.ReadStepFile(fileBuffer, null);
-            
+
             if (!result.success) {
                 throw new Error('Failed to import STEP file');
             }
-            
+
             console.log('STEP loaded, result:', result);
+            console.log('Available mesh data keys:', result.meshes ? Object.keys(result.meshes[0] || {}) : 'no meshes');
             
-            // Process the hierarchical structure - meshes from STEP are already positioned correctly
-            // No need to apply transformations as they're already in world coordinates
-            if (result.root && result.root.children && result.root.children.length > 0) {
-                const child = result.root.children[0];
-                if (child.meshes) {
-                    child.meshes.forEach(meshIndex => {
-                        const meshData = result.meshes[meshIndex];
-                        if (meshData) {
-                            createSTEPMesh(meshData, file.name);
+            // Track placed meshes to avoid duplicates
+            const placedMeshIds = new Set();
+            
+            // Function to process a node in the STEP hierarchy with transformations
+            function processSTEPNode(node, parentTransform, meshes, baseName) {
+                if (!node) return;
+                
+                // Calculate this node's transformation by combining with parent
+                let nodeTransform = parentTransform;
+                
+                // Check if this node has its own transformation
+                if (node.transformation || node.matrix) {
+                    nodeTransform = node.transformation || node.matrix;
+                }
+                
+                // Process meshes at this node
+                if (node.meshes) {
+                    node.meshes.forEach(meshIndex => {
+                        const meshData = meshes[meshIndex];
+                        if (meshData && !placedMeshIds.has(meshIndex)) {
+                            placedMeshIds.add(meshIndex);
+                            
+                            // Combine node transform with mesh-specific transform
+                            const combinedTransform = nodeTransform ? 
+                                { ...nodeTransform, ...meshData.transformation } : 
+                                meshData.transformation;
+                            
+                            // Create mesh with combined transformation
+                            createSTEPMeshWithTransform(meshData, baseName, combinedTransform);
                         }
                     });
                 }
-                // Also process any nested children
-                if (child.children) {
-                    processSTEPTreeNoMatrix(child, result.meshes, file.name);
+                
+                // Recursively process children
+                if (node.children) {
+                    node.children.forEach(child => processSTEPNode(child, nodeTransform, meshes, baseName));
                 }
-            } else if (result.meshes) {
-                // Fallback: just process all meshes directly
-                result.meshes.forEach((meshData, index) => {
-                    createSTEPMesh(meshData, file.name + ' (Part ' + (index + 1) + ')');
-                });
             }
             
+            // Start processing from root
+            if (result.root) {
+                processSTEPNode(result.root, null, result.meshes, file.name);
+            }
+            
+            // Fallback: if no meshes were placed, try direct processing
+            if (placedMeshIds.size === 0 && result.meshes && result.meshes.length > 0) {
+                console.log('No hierarchy processed, using direct mesh processing');
+                result.meshes.forEach((meshData, index) => {
+                    if (meshData) {
+                        createSTEPMeshWithTransform(meshData, file.name + ' (Part ' + (index + 1) + ')', null);
+                    }
+                });
+            }
+
         } catch (error) {
             console.error('Error loading STEP file:', error);
             alert('Error loading STEP file: ' + error.message);
@@ -8491,7 +8523,7 @@ window.dImportFile = function(input) {
     // Process STEP tree without matrix transformations
     window.processSTEPTreeNoMatrix = function(node, allMeshes, baseName) {
         if (!node || !node.children) return;
-        
+
         node.children.forEach(childNode => {
             if (childNode.meshes) {
                 childNode.meshes.forEach(meshIndex => {
@@ -8507,49 +8539,98 @@ window.dImportFile = function(input) {
         });
     };
 
-    // Create a single STEP mesh - positions are already correct from STEP file
-    window.createSTEPMesh = function(meshData, baseName) {
+    // Create a single STEP mesh with transformation
+    window.createSTEPMeshWithTransform = function(meshData, baseName, transform) {
         // Create Three.js geometry from the mesh data
         const geometry = new THREE.BufferGeometry();
-        
+
         if (meshData.attributes && meshData.attributes.position) {
             geometry.setAttribute('position', new THREE.Float32BufferAttribute(
                 meshData.attributes.position.array, 3
             ));
         }
-        
+
         if (meshData.attributes && meshData.attributes.normal) {
             geometry.setAttribute('normal', new THREE.Float32BufferAttribute(
                 meshData.attributes.normal.array, 3
             ));
         }
-        
+
         if (meshData.index) {
             geometry.setIndex(new THREE.Uint32BufferAttribute(
                 meshData.index.array, 1
             ));
         }
-        
+
         geometry.computeVertexNormals();
-        
+
         // Get the name
         const objName = meshData.name ? meshData.name : baseName;
-        
+
         // Create material with color from STEP file
         const material = new THREE.MeshStandardMaterial({
-            color: meshData.color ? 
+            color: meshData.color ?
                 new THREE.Color(meshData.color[0], meshData.color[1], meshData.color[2]) :
                 0x888888,
             metalness: 0.3,
             roughness: 0.7
         });
-        
-        // Create mesh - no transformation needed, positions are from STEP file
+
+        // Create mesh
         const mesh = new THREE.Mesh(geometry, material);
         mesh.name = objName;
-        
-        // Add to scene
+
+        // Apply transformation from the STEP file
+        // The transformation includes position, rotation (quaternion), and scale
+        if (transform) {
+            // Check for position array [x, y, z]
+            if (transform.position && Array.isArray(transform.position)) {
+                mesh.position.set(transform.position[0] || 0, transform.position[1] || 0, transform.position[2] || 0);
+            } else if (transform.position) {
+                mesh.position.copy(transform.position);
+            }
+            
+            // Check for rotation quaternion [x, y, z, w]
+            if (transform.rotation && Array.isArray(transform.rotation)) {
+                mesh.quaternion.set(transform.rotation[0] || 0, transform.rotation[1] || 0, transform.rotation[2] || 0, transform.rotation[3] || 1);
+            } else if (transform.quaternion) {
+                mesh.quaternion.copy(transform.quaternion);
+            }
+            
+            // Check for scale [x, y, z]
+            if (transform.scale && Array.isArray(transform.scale)) {
+                mesh.scale.set(transform.scale[0] || 1, transform.scale[1] || 1, transform.scale[2] || 1);
+            }
+            
+            console.log('Applied transform to:', objName, { position: mesh.position, quaternion: mesh.quaternion, scale: mesh.scale });
+        } else {
+            // Default position - place above the ground plane with some spacing for multiple parts
+            const meshCount = scene.children.filter(c => c.isMesh && c.userData.name && c.userData.name.includes('Part')).length;
+            mesh.position.set(0, 0, 10 + meshCount * 20);
+        }
+
+        // Add to scene using buildAndAddMesh which handles proper setup
         buildAndAddMesh(geometry, objName, null, material);
+        
+        // Override the position with our transformed position
+        const lastObj = scene.children[scene.children.length - 1];
+        if (lastObj && lastObj.isMesh && lastObj.userData.name === objName) {
+            if (transform) {
+                lastObj.position.copy(mesh.position);
+                lastObj.quaternion.copy(mesh.quaternion);
+                lastObj.scale.copy(mesh.scale);
+            } else {
+                // Space out multiple parts if no transformation
+                const meshCount = scene.children.filter(c => c.isMesh && c.userData.name && c.userData.name.includes('Part')).length;
+                lastObj.position.set(0, 0, 10 + meshCount * 20);
+            }
+        }
+    };
+
+    // Create a single STEP mesh - extracts transformation from meshData and applies it
+    window.createSTEPMesh = function(meshData, baseName) {
+        // Delegate to the transform version
+        createSTEPMeshWithTransform(meshData, baseName, meshData.transformation || meshData.matrix);
     };
 
     window.triggerExport = () => window.downloadExport(document.getElementById("export-format").value);

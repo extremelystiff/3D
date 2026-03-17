@@ -7877,7 +7877,7 @@ function cleanObject(obj) {
             const clone = obj.clone();
             if(clone.material) clone.material = obj.material.clone();
             clone.material.emissive.setHex(0);
-            clone.position.add(new THREE.Vector3(10, 0, 0));
+            clone.position.add(new THREE.Vector3(0, 0, 0));
             clone.userData = JSON.parse(JSON.stringify(obj.userData));
             clone.userData.name = obj.userData.name + " (Copy)";
             clone.userData.markForMerge = false;

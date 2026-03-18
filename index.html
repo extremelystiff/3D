@@ -504,6 +504,20 @@
         display: none;
     }
 
+    /* Extrude Controls Panel */
+    .float-extrude-controls {
+        top: 80px;
+        right: 20px;
+        width: 260px;
+        z-index: 200;
+    }
+    
+    .float-extrude-controls .btn-check:checked + .btn {
+        background-color: var(--ui-accent);
+        border-color: var(--ui-accent);
+        color: white;
+    }
+
     /* Export Modal */
     .float-export {
         top: 50%;
@@ -1386,6 +1400,110 @@
         </div>
     </div>
 
+    <!-- Extrude Controls Panel -->
+    <div class="float-panel float-extrude-controls" id="extrude-controls-panel" style="display: none;">
+        <div class="d-flex justify-content-between border-bottom pb-2 mb-2">
+            <span class="panel-title"><i class="bi bi-arrows-expand"></i> Extrude Controls</span>
+        </div>
+        
+        <!-- Shape Type -->
+        <div class="mb-3">
+            <label class="small text-muted mb-1 d-block">Shape Type</label>
+            <div class="btn-group w-100" role="group">
+                <input type="radio" class="btn-check" name="extrudeShape" id="shape-face" value="face" checked>
+                <label class="btn btn-sm btn-outline-primary" for="shape-face">Face</label>
+                <input type="radio" class="btn-check" name="extrudeShape" id="shape-circle" value="circle">
+                <label class="btn btn-sm btn-outline-primary" for="shape-circle">Circle</label>
+                <input type="radio" class="btn-check" name="extrudeShape" id="shape-square" value="square">
+                <label class="btn btn-sm btn-outline-primary" for="shape-square">Square</label>
+                <input type="radio" class="btn-check" name="extrudeShape" id="shape-custom" value="custom">
+                <label class="btn btn-sm btn-outline-primary" for="shape-custom">Custom</label>
+            </div>
+        </div>
+        
+        <!-- Custom Polygon Controls -->
+        <div id="custom-polygon-controls" class="mb-3 pt-2 border-top" style="display: none;">
+            <div class="d-flex gap-2 mb-2">
+                <button class="btn btn-sm btn-primary flex-grow-1" id="btn-start-drawing" onclick="window.startCustomPolygon()">
+                    <i class="bi bi-pencil"></i> Draw Polygon
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="window.clearCustomPolygon()" title="Clear points">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+            <div class="small text-muted">
+                Click on surface to add vertices. Click "Done" to finish.
+            </div>
+            <div class="d-flex gap-2 mt-2">
+                <button class="btn btn-sm btn-success flex-grow-1" id="btn-finish-drawing" onclick="window.finishCustomPolygon()" disabled>
+                    Done
+                </button>
+            </div>
+        </div>
+        
+        <!-- Shape Dimensions -->
+        <div id="shape-dimensions" class="mb-3 pt-2 border-top" style="display: none;">
+            <label class="small text-muted mb-1 d-block">Shape Dimensions</label>
+            <div class="row g-2">
+                <div class="col-6" id="dim-width-container">
+                    <input type="number" id="extrude-dim-width" class="form-control form-control-sm" placeholder="Width" value="10" step="0.5">
+                </div>
+                <div class="col-6" id="dim-height-container">
+                    <input type="number" id="extrude-dim-height" class="form-control form-control-sm" placeholder="Height" value="10" step="0.5">
+                </div>
+                <div class="col-6" id="dim-radius-container" style="display: none;">
+                    <input type="number" id="extrude-dim-radius" class="form-control form-control-sm" placeholder="Radius" value="5" step="0.5">
+                </div>
+                <div class="col-12 mt-2" id="dim-sides-container" style="display: none;">
+                    <label class="small text-muted">Circle Sides: <span id="circle-sides-value">32</span></label>
+                    <input type="range" id="extrude-dim-sides" class="form-range" min="3" max="64" value="32" oninput="document.getElementById('circle-sides-value').innerText=this.value; window.onExtrudeParamChange()">
+                </div>
+            </div>
+        </div>
+        
+        <!-- Extrude Parameters -->
+        <div class="mb-3 pt-2 border-top">
+            <label class="small text-muted mb-1 d-block">Extrude Parameters</label>
+            <div class="row g-2">
+                <div class="col-12">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">Height</span>
+                        <input type="number" id="extrude-height" class="form-control" placeholder="mm" value="5" step="0.5">
+                        <button class="btn btn-outline-secondary" type="button" onclick="window.applyExtrudeParams()">Apply</button>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">Taper</span>
+                        <input type="number" id="extrude-taper" class="form-control" placeholder="%" value="100" min="0" max="200">
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">Skew X</span>
+                        <input type="number" id="extrude-skew-x" class="form-control" value="0" step="0.5">
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">Skew Y</span>
+                        <input type="number" id="extrude-skew-y" class="form-control" value="0" step="0.5">
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-success flex-grow-1" onclick="window.commitExtrude()">
+                <i class="bi bi-check-lg"></i> Extrude
+            </button>
+            <button class="btn btn-sm btn-outline-danger" onclick="window.cancelExtrude()">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+    </div>
+
     <!-- Export Panel -->
     <div class="float-panel float-export" id="export-panel">
         <div class="d-flex justify-content-between mb-3 border-bottom pb-2">
@@ -1648,6 +1766,11 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
     let isExtrudeDragging = false;
     let extrudeState = -1; // -1=Off, 0=Select, 1=Height, 2=Taper
     let extrudeData = null;
+    let extrudeSelectedFaces = []; // Track multiple selected faces for multi-select extrude
+    let extrudeHighlightMeshes = []; // Track multiple highlight meshes
+    let isDrawingCustomPolygon = false; // Custom polygon drawing mode
+    let customPolygonPoints = []; // Points for custom polygon
+    let customPolygonPreviewLine = null; // Preview line during drawing
 
 
     // --- OPTIMIZATION GLOBALS ---
@@ -5689,7 +5812,7 @@ const onPointerUp = e => {
     ray.setFromCamera(mouse, cam);
 
     // 2. Extrude Tool (High Priority)
-    if(window.handleExtrudeClick && window.handleExtrudeClick(ray)) return;
+    if(window.handleExtrudeClick && window.handleExtrudeClick(ray, e)) return;
 
     // 3. Lift Tool (High Priority)
     if (isLifting) {
@@ -5907,7 +6030,31 @@ window.handleShellFaceClick = (hit) => {
 function getConnectedFlatSurface(mesh, startFaceIndex, targetNormal) {
         const geo = mesh.geometry;
         const posAttr = geo.attributes.position;
-        const count = posAttr.count;
+        const indexAttr = geo.index; // Handle indexed geometries
+        
+        // Determine the actual number of faces
+        let totalFaces;
+        let getVertexIndex;
+        
+        if (indexAttr) {
+            // Indexed geometry: use index buffer
+            totalFaces = indexAttr.count / 3;
+            getVertexIndex = (faceIdx, localVertIdx) => {
+                return indexAttr.getX(faceIdx * 3 + localVertIdx);
+            };
+        } else {
+            // Non-indexed geometry: position count directly maps to faces
+            totalFaces = posAttr.count / 3;
+            getVertexIndex = (faceIdx, localVertIdx) => {
+                return faceIdx * 3 + localVertIdx;
+            };
+        }
+
+        // Validate startFaceIndex
+        if (startFaceIndex >= totalFaces || startFaceIndex < 0) {
+            console.error('Invalid start face index:', startFaceIndex, 'of', totalFaces);
+            return { indices: [] };
+        }
 
         // 1. Helper: Lower precision key to bridge CSG gaps
         // Using *10 instead of *100 allows vertices within ~0.1 to match
@@ -5922,9 +6069,16 @@ function getConnectedFlatSurface(mesh, startFaceIndex, targetNormal) {
         const _cb = new THREE.Vector3(), _ab = new THREE.Vector3();
 
         const getFaceNormal = (faceIdx, target) => {
-            const a = faceIdx * 3;
-            const b = faceIdx * 3 + 1;
-            const c = faceIdx * 3 + 2;
+            const a = getVertexIndex(faceIdx, 0);
+            const b = getVertexIndex(faceIdx, 1);
+            const c = getVertexIndex(faceIdx, 2);
+            
+            // Validate indices are within bounds
+            if (a >= posAttr.count || b >= posAttr.count || c >= posAttr.count) {
+                target.set(0, 0, 0);
+                return;
+            }
+            
             _vA.fromBufferAttribute(posAttr, a);
             _vB.fromBufferAttribute(posAttr, b);
             _vC.fromBufferAttribute(posAttr, c);
@@ -5936,11 +6090,13 @@ function getConnectedFlatSurface(mesh, startFaceIndex, targetNormal) {
 
         // 2. Build Adjacency Graph
         const vertToFaces = {};
-        const totalFaces = count / 3;
 
         for (let f = 0; f < totalFaces; f++) {
             for (let v = 0; v < 3; v++) {
-                const key = getVertKey(f * 3 + v);
+                const vertIdx = getVertexIndex(f, v);
+                // Skip invalid indices
+                if (vertIdx >= posAttr.count) continue;
+                const key = getVertKey(vertIdx);
                 if (!vertToFaces[key]) vertToFaces[key] = [];
                 vertToFaces[key].push(f);
             }
@@ -5958,7 +6114,8 @@ function getConnectedFlatSurface(mesh, startFaceIndex, targetNormal) {
 
             // Check all 3 vertices to find neighbors
             for (let v = 0; v < 3; v++) {
-                const key = getVertKey(currentFace * 3 + v);
+                const currentVertIdx = getVertexIndex(currentFace, v);
+                const key = getVertKey(currentVertIdx);
                 const neighbors = vertToFaces[key];
 
                 if (neighbors) {
@@ -5974,9 +6131,9 @@ function getConnectedFlatSurface(mesh, startFaceIndex, targetNormal) {
                             // This fixes the "Ring" issue.
                             let sharedVerts = 0;
                             for(let k=0; k<3; k++) {
-                                const kKey = getVertKey(currentFace * 3 + k);
+                                const kKey = getVertKey(getVertexIndex(currentFace, k));
                                 for(let j=0; j<3; j++) {
-                                    if(kKey === getVertKey(n * 3 + j)) sharedVerts++;
+                                    if(kKey === getVertKey(getVertexIndex(n, j))) sharedVerts++;
                                 }
                             }
 
@@ -5995,7 +6152,7 @@ function getConnectedFlatSurface(mesh, startFaceIndex, targetNormal) {
             indices.push(f * 3, f * 3 + 1, f * 3 + 2);
         });
 
-        return { indices };
+        return { indices, isIndexed: !!indexAttr };
     }
 
 
@@ -10052,6 +10209,25 @@ window.dExtrude = () => {
     if(selectedObjects.length > 0) selectObject(null);
     extrudeState = 0;
     extrudeData = null;
+    
+    // Clean up previous selections
+    extrudeSelectedFaces = [];
+    if (extrudeHighlightMeshes) {
+        Object.values(extrudeHighlightMeshes).forEach(mesh => {
+            if (mesh) {
+                scene.remove(mesh);
+                mesh.geometry.dispose();
+                mesh.material.dispose();
+            }
+        });
+    }
+    extrudeHighlightMeshes = [];
+    if (extrudeHighlightMesh) {
+        scene.remove(extrudeHighlightMesh);
+        extrudeHighlightMesh.geometry.dispose();
+        extrudeHighlightMesh.material.dispose();
+        extrudeHighlightMesh = null;
+    }
 
     document.body.style.cursor = 'crosshair';
     document.querySelectorAll(".btn-tool").forEach(b => b.classList.remove("active-tool"));
@@ -10059,8 +10235,300 @@ window.dExtrude = () => {
     if(btn) btn.classList.add('active-tool');
 
     const status = document.getElementById("auto-save-status");
-    status.innerText = "Step 1: Click a FACE to extrude";
+    status.innerText = "Step 1: Click a FACE to extrude (Shift+Click for multi-select)";
     status.style.opacity = 1;
+    
+    // Show the extrude controls panel
+    const panel = document.getElementById('extrude-controls-panel');
+    panel.style.display = 'block';
+    
+    // Stop propagation on panel to prevent tool from capturing clicks
+    panel.addEventListener('click', (e) => e.stopPropagation());
+    panel.addEventListener('pointerdown', (e) => e.stopPropagation());
+    panel.addEventListener('pointerup', (e) => e.stopPropagation());
+    
+    // Stop propagation on all inputs
+    panel.querySelectorAll('input, select, button').forEach(el => {
+        el.addEventListener('click', (e) => e.stopPropagation());
+        el.addEventListener('pointerdown', (e) => e.stopPropagation());
+        el.addEventListener('pointerup', (e) => e.stopPropagation());
+    });
+    
+    // Set up shape type change handler
+    const shapeInputs = document.querySelectorAll('input[name="extrudeShape"]');
+    shapeInputs.forEach(input => {
+        input.addEventListener('change', window.onExtrudeShapeChange);
+    });
+    
+    // Set up input change handlers
+    document.getElementById('extrude-height').addEventListener('input', window.onExtrudeParamChange);
+    document.getElementById('extrude-taper').addEventListener('input', window.onExtrudeParamChange);
+    document.getElementById('extrude-skew-x').addEventListener('input', window.onExtrudeParamChange);
+    document.getElementById('extrude-skew-y').addEventListener('input', window.onExtrudeParamChange);
+    document.getElementById('extrude-dim-width').addEventListener('input', window.onExtrudeParamChange);
+    document.getElementById('extrude-dim-height').addEventListener('input', window.onExtrudeParamChange);
+    document.getElementById('extrude-dim-radius').addEventListener('input', window.onExtrudeParamChange);
+};
+
+// Handle shape type change
+window.onExtrudeShapeChange = function() {
+    const shape = document.querySelector('input[name="extrudeShape"]:checked').value;
+    const dimsContainer = document.getElementById('shape-dimensions');
+    const customControls = document.getElementById('custom-polygon-controls');
+    const widthContainer = document.getElementById('dim-width-container');
+    const heightContainer = document.getElementById('dim-height-container');
+    const radiusContainer = document.getElementById('dim-radius-container');
+    const sidesContainer = document.getElementById('dim-sides-container');
+    
+    if (shape === 'face') {
+        dimsContainer.style.display = 'none';
+        customControls.style.display = 'none';
+        sidesContainer.style.display = 'none';
+    } else if (shape === 'custom') {
+        dimsContainer.style.display = 'none';
+        customControls.style.display = 'block';
+        sidesContainer.style.display = 'none';
+    } else {
+        dimsContainer.style.display = 'block';
+        customControls.style.display = 'none';
+        
+        if (shape === 'circle') {
+            widthContainer.style.display = 'none';
+            heightContainer.style.display = 'none';
+            radiusContainer.style.display = 'block';
+            sidesContainer.style.display = 'block';
+        } else if (shape === 'square') {
+            widthContainer.style.display = 'block';
+            heightContainer.style.display = 'block';
+            radiusContainer.style.display = 'none';
+            sidesContainer.style.display = 'none';
+        }
+    }
+    
+    window.updateExtrudePreview();
+};
+
+// Handle parameter change
+window.onExtrudeParamChange = function() {
+    window.updateExtrudePreview();
+};
+
+// Update extrude preview based on controls
+window.updateExtrudePreview = function() {
+    if (!extrudeData || !extrudeData.ghost) return;
+    
+    const height = parseFloat(document.getElementById('extrude-height').value) || 5;
+    const taper = parseFloat(document.getElementById('extrude-taper').value) || 100;
+    const skewX = parseFloat(document.getElementById('extrude-skew-x').value) || 0;
+    const skewY = parseFloat(document.getElementById('extrude-skew-y').value) || 0;
+    
+    extrudeData.currentHeight = height;
+    extrudeData.currentScale = taper / 100;
+    extrudeData.currentSkew = new THREE.Vector3(skewX, skewY, 0);
+    
+    // Update shape dimensions if using shape-based extrusion
+    if (extrudeData.shapeType && extrudeData.shapeType !== 'face') {
+        extrudeData.shapeDimensions = {
+            width: parseFloat(document.getElementById('extrude-dim-width').value) || 10,
+            height: parseFloat(document.getElementById('extrude-dim-height').value) || 10,
+            radius: parseFloat(document.getElementById('extrude-dim-radius').value) || 5
+        };
+    }
+    
+    window.updateExtrudeGhost();
+    
+    // Force render update
+    if (typeof window.requestRender === 'function') {
+        window.requestRender();
+    }
+};
+
+// Apply parameters button
+window.applyExtrudeParams = function() {
+    window.updateExtrudePreview();
+};
+
+// Start custom polygon drawing mode
+window.startCustomPolygon = function() {
+    isDrawingCustomPolygon = true;
+    customPolygonPoints = [];
+    
+    // Clean up existing preview
+    if (customPolygonPreviewLine) {
+        scene.remove(customPolygonPreviewLine);
+        customPolygonPreviewLine.geometry.dispose();
+        customPolygonPreviewLine.material.dispose();
+        customPolygonPreviewLine = null;
+    }
+    
+    // Remove any existing markers
+    scene.children.filter(c => c.userData && c.userData.isPolygonMarker).forEach(m => {
+        scene.remove(m);
+        m.geometry.dispose();
+        m.material.dispose();
+    });
+    
+    document.getElementById('btn-start-drawing').disabled = true;
+    document.getElementById('btn-finish-drawing').disabled = false;
+    document.getElementById("auto-save-status").innerText = "Click on surface to add polygon vertices";
+    document.body.style.cursor = 'crosshair';
+};
+
+// Clear custom polygon
+window.clearCustomPolygon = function() {
+    customPolygonPoints = [];
+    isDrawingCustomPolygon = false;
+    
+    if (customPolygonPreviewLine) {
+        scene.remove(customPolygonPreviewLine);
+        customPolygonPreviewLine.geometry.dispose();
+        customPolygonPreviewLine.material.dispose();
+        customPolygonPreviewLine = null;
+    }
+    
+    // Remove markers
+    scene.children.filter(c => c.userData && c.userData.isPolygonMarker).forEach(m => {
+        scene.remove(m);
+        m.geometry.dispose();
+        m.material.dispose();
+    });
+    
+    document.getElementById('btn-start-drawing').disabled = false;
+    document.getElementById('btn-finish-drawing').disabled = true;
+    document.getElementById("auto-save-status").innerText = "Click a FACE or select shape to extrude";
+};
+
+// Finish custom polygon
+window.finishCustomPolygon = function() {
+    if (customPolygonPoints.length < 3) {
+        alert('Please add at least 3 points to create a polygon');
+        return;
+    }
+    
+    isDrawingCustomPolygon = false;
+    
+    document.getElementById('btn-start-drawing').disabled = false;
+    document.getElementById('btn-finish-drawing').disabled = true;
+    document.getElementById("auto-save-status").innerText = 
+        `Polygon created with ${customPolygonPoints.length} points - Click surface to place`;
+    document.body.style.cursor = 'crosshair';
+    
+    window.requestRender();
+};
+
+// Add point to custom polygon (called from click handler)
+window.addCustomPolygonPoint = function(point, normal) {
+    if (!isDrawingCustomPolygon) return false;
+    
+    customPolygonPoints.push({ point: point.clone(), normal: normal.clone() });
+    
+    // Update preview line
+    updateCustomPolygonPreview();
+    
+    document.getElementById("auto-save-status").innerText = 
+        `Points: ${customPolygonPoints.length} - Click to add more or press Done`;
+    
+    return true;
+};
+
+// Update preview line during polygon drawing
+function updateCustomPolygonPreview() {
+    if (customPolygonPreviewLine) {
+        scene.remove(customPolygonPreviewLine);
+        customPolygonPreviewLine.geometry.dispose();
+        customPolygonPreviewLine.material.dispose();
+    }
+    
+    if (customPolygonPoints.length < 2) return;
+    
+    const points = customPolygonPoints.map(p => p.point);
+    // Add first point again to close the loop visually
+    if (customPolygonPoints.length >= 3) {
+        points.push(customPolygonPoints[0].point);
+    }
+    
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const material = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 2 });
+    customPolygonPreviewLine = new THREE.Line(geometry, material);
+    scene.add(customPolygonPreviewLine);
+    
+    // Add vertex markers
+    customPolygonPoints.forEach((p, i) => {
+        const markerGeo = new THREE.SphereGeometry(0.5, 8, 8);
+        const markerMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+        const marker = new THREE.Mesh(markerGeo, markerMat);
+        marker.position.copy(p.point);
+        marker.userData = { isPolygonMarker: true };
+        scene.add(marker);
+    });
+}
+
+// Commit extrude
+window.commitExtrude = function() {
+    // Can commit from stage 1 (after selection) or stage 3
+    if (extrudeState === 1 || extrudeState === 3) {
+        window.finishExtrude();
+    }
+};
+
+// Cancel extrude
+window.cancelExtrude = function() {
+    // Detach transform gizmo
+    if (typeof tCtrl !== 'undefined') {
+        tCtrl.detach();
+    }
+    
+    // Clean up
+    if (extrudeData && extrudeData.ghost) {
+        scene.remove(extrudeData.ghost);
+    }
+    extrudeSelectedFaces = [];
+    if (extrudeHighlightMeshes) {
+        Object.values(extrudeHighlightMeshes).forEach(mesh => {
+            if (mesh) {
+                scene.remove(mesh);
+                mesh.geometry.dispose();
+                mesh.material.dispose();
+            }
+        });
+    }
+    extrudeHighlightMeshes = [];
+    if (extrudeHighlightMesh) {
+        scene.remove(extrudeHighlightMesh);
+        extrudeHighlightMesh.geometry.dispose();
+        extrudeHighlightMesh.material.dispose();
+        extrudeHighlightMesh = null;
+    }
+    
+    // Clean up custom polygon markers
+    if (customPolygonPreviewLine) {
+        scene.remove(customPolygonPreviewLine);
+        customPolygonPreviewLine.geometry.dispose();
+        customPolygonPreviewLine.material.dispose();
+        customPolygonPreviewLine = null;
+    }
+    scene.children.filter(c => c.userData && c.userData.isPolygonMarker).forEach(m => {
+        scene.remove(m);
+        m.geometry.dispose();
+        m.material.dispose();
+    });
+    customPolygonPoints = [];
+    isDrawingCustomPolygon = false;
+    
+    extrudeData = null;
+    extrudeState = -1;
+    
+    // Hide controls panel
+    document.getElementById('extrude-controls-panel').style.display = 'none';
+    
+    document.body.style.cursor = 'default';
+    document.querySelectorAll(".btn-tool").forEach(b => b.classList.remove("active-tool"));
+    window.setMode('translate');
+    
+    document.getElementById("auto-save-status").innerText = "Done";
+    setTimeout(() => document.getElementById("auto-save-status").style.opacity = 0, 1000);
+    
+    window.requestRender();
 };
 
 // HELPER: Create Extrusion with Taper AND Skew (Offset)
@@ -10069,13 +10537,160 @@ window.dExtrude = () => {
 // HELPER: Create Extrusion (Position-Based Topology)
 // Fixes "Spikes" and "Internal Walls" on complex shapes
 // HELPER: Create Extrusion (Position-Based Topology) with Normal Fix
+
+// Create shape-based extrusion (circle, square, etc.)
+function createShapeExtrusion(shapeType, dimensions, height, localNormal, taperScale = 1.0, skewOffset = new THREE.Vector3(0,0,0), sides = 32) {
+    let shape;
+    const center = new THREE.Vector3(0, 0, 0);
+    
+    if (shapeType === 'circle') {
+        const radius = dimensions.radius || 5;
+        shape = new THREE.Shape();
+        // Create circle with specified number of sides
+        const segments = Math.max(3, Math.min(64, sides));
+        for (let i = 0; i <= segments; i++) {
+            const angle = (i / segments) * Math.PI * 2;
+            const x = Math.cos(angle) * radius;
+            const y = Math.sin(angle) * radius;
+            if (i === 0) {
+                shape.moveTo(x, y);
+            } else {
+                shape.lineTo(x, y);
+            }
+        }
+    } else if (shapeType === 'square') {
+        const width = dimensions.width || 10;
+        const heightDim = dimensions.height || 10;
+        const hw = width / 2;
+        const hh = heightDim / 2;
+        shape = new THREE.Shape();
+        shape.moveTo(-hw, -hh);
+        shape.lineTo(hw, -hh);
+        shape.lineTo(hw, hh);
+        shape.lineTo(-hw, hh);
+        shape.lineTo(-hw, -hh);
+    } else {
+        return null;
+    }
+    
+    const extrudeSettings = {
+        depth: Math.abs(height),
+        bevelEnabled: false,
+        steps: 1
+    };
+    
+    const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+    
+    // Apply taper by scaling the top vertices
+    if (taperScale !== 1.0) {
+        const positions = geometry.attributes.position;
+        for (let i = 0; i < positions.count; i++) {
+            const z = positions.getZ(i);
+            if (z > 0) { // Top vertices
+                positions.setX(i, positions.getX(i) * taperScale);
+                positions.setY(i, positions.getY(i) * taperScale);
+            }
+        }
+        positions.needsUpdate = true;
+    }
+    
+    // Apply skew
+    if (skewOffset.x !== 0 || skewOffset.y !== 0) {
+        const positions = geometry.attributes.position;
+        for (let i = 0; i < positions.count; i++) {
+            const z = positions.getZ(i);
+            const skewFactor = z / Math.abs(height);
+            positions.setX(i, positions.getX(i) + skewOffset.x * skewFactor);
+            positions.setY(i, positions.getY(i) + skewOffset.y * skewFactor);
+        }
+        positions.needsUpdate = true;
+    }
+    
+    // Rotate to align with surface normal
+    const quaternion = new THREE.Quaternion();
+    quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), localNormal);
+    geometry.applyQuaternion(quaternion);
+    
+    return geometry;
+}
+
+// Create custom polygon extrusion from drawn points
+function createCustomPolygonExtrusion(points, height, localNormal) {
+    if (points.length < 3) return null;
+    
+    // Create shape from points (project onto the surface plane)
+    const shape = new THREE.Shape();
+    
+    // Find centroid
+    const centroid = new THREE.Vector3();
+    points.forEach(p => centroid.add(p));
+    centroid.divideScalar(points.length);
+    
+    // Project points onto the plane defined by localNormal
+    // and create shape relative to centroid
+    const projectedPoints = points.map(p => {
+        const rel = new THREE.Vector3().subVectors(p, centroid);
+        // Project onto the plane (just take X, Y in local coords)
+        return { x: rel.x, y: rel.y };
+    });
+    
+    shape.moveTo(projectedPoints[0].x, projectedPoints[0].y);
+    for (let i = 1; i < projectedPoints.length; i++) {
+        shape.lineTo(projectedPoints[i].x, projectedPoints[i].y);
+    }
+    shape.lineTo(projectedPoints[0].x, projectedPoints[0].y);
+    
+    const extrudeSettings = {
+        depth: Math.abs(height),
+        bevelEnabled: false,
+        steps: 1
+    };
+    
+    const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+    
+    // Rotate to align with surface normal
+    const quaternion = new THREE.Quaternion();
+    quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), localNormal);
+    geometry.applyQuaternion(quaternion);
+    
+    return geometry;
+}
+
 function createExtrusionGeo(mesh, indices, height, localNormal, taperScale = 1.0, skewOffset = new THREE.Vector3(0,0,0), startOffset = 0) {
     const posAttr = mesh.geometry.attributes.position;
+    const indexAttr = mesh.geometry.index; // Handle indexed geometries
 
     // 1. Gather Vertices & Map Indices to Positions
     const triVerts = [];
     for(let i=0; i<indices.length; i++) {
-        triVerts.push(new THREE.Vector3().fromBufferAttribute(posAttr, indices[i]));
+        let vertexIndex = indices[i];
+        
+        // For indexed geometries, resolve the actual position index
+        if (indexAttr) {
+            vertexIndex = indexAttr.getX(indices[i]);
+        }
+        
+        // Validate the index is within bounds
+        if (vertexIndex >= posAttr.count || vertexIndex < 0) {
+            console.warn('Invalid vertex index:', vertexIndex, 'of', posAttr.count);
+            continue;
+        }
+        
+        const v = new THREE.Vector3().fromBufferAttribute(posAttr, vertexIndex);
+        
+        // Additional safety check - ensure we got valid coordinates
+        if (typeof v.x !== 'number' || typeof v.y !== 'number' || typeof v.z !== 'number') {
+            console.warn('Invalid vertex data at index:', vertexIndex);
+            continue;
+        }
+        
+        triVerts.push(v);
+    }
+
+    // Handle empty or invalid triangle list
+    if (triVerts.length === 0) {
+        console.error('No valid vertices for extrusion');
+        return new THREE.BufferGeometry();
     }
 
     // 2. Calculate Centroid (Using Unique Positions Only)
@@ -10227,8 +10842,69 @@ function getTangentBasis(normal) {
     return { u: tangent, v: bitangent };
 }
 
-window.handleExtrudeClick = (ray) => {
+// Helper function to create surface highlight mesh
+function createSurfaceHighlight(mesh, indices, color) {
+    if (!indices || indices.length === 0) return null;
+    
+    const posAttr = mesh.geometry.attributes.position;
+    const indexAttr = mesh.geometry.index;
+    const positions = [];
+    
+    for (let i = 0; i < indices.length; i++) {
+        let vertexIndex = indices[i];
+        if (indexAttr) {
+            vertexIndex = indexAttr.getX(vertexIndex);
+        }
+        
+        if (vertexIndex >= 0 && vertexIndex < posAttr.count) {
+            positions.push(
+                posAttr.getX(vertexIndex),
+                posAttr.getY(vertexIndex),
+                posAttr.getZ(vertexIndex)
+            );
+        }
+    }
+    
+    if (positions.length === 0) return null;
+    
+    const highlightGeo = new THREE.BufferGeometry();
+    highlightGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    
+    const highlightMat = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0.4,
+        side: THREE.DoubleSide,
+        depthTest: true
+    });
+    
+    const highlightMesh = new THREE.Mesh(highlightGeo, highlightMat);
+    highlightMesh.position.copy(mesh.position);
+    highlightMesh.rotation.copy(mesh.rotation);
+    highlightMesh.scale.copy(mesh.scale);
+    highlightMesh.userData = { isExtrudeHighlight: true };
+    
+    // Add edge highlight
+    const edgeGeo = new THREE.EdgesGeometry(highlightGeo, 15);
+    const edgeColor = color === 0x00ffff ? 0x00ffaa : 0x00ff88;
+    const edgeMat = new THREE.LineBasicMaterial({ 
+        color: edgeColor, 
+        linewidth: 2,
+        transparent: true,
+        opacity: 0.9
+    });
+    const edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
+    highlightMesh.add(edgeLines);
+    
+    scene.add(highlightMesh);
+    return highlightMesh;
+}
+
+window.handleExtrudeClick = (ray, event) => {
     if (typeof extrudeState === 'undefined' || extrudeState === -1) return false;
+    
+    // Check for Shift key for multi-select
+    const isMultiSelect = event && event.shiftKey;
 
     // --- STAGE 3: COMMIT (Finish Skew) ---
     if (extrudeState === 3) {
@@ -10236,20 +10912,22 @@ window.handleExtrudeClick = (ray) => {
         return true;
     }
 
-    // --- STAGE 2: LOCK TAPER (Start Skew) ---
-    if (extrudeState === 2) {
-        extrudeState = 3;
-        extrudeData.startMouseSkew = null;
-        document.getElementById("auto-save-status").innerText = "Step 4: Drag to change ANGLE/SKEW (Click to Finish)";
-        return true;
-    }
-
-    // --- STAGE 1: LOCK HEIGHT (Start Taper) ---
+    // --- STAGE 1: After selection - use input fields for parameters ---
+    // Mouse clicking no longer changes stages - use input fields instead
     if (extrudeState === 1) {
-        extrudeState = 2;
-        extrudeData.startMouseTaper = null;
-        document.getElementById("auto-save-status").innerText = "Step 3: Drag LEFT/RIGHT to Taper";
-        return true;
+        // Check if user clicked on the ghost to re-select it
+        if (extrudeData && extrudeData.ghost) {
+            const ghostIntersects = ray.intersectObject(extrudeData.ghost, true);
+            if (ghostIntersects.length > 0) {
+                // Re-attach transform gizmo to ghost for manipulation
+                if (typeof tCtrl !== 'undefined' && tCtrl) {
+                    tCtrl.attach(extrudeData.ghost);
+                }
+                return true;
+            }
+        }
+        // Just return - let the user use input fields
+        return false;
     }
 
     // --- STAGE 0: SELECT FACE ---
@@ -10261,44 +10939,280 @@ window.handleExtrudeClick = (ray) => {
             const hit = intersects[0];
             const mesh = hit.object;
 
+            // Check for custom polygon drawing mode
+            const selectedShape = document.querySelector('input[name="extrudeShape"]:checked').value;
+            if (selectedShape === 'custom' && customPolygonPoints.length >= 3) {
+                // Place the custom polygon on the surface
+                const localNormal = hit.face.normal.clone().normalize();
+                
+                // Store custom polygon data
+                extrudeData = {
+                    mesh: mesh,
+                    localNormal: localNormal,
+                    worldNormal: hit.face.normal.clone().applyQuaternion(mesh.quaternion).normalize(),
+                    hitPoint: hit.point.clone(),
+                    shapeType: 'custom',
+                    customPoints: customPolygonPoints.map(p => p.point),
+                    startMouse: null,
+                    startMouseTaper: null,
+                    startMouseSkew: null,
+                    currentHeight: parseFloat(document.getElementById('extrude-height').value) || 5,
+                    currentScale: (parseFloat(document.getElementById('extrude-taper').value) || 100) / 100,
+                    currentSkew: new THREE.Vector3(
+                        parseFloat(document.getElementById('extrude-skew-x').value) || 0,
+                        parseFloat(document.getElementById('extrude-skew-y').value) || 0,
+                        0
+                    ),
+                    ghost: null
+                };
+                
+                // Clear polygon markers
+                scene.children.filter(c => c.userData && c.userData.isPolygonMarker).forEach(m => {
+                    scene.remove(m);
+                    m.geometry.dispose();
+                    m.material.dispose();
+                });
+                if (customPolygonPreviewLine) {
+                    scene.remove(customPolygonPreviewLine);
+                    customPolygonPreviewLine.geometry.dispose();
+                    customPolygonPreviewLine.material.dispose();
+                    customPolygonPreviewLine = null;
+                }
+                customPolygonPoints = [];
+                
+                // Create the custom polygon geometry
+                const geo = createCustomPolygonExtrusion(extrudeData.customPoints, extrudeData.currentHeight, localNormal);
+                
+                if (!geo || !geo.attributes.position || geo.attributes.position.count === 0) {
+                    console.error('Failed to create custom polygon geometry');
+                    alert('Failed to create polygon extrusion.');
+                    return false;
+                }
+                
+                // Offset to hit point
+                geo.translate(hit.point.x, hit.point.y, hit.point.z);
+                
+                const mat = new THREE.MeshStandardMaterial({
+                    color: 0xffff00, transparent: true, opacity: 0.8, roughness: 0.2
+                });
+
+                const ghost = new THREE.Mesh(geo, mat);
+                ghost.position.copy(mesh.position);
+                ghost.rotation.copy(mesh.rotation);
+                ghost.scale.copy(mesh.scale);
+                ghost.userData = { isGhost: true };
+
+                scene.add(ghost);
+                extrudeData.ghost = ghost;
+
+                // Attach transform gizmo to ghost for moving/rotating/scaling
+                if (typeof tCtrl !== 'undefined') {
+                    tCtrl.attach(ghost);
+                    // Update preview when gizmo is moved
+                    tCtrl.addEventListener('change', function() {
+                        if (extrudeData && extrudeData.ghost) {
+                            window.requestRender();
+                        }
+                    });
+                }
+                
+                // Change cursor to indicate user can interact with gizmo
+                document.body.style.cursor = 'default';
+                
+                extrudeState = 1;
+                document.getElementById("auto-save-status").innerText = "Use gizmo or input fields to adjust, then click Extrude";
+
+                return true;
+            }
+            
+            // Handle custom polygon point adding
+            if (selectedShape === 'custom') {
+                const normal = hit.face.normal.clone().applyQuaternion(mesh.quaternion).normalize();
+                if (window.addCustomPolygonPoint(hit.point, normal)) {
+                    return true;
+                }
+            }
+
             const surfaceData = getConnectedFlatSurface(mesh, hit.faceIndex, hit.face.normal);
+            
+            // isMultiSelect is now checked at function level from event parameter
+            
+            // Create a unique key for this surface
+            const surfaceKey = mesh.uuid + '_' + hit.faceIndex;
+            
+            // Check if this surface is already selected
+            const existingIndex = extrudeSelectedFaces.findIndex(f => f.key === surfaceKey);
+            
+            if (isMultiSelect) {
+                // Toggle selection
+                if (existingIndex >= 0) {
+                    // Remove from selection
+                    extrudeSelectedFaces.splice(existingIndex, 1);
+                    // Remove highlight mesh
+                    if (extrudeHighlightMeshes[surfaceKey]) {
+                        scene.remove(extrudeHighlightMeshes[surfaceKey]);
+                        extrudeHighlightMeshes[surfaceKey].geometry.dispose();
+                        extrudeHighlightMeshes[surfaceKey].material.dispose();
+                        delete extrudeHighlightMeshes[surfaceKey];
+                    }
+                } else {
+                    // Add to selection
+                    extrudeSelectedFaces.push({
+                        key: surfaceKey,
+                        mesh: mesh,
+                        indices: surfaceData.indices,
+                        localNormal: hit.face.normal.clone().normalize()
+                    });
+                    
+                    // Add highlight for selected surface (cyan color)
+                    const highlightMesh = createSurfaceHighlight(mesh, surfaceData.indices, 0x00ffff);
+                    if (highlightMesh) {
+                        extrudeHighlightMeshes[surfaceKey] = highlightMesh;
+                    }
+                }
+                
+                // Update status
+                if (extrudeSelectedFaces.length > 0) {
+                    document.getElementById("auto-save-status").innerText = 
+                        `Selected: ${extrudeSelectedFaces.length} face(s) - Click to Extrude, Shift+Click to Add/Remove`;
+                } else {
+                    document.getElementById("auto-save-status").innerText = "Step 1: Click a FACE to extrude (Shift+Click for multi-select)";
+                }
+                
+                // Clean up hover highlight
+                if (extrudeHighlightMesh) {
+                    scene.remove(extrudeHighlightMesh);
+                    extrudeHighlightMesh.geometry.dispose();
+                    extrudeHighlightMesh.material.dispose();
+                    extrudeHighlightMesh = null;
+                }
+                
+                return true;
+            }
+            
+            // No Shift - proceed with extrusion
+            // If there are previously selected faces, include them; otherwise just use current face
+            let allIndices = [];
+            let primaryMesh = mesh;
+            let primaryNormal = hit.face.normal.clone().normalize();
+            
+            if (extrudeSelectedFaces.length > 0) {
+                // Add current face to selection
+                extrudeSelectedFaces.push({
+                    key: surfaceKey,
+                    mesh: mesh,
+                    indices: surfaceData.indices,
+                    localNormal: hit.face.normal.clone().normalize()
+                });
+                
+                // Merge all selected faces' indices
+                for (const selected of extrudeSelectedFaces) {
+                    allIndices = allIndices.concat(selected.indices);
+                    primaryMesh = selected.mesh; // Use last selected mesh as primary
+                    primaryNormal = selected.localNormal;
+                }
+            } else {
+                // Single face - just use current face's indices
+                allIndices = surfaceData.indices;
+            }
+            
             const worldNormal = hit.face.normal.clone().applyQuaternion(mesh.quaternion).normalize();
-            const localNormal = hit.face.normal.clone().normalize();
+            const localNormal = primaryNormal;
             const screenDir = getScreenDirection(hit.point, worldNormal, cam, ren);
             const basis = getTangentBasis(localNormal); // For Skewing
 
             extrudeData = {
-                mesh: mesh,
+                mesh: primaryMesh,
                 localNormal: localNormal,
                 worldNormal: worldNormal,
                 screenDir: screenDir,
                 basis: basis,
-                indices: surfaceData.indices,
+                indices: allIndices,
                 startMouse: null,
                 startMouseTaper: null,
                 startMouseSkew: null,
                 currentHeight: 0,
                 currentScale: 1.0,
                 currentSkew: new THREE.Vector3(0,0,0),
-                ghost: null
+                ghost: null,
+                shapeType: document.querySelector('input[name="extrudeShape"]:checked').value,
+                shapeDimensions: {
+                    width: parseFloat(document.getElementById('extrude-dim-width').value) || 10,
+                    height: parseFloat(document.getElementById('extrude-dim-height').value) || 10,
+                    radius: parseFloat(document.getElementById('extrude-dim-radius').value) || 5,
+                    sides: parseInt(document.getElementById('extrude-dim-sides').value) || 32
+                },
+                hitPoint: hit.point.clone()
             };
 
-            const geo = createExtrusionGeo(mesh, surfaceData.indices, 0.1, localNormal);
+            // Create geometry based on shape type
+            let geo;
+            const shapeType = extrudeData.shapeType;
+            
+            if (shapeType === 'face') {
+                geo = createExtrusionGeo(primaryMesh, allIndices, 0.1, localNormal);
+            } else {
+                // Shape-based extrusion (circle, square)
+                const sides = extrudeData.shapeDimensions.sides || 32;
+                geo = createShapeExtrusion(
+                    shapeType,
+                    extrudeData.shapeDimensions,
+                    0.1,
+                    localNormal,
+                    1.0,
+                    new THREE.Vector3(0,0,0),
+                    sides
+                );
+                // Offset to hit point for shapes
+                if (geo) {
+                    geo.translate(hit.point.x, hit.point.y, hit.point.z);
+                }
+            }
+            
+            // Validate geometry was created successfully
+            if (!geo || !geo.attributes.position || geo.attributes.position.count === 0) {
+                console.error('Failed to create extrusion geometry');
+                alert('Failed to create extrusion. Please try a different face.');
+                return false;
+            }
+            
             const mat = new THREE.MeshStandardMaterial({
                 color: 0xffff00, transparent: true, opacity: 0.8, roughness: 0.2
             });
 
             const ghost = new THREE.Mesh(geo, mat);
-            ghost.position.copy(mesh.position);
-            ghost.rotation.copy(mesh.rotation);
-            ghost.scale.copy(mesh.scale);
+            ghost.position.copy(primaryMesh.position);
+            ghost.rotation.copy(primaryMesh.rotation);
+            ghost.scale.copy(primaryMesh.scale);
             ghost.userData = { isGhost: true };
 
             scene.add(ghost);
             extrudeData.ghost = ghost;
 
+            // Attach transform gizmo to ghost for moving/rotating/scaling
+            if (typeof tCtrl !== 'undefined') {
+                tCtrl.attach(ghost);
+                // Update preview when gizmo is moved
+                tCtrl.addEventListener('change', function() {
+                    if (extrudeData && extrudeData.ghost) {
+                        window.requestRender();
+                    }
+                });
+            }
+            
+            // Change cursor to indicate user can interact with gizmo
+            document.body.style.cursor = 'default';
+
+            // Clean up highlight mesh on selection
+            if (extrudeHighlightMesh) {
+                scene.remove(extrudeHighlightMesh);
+                extrudeHighlightMesh.geometry.dispose();
+                extrudeHighlightMesh.material.dispose();
+                extrudeHighlightMesh = null;
+            }
+
             extrudeState = 1;
-            document.getElementById("auto-save-status").innerText = "Step 2: Drag ALONG arrow for Height";
+            document.getElementById("auto-save-status").innerText = "Use gizmo or input fields to adjust, then click Extrude";
 
             return true;
         }
@@ -10307,56 +11221,114 @@ window.handleExtrudeClick = (ray) => {
     return false;
 };
 
+// Global variable for extrude highlight mesh
+let extrudeHighlightMesh = null;
+
 window.handleExtrudeHover = (ray, e) => {
+    // --- STAGE 0: FACE PREVIEW (Before selection) ---
+    if (extrudeState === 0) {
+        // Compute ray from mouse position if not provided
+        let activeRay = ray;
+        if (!activeRay) {
+            const rect = ren.domElement.getBoundingClientRect();
+            const mouse = new THREE.Vector2(
+                ((e.clientX - rect.left) / rect.width) * 2 - 1,
+                -((e.clientY - rect.top) / rect.height) * 2 + 1
+            );
+            activeRay = new THREE.Raycaster();
+            activeRay.setFromCamera(mouse, cam);
+        }
+        
+        const targets = scene.children.filter(o => 
+            o.isMesh && !o.userData.isRuler && o !== liftCone && 
+            !o.userData.isGhost && !o.userData.isTextMesh
+        );
+        const intersects = activeRay.intersectObjects(targets, false);
+        
+        // Remove existing highlight
+        if (extrudeHighlightMesh) {
+            scene.remove(extrudeHighlightMesh);
+            extrudeHighlightMesh.geometry.dispose();
+            extrudeHighlightMesh.material.dispose();
+            extrudeHighlightMesh = null;
+        }
+        
+        if (intersects.length > 0) {
+            const hit = intersects[0];
+            const mesh = hit.object;
+            
+            // Get the connected flat surface
+            const surfaceData = getConnectedFlatSurface(mesh, hit.faceIndex, hit.face.normal);
+            
+            if (surfaceData.indices && surfaceData.indices.length > 0) {
+                // Create highlight geometry
+                const posAttr = mesh.geometry.attributes.position;
+                const indexAttr = mesh.geometry.index;
+                const positions = [];
+                
+                for (let i = 0; i < surfaceData.indices.length; i++) {
+                    let vertexIndex = surfaceData.indices[i];
+                    if (indexAttr) {
+                        vertexIndex = indexAttr.getX(vertexIndex);
+                    }
+                    
+                    if (vertexIndex >= 0 && vertexIndex < posAttr.count) {
+                        positions.push(
+                            posAttr.getX(vertexIndex),
+                            posAttr.getY(vertexIndex),
+                            posAttr.getZ(vertexIndex)
+                        );
+                    }
+                }
+                
+                if (positions.length > 0) {
+                    const highlightGeo = new THREE.BufferGeometry();
+                    highlightGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+                    
+                    const highlightMat = new THREE.MeshBasicMaterial({
+                        color: 0x00ff88,
+                        transparent: true,
+                        opacity: 0.4,
+                        side: THREE.DoubleSide,
+                        depthTest: true
+                    });
+                    
+                    extrudeHighlightMesh = new THREE.Mesh(highlightGeo, highlightMat);
+                    extrudeHighlightMesh.position.copy(mesh.position);
+                    extrudeHighlightMesh.rotation.copy(mesh.rotation);
+                    extrudeHighlightMesh.scale.copy(mesh.scale);
+                    extrudeHighlightMesh.userData = { isExtrudeHighlight: true };
+                    
+                    scene.add(extrudeHighlightMesh);
+                    
+                    // Add edge highlight
+                    const edgeGeo = new THREE.EdgesGeometry(highlightGeo, 15);
+                    const edgeMat = new THREE.LineBasicMaterial({ 
+                        color: 0x00ffaa, 
+                        linewidth: 2,
+                        transparent: true,
+                        opacity: 0.9
+                    });
+                    const edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
+                    extrudeHighlightMesh.add(edgeLines);
+                }
+            }
+        }
+        return;
+    }
+    
+    // --- STAGES 1-3: Only process if we have extrudeData ---
+    // NOTE: Mouse dragging for height/taper/skew has been disabled
+    // Use the input fields in the panel instead
     if (!extrudeData || !extrudeData.ghost) return;
-    const currentMouse = new THREE.Vector2(e.clientX, e.clientY);
-
-    // --- STAGE 1: HEIGHT ---
-    if (extrudeState === 1) {
-        if(!extrudeData.startMouse) { extrudeData.startMouse = currentMouse.clone(); return; }
-        const delta = new THREE.Vector2().subVectors(currentMouse, extrudeData.startMouse);
-        let projection = delta.dot(extrudeData.screenDir);
-        let height = projection * 0.5;
-        if(Math.abs(height) < 0.1) height = 0.1;
-
-        extrudeData.currentHeight = height;
-        updateExtrudeGhost();
-
-        const type = height > 0 ? "Add" : "Cut";
-        document.getElementById("auto-save-status").innerText = `Height: ${height.toFixed(1)}mm (${type})`;
-    }
-
-    // --- STAGE 2: TAPER ---
-    else if (extrudeState === 2) {
-        if(!extrudeData.startMouseTaper) { extrudeData.startMouseTaper = currentMouse.clone(); return; }
-        const deltaX = (currentMouse.x - extrudeData.startMouseTaper.x) * 0.01;
-        let scale = 1.0 + deltaX;
-        if(scale < 0.1) scale = 0.1;
-
-        extrudeData.currentScale = scale;
-        updateExtrudeGhost();
-        document.getElementById("auto-save-status").innerText = `Taper: ${(scale*100).toFixed(0)}%`;
-    }
-
-    // --- STAGE 3: SKEW (ANGLE) ---
-    else if (extrudeState === 3) {
-        if(!extrudeData.startMouseSkew) { extrudeData.startMouseSkew = currentMouse.clone(); return; }
-        const dx = (currentMouse.x - extrudeData.startMouseSkew.x) * 0.2; // Sensitivity
-        const dy = (currentMouse.y - extrudeData.startMouseSkew.y) * -0.2; // Invert Y
-
-        // Map 2D mouse to 3D surface plane (Tangent/Bitangent)
-        const skew = new THREE.Vector3()
-            .add(extrudeData.basis.u.clone().multiplyScalar(dx))
-            .add(extrudeData.basis.v.clone().multiplyScalar(dy));
-
-        extrudeData.currentSkew = skew;
-        updateExtrudeGhost();
-        document.getElementById("auto-save-status").innerText = `Skew: X:${dx.toFixed(1)} Y:${dy.toFixed(1)}`;
-    }
+    
+    // Only allow mouse to select faces in stage 0
+    // All parameter adjustments should be done via input fields
+    return;
 };
 
-function updateExtrudeGhost() {
-    const { mesh, indices, currentHeight, localNormal, currentScale, currentSkew, ghost } = extrudeData;
+window.updateExtrudeGhost = function() {
+    const { mesh, indices, currentHeight, localNormal, currentScale, currentSkew, ghost, shapeType, shapeDimensions, hitPoint, customPoints } = extrudeData;
 
     let color = 0xffff00; // Yellow (Add)
     let startOffset = 0;
@@ -10366,13 +11338,36 @@ function updateExtrudeGhost() {
         startOffset = 0.5; // Visually show it sticking out
     }
 
-    const newGeo = createExtrusionGeo(mesh, indices, currentHeight, localNormal, currentScale, currentSkew, startOffset);
+    let newGeo;
+    
+    if (shapeType === 'face') {
+        newGeo = createExtrusionGeo(mesh, indices, currentHeight, localNormal, currentScale, currentSkew, startOffset);
+    } else if (shapeType === 'custom' && customPoints) {
+        // Custom polygon extrusion
+        newGeo = createCustomPolygonExtrusion(customPoints, currentHeight, localNormal);
+        if (newGeo && hitPoint) {
+            newGeo.translate(hitPoint.x, hitPoint.y, hitPoint.z);
+        }
+    } else {
+        // Shape-based extrusion (circle, square)
+        const sides = shapeDimensions.sides || 32;
+        newGeo = createShapeExtrusion(shapeType, shapeDimensions, currentHeight, localNormal, currentScale, currentSkew, sides);
+        if (newGeo && hitPoint) {
+            newGeo.translate(hitPoint.x, hitPoint.y, hitPoint.z);
+        }
+    }
+    
     ghost.geometry.dispose();
     ghost.geometry = newGeo;
     ghost.material.color.setHex(color);
 }
 
-function finishExtrude() {
+window.finishExtrude = function() {
+    // Detach transform gizmo first
+    if (typeof tCtrl !== 'undefined') {
+        tCtrl.detach();
+    }
+    
     const status = document.getElementById("auto-save-status");
     status.innerText = "Computing Boolean...";
 
@@ -10390,22 +11385,51 @@ function finishExtrude() {
 
             // --- THE FIX ---
             let finalGeo;
-
+            
+            const shapeType = extrudeData.shapeType || 'face';
+            
             if (currentHeight < 0) {
                 // CUT MODE:
                 // Generate geometry that starts +1.0mm OUTSIDE the object (startOffset)
                 // and goes to the desired depth.
                 // We don't change 'currentHeight' logic, just where it starts.
 
-                finalGeo = createExtrusionGeo(
-                    mesh,
-                    extrudeData.indices,
-                    currentHeight, // Target depth (e.g. -10)
-                    extrudeData.localNormal,
-                    extrudeData.currentScale,
-                    extrudeData.currentSkew,
-                    1.0 // <--- START OFFSET: Start 1mm "in the air"
-                );
+                if (shapeType === 'face') {
+                    finalGeo = createExtrusionGeo(
+                        mesh,
+                        extrudeData.indices,
+                        currentHeight, // Target depth (e.g. -10)
+                        extrudeData.localNormal,
+                        extrudeData.currentScale,
+                        extrudeData.currentSkew,
+                        1.0 // <--- START OFFSET: Start 1mm "in the air"
+                    );
+                } else if (shapeType === 'custom' && extrudeData.customPoints) {
+                    // Custom polygon cut
+                    finalGeo = createCustomPolygonExtrusion(
+                        extrudeData.customPoints,
+                        currentHeight,
+                        extrudeData.localNormal
+                    );
+                    if (finalGeo && extrudeData.hitPoint) {
+                        finalGeo.translate(extrudeData.hitPoint.x, extrudeData.hitPoint.y, extrudeData.hitPoint.z);
+                    }
+                } else {
+                    // Shape-based cut (circle, square)
+                    const sides = extrudeData.shapeDimensions.sides || 32;
+                    finalGeo = createShapeExtrusion(
+                        shapeType,
+                        extrudeData.shapeDimensions,
+                        currentHeight,
+                        extrudeData.localNormal,
+                        extrudeData.currentScale,
+                        extrudeData.currentSkew,
+                        sides
+                    );
+                    if (finalGeo && extrudeData.hitPoint) {
+                        finalGeo.translate(extrudeData.hitPoint.x, extrudeData.hitPoint.y, extrudeData.hitPoint.z);
+                    }
+                }
             } else {
                 // ADD MODE: Start exactly at 0
                 finalGeo = ghost.geometry;
@@ -10447,9 +11471,33 @@ function finishExtrude() {
         extrudeState = -1;
         isExtrudeMode = false;
 
+        // Clean up highlight mesh
+        if (extrudeHighlightMesh) {
+            scene.remove(extrudeHighlightMesh);
+            extrudeHighlightMesh.geometry.dispose();
+            extrudeHighlightMesh.material.dispose();
+            extrudeHighlightMesh = null;
+        }
+        
+        // Clean up multi-select highlights
+        extrudeSelectedFaces = [];
+        if (extrudeHighlightMeshes) {
+            Object.values(extrudeHighlightMeshes).forEach(mesh => {
+                if (mesh) {
+                    scene.remove(mesh);
+                    mesh.geometry.dispose();
+                    mesh.material.dispose();
+                }
+            });
+        }
+        extrudeHighlightMeshes = [];
+
         document.body.style.cursor = 'default';
         document.querySelectorAll(".btn-tool").forEach(b => b.classList.remove("active-tool"));
         window.setMode('translate');
+        
+        // Hide extrude controls panel
+        document.getElementById('extrude-controls-panel').style.display = 'none';
 
         status.innerText = "Done";
         setTimeout(() => status.style.opacity = 0, 1000);

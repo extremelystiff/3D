@@ -1813,6 +1813,15 @@
             </div>
         </div>
 
+        <!-- Font Management -->
+        <div class="mb-3 border-top pt-3">
+            <label class="small text-muted mb-2">Custom Fonts</label>
+            <div id="font-manager-list" class="d-flex flex-column gap-1 small">
+                <!-- Dynamically populated -->
+                <span class="text-muted fst-italic">No custom fonts loaded.</span>
+            </div>
+        </div>
+
         <!-- Storage Meter -->
         <div class="mb-3 border-top pt-3">
             <label class="small text-muted mb-2">Local Storage</label>
@@ -1913,64 +1922,117 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
         'droid_sans': { name: 'Droid Sans', url: 'https://unpkg.com/three@0.77.0/examples/fonts/droid/droid_sans_regular.typeface.json' },
         'droid_sans_mono': { name: 'Droid Sans Mono', url: 'https://unpkg.com/three@0.77.0/examples/fonts/droid/droid_sans_mono_regular.typeface.json' }
     };
+
     let currentFontKey = 'helvetiker';
-    let customFonts = {}; // Store custom uploaded fonts
-    
+    let customFonts = {}; // Structure: { 'custom_123': { name: "My Font", data: "{...json...}" } }
+
+    // Save fonts to LocalStorage
+    function saveCustomFonts() {
+        try {
+            localStorage.setItem('3d_custom_fonts', JSON.stringify(customFonts));
+            window.updateStorageUI();
+        } catch (e) {
+            console.warn("Storage full! Couldn't save custom fonts to browser.", e);
+            alert("Browser storage is full! The font is loaded for this session and will save to .tinker exports, but won't persist if you refresh the page.");
+        }
+    }
+
+    // Load fonts from LocalStorage
+    function loadCustomFonts() {
+        try {
+            const stored = localStorage.getItem('3d_custom_fonts');
+            if (stored) customFonts = JSON.parse(stored);
+        } catch(e) { console.warn("Failed to load custom fonts from storage."); }
+        updateFontManagementUI();
+    }
+
+    const fontCache = {}; // Store parsed fonts in memory
+
     // Function to load a font by key or URL
     function loadFont(fontKey, callback) {
-        const fLoader = new FontLoader();
-        let fontUrl;
-        
-        if (BUILTIN_FONTS[fontKey]) {
-            fontUrl = BUILTIN_FONTS[fontKey].url;
-        } else if (customFonts[fontKey]) {
-            fontUrl = customFonts[fontKey];
-        } else {
-            fontUrl = fontKey; // Assume it's a URL
-        }
-        
-        fLoader.load(fontUrl, (font) => {
-            loadedFont = font;
+        // If it's already parsed and in memory, use it instantly
+        if (fontCache[fontKey]) {
+            loadedFont = fontCache[fontKey];
             currentFontKey = fontKey;
-            console.log('Font Loaded:', fontKey);
-            if (callback) callback(font);
-        }, undefined, (err) => {
-            console.error('Failed to load font:', fontKey, err);
-            alert('Failed to load font. Please try another.');
-        });
+            if (callback) callback(fontCache[fontKey]);
+            return;
+        }
+
+        const fLoader = new FontLoader();
+
+        if (BUILTIN_FONTS[fontKey]) {
+            fLoader.load(BUILTIN_FONTS[fontKey].url, (font) => {
+                fontCache[fontKey] = font;
+                loadedFont = font;
+                currentFontKey = fontKey;
+                if (callback) callback(font);
+            }, undefined, () => alert('Failed to load built-in font.'));
+        } else if (customFonts[fontKey]) {
+            try {
+                // Parse directly from the stored JSON string
+                const parsedJson = JSON.parse(customFonts[fontKey].data);
+                const font = fLoader.parse(parsedJson);
+                fontCache[fontKey] = font;
+                loadedFont = font;
+                currentFontKey = fontKey;
+                if (callback) callback(font);
+            } catch (e) {
+                console.error('Failed to parse custom font data', e);
+                alert('Failed to load custom font. The data might be corrupted.');
+            }
+        } else {
+            fLoader.load(fontKey, (font) => {
+                fontCache[fontKey] = font;
+                loadedFont = font;
+                currentFontKey = fontKey;
+                if (callback) callback(font);
+            });
+        }
     }
-    
+
     // Function to handle custom font upload
     function handleCustomFontUpload(event) {
         const file = event.target.files[0];
         if (!file) return;
 
+        let defaultName = file.name.split('.')[0];
+        let fontName = prompt("Enter a name for this custom font:", defaultName);
+        if (!fontName) fontName = defaultName;
+
         const fontKey = 'custom_' + Date.now();
         const fileName = file.name.toLowerCase();
+
+        // Helper to finalize loading
+        const finishLoading = (jsonStr) => {
+            customFonts[fontKey] = { name: fontName, data: jsonStr };
+            saveCustomFonts();
+            updateFontManagementUI();
+
+            loadFont(fontKey, () => {
+                updateFontSelector();
+                if (selectedObjects.length > 0) {
+                    const obj = selectedObjects[0];
+                    if (obj.userData.geoParams && obj.userData.geoParams.type === 'text') {
+                        obj.userData.geoParams.fontKey = fontKey;
+                        regenerateText(obj);
+                        saveState();
+                    }
+                }
+                alert(`Custom font "${fontName}" loaded successfully!`);
+            });
+        };
 
         // ---- PATH A: Already a typeface.json ----
         if (fileName.endsWith('.json')) {
             const reader = new FileReader();
             reader.onload = function (e) {
-                customFonts[fontKey] = e.target.result;
-                const fLoader = new FontLoader();
-                fLoader.load(e.target.result, (font) => {
-                    loadedFont = font;
-                    currentFontKey = fontKey;
-                    updateFontSelector();
-                    if (selectedObjects.length > 0) {
-                        const obj = selectedObjects[0];
-                        if (obj.userData.geoParams && obj.userData.geoParams.type === 'text') {
-                            obj.userData.geoParams.fontKey = fontKey;
-                            regenerateText(obj);
-                        }
-                    }
-                    alert('Custom font "' + file.name + '" loaded successfully!');
-                }, undefined, () => {
-                    alert('Failed to load typeface JSON.');
-                });
+                try {
+                    const jsonStr = e.target.result;
+                    JSON.parse(jsonStr); // Validate JSON
+                    finishLoading(jsonStr);
+                } catch(err) { alert('Invalid typeface JSON file.'); }
             };
-            reader.readAsDataURL(file);
+            reader.readAsText(file);
             return;
         }
 
@@ -1986,44 +2048,89 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                 const arrayBuffer = e.target.result;
                 const parsedFont = opentype.parse(arrayBuffer);
                 const typefaceJson = convertToTypefaceJson(parsedFont);
-
-                // Create a Blob URL from the JSON so FontLoader.load() can fetch it
                 const jsonStr = JSON.stringify(typefaceJson);
-                const blob = new Blob([jsonStr], { type: 'application/json' });
-                const fontUrl = URL.createObjectURL(blob);
-
-                customFonts[fontKey] = fontUrl;
-
-                const fLoader = new FontLoader();
-                fLoader.load(fontUrl, (font) => {
-                    loadedFont = font;
-                    currentFontKey = fontKey;
-                    console.log('Custom Font Loaded:', file.name);
-                    updateFontSelector();
-
-                    if (selectedObjects.length > 0) {
-                        const obj = selectedObjects[0];
-                        if (obj.userData.geoParams && obj.userData.geoParams.type === 'text') {
-                            obj.userData.geoParams.fontKey = fontKey;
-                            regenerateText(obj);
-                        }
-                    }
-                    alert('Custom font "' + file.name + '" loaded successfully!');
-                }, undefined, (err) => {
-                    console.error('FontLoader error:', err);
-                    alert('Failed to load converted font data.');
-                });
+                finishLoading(jsonStr);
             } catch (err) {
                 console.error('Failed to parse font file:', err);
-                alert(
-                    'Failed to parse font file.\n\n' +
-                    'Make sure it is a valid .ttf or .otf file.\n\n' +
-                    'Error: ' + err.message
-                );
+                alert('Failed to parse font file.\nMake sure it is a valid .ttf or .otf file.\nError: ' + err.message);
             }
         };
         reader.readAsArrayBuffer(file);
     }
+
+    // Function to update font selector UI
+    function updateFontSelector() {
+        const selector = document.getElementById('prop-font-select');
+        if (!selector) return;
+
+        // Clear existing options
+        selector.innerHTML = '';
+
+        // Add built-in fonts
+        for (const [key, font] of Object.entries(BUILTIN_FONTS)) {
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = font.name;
+            selector.appendChild(option);
+        }
+
+        // Add custom fonts
+        for (const [key, font] of Object.entries(customFonts)) {
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = `★ ${font.name}`;
+            selector.appendChild(option);
+        }
+
+        selector.value = currentFontKey;
+    }
+
+    // Function to update Settings Panel Font Manager
+    function updateFontManagementUI() {
+        const list = document.getElementById('font-manager-list');
+        if (!list) return;
+
+        list.innerHTML = '';
+        const keys = Object.keys(customFonts);
+
+        if (keys.length === 0) {
+            list.innerHTML = '<span class="text-muted fst-italic">No custom fonts loaded.</span>';
+            return;
+        }
+
+        keys.forEach(key => {
+            const font = customFonts[key];
+            list.innerHTML += `
+                <div class="d-flex justify-content-between align-items-center bg-dark p-1 rounded border border-secondary" style="background:rgba(0,0,0,0.2)!important;">
+                    <span class="text-truncate" style="max-width: 150px;" title="${font.name}">${font.name}</span>
+                    <button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="window.deleteCustomFont('${key}')" title="Delete Font">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            `;
+        });
+    }
+
+    window.deleteCustomFont = function(key) {
+        if (!confirm(`Delete custom font "${customFonts[key].name}"?\nObjects using this font will revert to default.`)) return;
+
+        delete customFonts[key];
+        delete fontCache[key]; // Clear from memory cache
+        saveCustomFonts();
+        updateFontManagementUI();
+        updateFontSelector();
+
+        // If the deleted font was currently active, revert to default
+        if (currentFontKey === key) {
+            loadFont('helvetiker', () => {
+                if (selectedObjects.length > 0 && selectedObjects[0].userData.geoParams?.type === 'text') {
+                    selectedObjects[0].userData.geoParams.fontKey = 'helvetiker';
+                    regenerateText(selectedObjects[0]);
+                }
+            });
+        }
+    };
+
 /**
  * Converts an opentype.js Font object into the typeface.json format
  * that Three.js FontLoader (r160) expects.
@@ -2036,6 +2143,10 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
  *   - move=m, line=l, quad=q, bezier=b (NOT 'c')
  *   - 'b' has ENDPOINT first: b endX endY cp1X cp1Y cp2X cp2Y
  */
+/**
+ * Converts an opentype.js Font object into the typeface.json format
+ * that Three.js FontLoader (r160) expects.
+ */
 function convertToTypefaceJson(font) {
     const upm = font.unitsPerEm || 1000;
 
@@ -2044,25 +2155,19 @@ function convertToTypefaceJson(font) {
         return isNaN(n) ? 0 : Math.round(n);
     };
 
-    // ---------- 1. Build glyphs DICTIONARY ----------
     const glyphs = {};
     let overallXMin = 0;
     let overallXMax = upm;
 
     for (let i = 0; i < font.glyphs.length; i++) {
         const glyph = font.glyphs.get(i);
-        if (!glyph) continue;
-        if (glyph.unicode === undefined || glyph.unicode === null) continue;
-        if (glyph.name === '.notdef') continue;
+        if (!glyph || glyph.unicode === undefined || glyph.unicode === null || glyph.name === '.notdef') continue;
 
         const unicodeStr = String.fromCodePoint(glyph.unicode);
 
-        if (glyph.xMin != null && isFinite(glyph.xMin))
-            overallXMin = Math.min(overallXMin, glyph.xMin);
-        if (glyph.xMax != null && isFinite(glyph.xMax))
-            overallXMax = Math.max(overallXMax, glyph.xMax);
+        if (glyph.xMin != null && isFinite(glyph.xMin)) overallXMin = Math.min(overallXMin, glyph.xMin);
+        if (glyph.xMax != null && isFinite(glyph.xMax)) overallXMax = Math.max(overallXMax, glyph.xMax);
 
-        // ---------- 2. Extract path with robust fallbacks ----------
         let commands = null;
 
         // Try resolved path (handles compound glyphs like é, Å)
@@ -2070,64 +2175,34 @@ function convertToTypefaceJson(font) {
             const resolvedPath = glyph.getPath(0, 0, upm);
             if (resolvedPath && resolvedPath.commands && resolvedPath.commands.length > 0) {
                 commands = resolvedPath.commands;
-            }
-        } catch (e) {
-            // getPath failed, fall through to raw path
-        }
 
-        // Fallback: use raw path directly
+                // FIX: opentype.js getPath() inverts the Y axis for HTML Canvas.
+                // Three.js needs Standard Cartesian (Y pointing Up). We invert it back here.
+                for (let k = 0; k < commands.length; k++) {
+                    if (commands[k].y !== undefined) commands[k].y = -commands[k].y;
+                    if (commands[k].y1 !== undefined) commands[k].y1 = -commands[k].y1;
+                    if (commands[k].y2 !== undefined) commands[k].y2 = -commands[k].y2;
+                }
+            }
+        } catch (e) {}
+
+        // Fallback: use raw path directly if getPath fails
         if (!commands && glyph.path && glyph.path.commands && glyph.path.commands.length > 0) {
             commands = glyph.path.commands;
         }
 
-        // Skip if absolutely no path data (space, etc.)
         if (!commands) continue;
 
-        // ---------- 3. Build ABSOLUTE path string ----------
         const parts = [];
 
         for (let j = 0; j < commands.length; j++) {
             const c = commands[j];
-
             switch (c.type) {
-                case 'M':
-                    // Three.js: m x y (absolute moveTo)
-                    parts.push('m', safe(c.x), safe(c.y));
-                    break;
-
-                case 'L':
-                    // Three.js: l x y (absolute lineTo)
-                    parts.push('l', safe(c.x), safe(c.y));
-                    break;
-
-                case 'Q':
-                    // Three.js: q controlX controlY endX endY (absolute)
-                    parts.push('q',
-                        safe(c.x1), safe(c.y1),
-                        safe(c.x), safe(c.y)
-                    );
-                    break;
-
-                case 'C':
-                    // Three.js uses 'b' (NOT 'c') for cubic bezier
-                    // Parameter order is REVERSED from SVG:
-                    //   SVG: C cp1X cp1Y cp2X cp2Y endX endY
-                    //   Three.js: b endX endY cp1X cp1Y cp2X cp2Y
-                    parts.push('b',
-                        safe(c.x), safe(c.y),        // endpoint
-                        safe(c.x1), safe(c.y1),      // control point 1
-                        safe(c.x2), safe(c.y2)       // control point 2
-                    );
-                    break;
-
-                case 'Z':
-                case 'z':
-                    parts.push('z');
-                    break;
-
-                default:
-                    // Skip exotic commands (H, V, S, T, A)
-                    break;
+                case 'M': parts.push('m', safe(c.x), safe(c.y)); break;
+                case 'L': parts.push('l', safe(c.x), safe(c.y)); break;
+                case 'Q': parts.push('q', safe(c.x1), safe(c.y1), safe(c.x), safe(c.y)); break;
+                case 'C': parts.push('b', safe(c.x), safe(c.y), safe(c.x1), safe(c.y1), safe(c.x2), safe(c.y2)); break;
+                case 'Z': case 'z': parts.push('z'); break;
             }
         }
 
@@ -2136,50 +2211,31 @@ function convertToTypefaceJson(font) {
 
         const glyphData = {
             unicode: unicodeStr,
-            name:    glyph.name || unicodeStr,
-            ha:      safe(glyph.advanceWidth || upm * 0.5),
-            x_min:   safe(glyph.xMin),
-            x_max:   safe(glyph.xMax),
-            o:       pathStr
+            name: glyph.name || unicodeStr,
+            ha: safe(glyph.advanceWidth || upm * 0.5),
+            x_min: safe(glyph.xMin),
+            x_max: safe(glyph.xMax),
+            o: pathStr
         };
 
-        // Key by unicode STRING — Three.js does: data.glyphs["h"]
         glyphs[unicodeStr] = glyphData;
-
-        // Also key by unicode NUMBER as fallback
         const unicodeNum = glyph.unicode;
         if (unicodeNum !== undefined && unicodeNum !== null) {
             glyphs[unicodeNum] = glyphData;
         }
     }
 
-    const ascender  = font.ascender  != null ? font.ascender  : upm * 0.8;
+    const ascender = font.ascender != null ? font.ascender : upm * 0.8;
     const descender = font.descender != null ? font.descender : -upm * 0.2;
 
-    // ---------- 4. Return complete typeface.json ----------
     return {
         glyphs: glyphs,
-
-        familyName:
-            (font.names.fontFamily && font.names.fontFamily.en) ||
-            font.names.fontFamily ||
-            'Custom Font',
-
-        // CRITICAL: Three.js uses this as scale divisor
-        //   const scale = size / data.resolution;
-        // Without it → size / undefined = NaN → ALL vertices become NaN
+        familyName: (font.names.fontFamily && font.names.fontFamily.en) || font.names.fontFamily || 'Custom Font',
         resolution: upm,
-
-        ascender:           Math.round(ascender),
-        descender:          Math.round(descender),
-        underlinePosition:  Math.round(
-            (font.tables.post && font.tables.post.underlinePosition) || -upm * 0.1
-        ),
-        underlineThickness: Math.round(
-            (font.tables.post && font.tables.post.underlineThickness) || upm * 0.05
-        ),
-
-        // CRITICAL: Three.js crashes at createPaths line 76 if missing
+        ascender: Math.round(ascender),
+        descender: Math.round(descender),
+        underlinePosition: Math.round((font.tables.post && font.tables.post.underlinePosition) || -upm * 0.1),
+        underlineThickness: Math.round((font.tables.post && font.tables.post.underlineThickness) || upm * 0.05),
         boundingBox: {
             xMin: Math.round(overallXMin),
             xMax: Math.round(overallXMax),
@@ -2188,46 +2244,6 @@ function convertToTypefaceJson(font) {
         }
     };
 }
-    // Function to get current font name for display
-    function getCurrentFontName() {
-        if (BUILTIN_FONTS[currentFontKey]) {
-            return BUILTIN_FONTS[currentFontKey].name;
-        } else if (currentFontKey.startsWith('custom_')) {
-            return 'Custom Font';
-        }
-        return 'Default';
-    }
-    
-    // Function to update font selector UI
-    function updateFontSelector() {
-        const selector = document.getElementById('prop-font-select');
-        const uploadInput = document.getElementById('prop-font-upload');
-        if (!selector) return;
-        
-        // Clear existing options except first
-        while (selector.options.length > 1) {
-            selector.remove(1);
-        }
-        
-        // Add built-in fonts
-        for (const [key, font] of Object.entries(BUILTIN_FONTS)) {
-            const option = document.createElement('option');
-            option.value = key;
-            option.textContent = font.name;
-            selector.appendChild(option);
-        }
-        
-        // Add custom fonts
-        for (const key of Object.keys(customFonts)) {
-            const option = document.createElement('option');
-            option.value = key;
-            option.textContent = 'Custom Font';
-            selector.appendChild(option);
-        }
-        
-        // Set current selection
-        selector.value = currentFontKey;
-    }
     let textGhost = null;
     let shadowPlane;
         // --- NEW GLOBALS FOR SHELL ---
@@ -5513,7 +5529,7 @@ function handleAlignClick(ray) {
 // Global reference for the shadow floor
 
 
-    async function init3D() {
+async function init3D() {
         // Init ZSTD
         try {
             await initZstd('https://unpkg.com/@bokuweb/zstd-wasm@0.0.27/dist/web/zstd.wasm');
@@ -5523,14 +5539,8 @@ function handleAlignClick(ray) {
             console.warn("Zstd failed to load, saving will be uncompressed", e);
         }
 
-        // --- 1. FONT LOADING (Must happen before LoadFromStorage) ---
-        // Load default font using the new font loader
-        loadFont('helvetiker', () => {
-            console.log("Font Loaded - Starting App");
-
-            // This is the stable loading point
-            loadFromStorage();
-        });
+        // LOAD CUSTOM FONTS FROM STORAGE BEFORE STARTING APP
+        loadCustomFonts();
 
         const canvas = document.getElementById("designer-canvas");
         const container = document.getElementById("designer-area");
@@ -5843,12 +5853,18 @@ function handleAlignClick(ray) {
         window.updateConstraintListUI();
 
         buildColorPicker();
-        window.setMode("translate");
 
         // Initialize compass
         initCompass();
 
-        // Data loading triggered in font loader callback above
+        // --- 1. FONT LOADING & STORAGE LOAD (Moved to end so scene/tCtrl exist) ---
+        // Load default font using the new font loader
+        loadFont('helvetiker', () => {
+            console.log("Font Loaded - Starting App");
+            // This is the stable loading point
+            loadFromStorage();
+            window.setMode("translate");
+        });
     }
 
 window.updateSettings = (key, value) => {
@@ -6285,15 +6301,12 @@ function updateTinkerLabels() {
 const onPointerUp = e => {
     isInteracting = false;
 
-    // 1. Calculate Mouse/Ray ONCE for all tools
     const rect = ren.domElement.getBoundingClientRect();
     const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
     ray.setFromCamera(mouse, cam);
 
-    // 2. Extrude Tool (High Priority)
     if(window.handleExtrudeClick && window.handleExtrudeClick(ray, e)) return;
 
-    // 3. Lift Tool (High Priority)
     if (isLifting) {
         isLifting = false;
         ctrl.enabled = true;
@@ -6302,25 +6315,77 @@ const onPointerUp = e => {
         return;
     }
 
-    // 4. Drag Check (Stop click logic if we just dragged the camera)
     const dist = Math.sqrt(Math.pow(e.clientX - pointerStartX, 2) + Math.pow(e.clientY - pointerStartY, 2));
     if (dist > 5) return;
 
-    // --- FROM HERE DOWN, WE USE THE RAY CALCULATED AT THE TOP ---
-
     if (window.handleRulerClick && window.handleRulerClick(ray)) return;
 
+// Locate this block inside 'const onPointerUp = e => {'
     if (textPlaceMode) {
-         if (textGhost && textGhost.visible) {
-            const bend = textGhost.userData.geoParams ? textGhost.userData.geoParams.bend : 0;
-            createTextObject(textGhost.position, textGhost.quaternion, bend);
-         }
-         textPlaceMode = false;
-         scene.remove(textGhost);
-         textGhost = null;
-         document.body.style.cursor = 'default';
-         document.getElementById("auto-save-status").style.opacity = 0;
-         return;
+        if (textGhost) {
+            if (textGhost.visible) {
+                // Successful Placement (clicked on an object)
+                const targetUuid = textGhost.userData.geoParams ? textGhost.userData.geoParams.targetUuid : null;
+
+                if (textGhost.userData.reSnapBackup) {
+                    // Finalizing a RE-PLACED existing text object
+                    textGhost.material = textGhost.userData.reSnapBackup.material;
+                    delete textGhost.userData.reSnapBackup;
+                    textGhost.userData.isGhost = false;
+
+                    regenerateText(textGhost);
+
+                    const placedObj = textGhost;
+                    textPlaceMode = false;
+                    textGhost = null;
+                    document.body.style.cursor = 'default';
+                    document.getElementById("auto-save-status").style.opacity = 0;
+
+                    selectObject(placedObj);
+                    saveState();
+                    return;
+                } else {
+                    // Finalizing a BRAND NEW text object
+                    createTextObject(textGhost.position, textGhost.quaternion, targetUuid);
+                    scene.remove(textGhost);
+                    textGhost.geometry.dispose();
+                    textGhost.material.dispose();
+                }
+            } else if (textGhost.userData.reSnapBackup) {
+                // Aborted Re-Snap (Clicked in empty space / ghost was invisible)
+                const backup = textGhost.userData.reSnapBackup;
+                textGhost.position.copy(backup.position);
+                textGhost.quaternion.copy(backup.quaternion);
+                textGhost.userData.geoParams.targetUuid = backup.targetUuid;
+                textGhost.material = backup.material;
+                textGhost.visible = true;
+                textGhost.userData.isGhost = false;
+                delete textGhost.userData.reSnapBackup;
+
+                regenerateText(textGhost);
+
+                const restoredObj = textGhost;
+                textPlaceMode = false;
+                textGhost = null;
+                document.body.style.cursor = 'default';
+                document.getElementById("auto-save-status").style.opacity = 0;
+
+                selectObject(restoredObj);
+                return;
+            }
+        }
+
+        // Failsafe exit for regular aborts
+        textPlaceMode = false;
+        if (textGhost && !textGhost.userData.reSnapBackup) {
+            scene.remove(textGhost);
+            if (textGhost.geometry) textGhost.geometry.dispose();
+            if (textGhost.material) textGhost.material.dispose();
+        }
+        textGhost = null;
+        document.body.style.cursor = 'default';
+        document.getElementById("auto-save-status").style.opacity = 0;
+        return;
     }
 
     if (e.target.tagName === 'INPUT') return;
@@ -6330,16 +6395,13 @@ const onPointerUp = e => {
         if(handleAlignClick(ray)) return;
     }
 
-    // --- B. LOFT FACE SELECTION ---
     if (isFaceLoftMode) {
         const intersects = ray.intersectObjects(scene.children.filter(o => o.isMesh && o !== liftCone && !o.userData.isRuler && o.visible), false);
         if (intersects.length > 0) handleFaceSelection(intersects[0]);
         return;
     }
 
-    // --- NEW: D. SHELL FACE SELECTION ---
     if (isShellSelectMode) {
-        // Only allow clicking the selected object
         const targetObj = selectedObjects[0];
         const intersects = ray.intersectObject(targetObj, false);
         if (intersects.length > 0) {
@@ -6347,9 +6409,7 @@ const onPointerUp = e => {
         }
         return;
     }
-    // ------------------------------------
 
-    // C. STANDARD SELECTION
     const intersects = ray.intersectObjects(scene.children, true);
     const validHits = intersects.filter(hit => {
         const o = hit.object;
@@ -6371,28 +6431,19 @@ const onPointerUp = e => {
         selectObject(null);
     }
 
-    // --- NEW: D. SHELL FACE SELECTION (Toggle Logic) ---
     if (isShellSelectMode) {
-        // 1. Check if we clicked an EXISTING MARKER (Deselect)
         const markerIntersects = ray.intersectObjects(shellMarkers, false);
         if (markerIntersects.length > 0) {
-            // Remove the marker
             const marker = markerIntersects[0].object;
             scene.remove(marker);
-            faceMarkerGroup.remove(marker); // Ensure removed from group
-
-            // Remove from array
+            faceMarkerGroup.remove(marker);
             shellMarkers = shellMarkers.filter(m => m !== marker);
-
-            // Clean up memory
             marker.geometry.dispose();
             marker.material.dispose();
-
             updateShellStatus();
             return;
         }
 
-        // 2. Check if we clicked the OBJECT (Select)
         const targetObj = selectedObjects[0];
         const intersects = ray.intersectObject(targetObj, false);
         if (intersects.length > 0) {
@@ -6400,7 +6451,6 @@ const onPointerUp = e => {
         }
         return;
     }
-    // ------------------------------------
 };
 function updateShellStatus() {
         const status = document.getElementById("auto-save-status");
@@ -7149,12 +7199,18 @@ canvasEl.addEventListener("pointermove", (e) => {
         document.body.style.cursor = 'crosshair';
 
         // Create Ghost
-        const geo = new TextGeometry('Text', { font: loadedFont, size: 10, height: 2, curveSegments: 4 });
-        geo.center();
+        const geo = new TextGeometry('Text', { font: loadedFont, size: 10, height: 5, curveSegments: 4 });
+        geo.computeBoundingBox();
+        geo.translate(
+            -0.5 * (geo.boundingBox.max.x - geo.boundingBox.min.x),
+            -0.5 * (geo.boundingBox.max.y - geo.boundingBox.min.y),
+            0
+        );
 
         // Create a parent wrapper to handle the offset easily
         textGhost = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x0d6efd, transparent: true, opacity: 0.5, wireframe: true }));
         textGhost.userData.isGhost = true;
+        textGhost.userData.geoParams = { type: 'text', text: 'Text', thickness: 5, surfaceOffset: 0, fontKey: currentFontKey, targetUuid: null };
         scene.add(textGhost);
 
         const status = document.getElementById("auto-save-status");
@@ -7163,305 +7219,234 @@ canvasEl.addEventListener("pointermove", (e) => {
     };
 
     // 2. CREATE THE REAL TEXT
-function createTextObject(pos, quat, bendValue) { // Added bendValue param
-        const textString = "Text";
+function createTextObject(pos, quat, targetUuid) {
+    const textString = "Text";
 
-        // Use the new helper to generate the initial geometry with the correct bend
-        const dummyMesh = {
-            userData: { geoParams: { type: 'text', text: textString, bend: bendValue || 0, fontKey: currentFontKey } },
-            geometry: null
-        };
+    const dummyMesh = {
+        userData: { geoParams: { type: 'text', text: textString, thickness: 5, surfaceOffset: 0, fontKey: currentFontKey, targetUuid: targetUuid } },
+        geometry: null,
+        position: pos.clone(),
+        quaternion: quat.clone(),
+        scale: new THREE.Vector3(1,1,1),
+        matrixWorld: new THREE.Matrix4()
+    };
 
-        // We hijack the regenerate function to create our first geometry
-        // Use a temp geometry to start
-        dummyMesh.geometry = new TextGeometry(textString, { font: loadedFont, size: 10, height: 2, curveSegments: 4 });
-        regenerateText(dummyMesh); // This applies the bend math immediately
+    dummyMesh.updateMatrixWorld = function() {
+        this.matrixWorld.compose(this.position, this.quaternion, this.scale);
+    };
 
-        const mat = new THREE.MeshStandardMaterial({ color: 0x0d6efd });
-        const mesh = new THREE.Mesh(dummyMesh.geometry, mat);
+    // Use the dummy to generate the initial surface projection
+    regenerateText(dummyMesh);
 
-        mesh.position.copy(pos);
-        mesh.quaternion.copy(quat);
+    const mat = new THREE.MeshStandardMaterial({ color: 0x0d6efd });
+    const mesh = new THREE.Mesh(dummyMesh.geometry, mat);
 
-        const nameCount = scene.children.filter(e => e.userData && e.userData.name && e.userData.name.startsWith("Text")).length + 1;
-        mesh.userData = {
-            name: `Text ${nameCount}`,
-            isHole: false,
-            geoParams: { type: 'text', text: textString, bend: bendValue || 0, fontKey: currentFontKey }
-        };
+    mesh.position.copy(pos);
+    mesh.quaternion.copy(quat);
 
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
+    const nameCount = scene.children.filter(e => e.userData && e.userData.name && e.userData.name.startsWith("Text")).length + 1;
+    mesh.userData = dummyMesh.userData;
+    mesh.userData.name = `Text ${nameCount}`;
+    mesh.userData.isHole = false;
 
-        scene.add(mesh);
-        selectObject(mesh);
-        saveState();
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    scene.add(mesh);
+    selectObject(mesh);
+    saveState();
+}
+
+// --- 3. REGENERATE TEXT (Surface Projection Wrap) ---
+function regenerateText(mesh) {
+    const p = mesh.userData.geoParams;
+    if(!p || p.type !== 'text') return;
+
+    const targetFontKey = p.fontKey || 'helvetiker';
+
+    // If the required font isn't parsed in memory yet, load it, then regenerate
+    if (!fontCache[targetFontKey]) {
+        loadFont(targetFontKey, () => regenerateText(mesh));
+        return;
     }
 
-    // 3. REGENERATE TEXT (When typing or bending)
-function regenerateText(mesh) {
-        // SAFETY CHECK
-        if (!loadedFont) {
-            console.warn("Font not loaded yet, skipping regeneration");
-            return;
-        }
-        const p = mesh.userData.geoParams;
-        if(!p || p.type !== 'text') return;
+    const activeFont = fontCache[targetFontKey];
+    const thickness = parseFloat(p.thickness) || 5;
+    const surfaceOffset = parseFloat(p.surfaceOffset) || 0;
 
-        // 1. Create Base Geometry
-        let geo = new TextGeometry(p.text, {
-            font: loadedFont,
-            size: 10,
-            height: 2, // This is the Z-thickness
-            curveSegments: 4
-        });
+    // 1. Create Flat Base Geometry
+    let geo = new TextGeometry(p.text, {
+        font: activeFont, // <-- Use the object's specific font
+        size: 10,
+        height: thickness,
+        curveSegments: 4
+    });
 
-        // Center X/Y but keep Z at 0 (back of text) for easier bending
-        geo.computeBoundingBox();
-        const centerOffset = - 0.5 * ( geo.boundingBox.max.x - geo.boundingBox.min.x );
-        const centerOffsetY = - 0.5 * ( geo.boundingBox.max.y - geo.boundingBox.min.y );
-        geo.translate( centerOffset, centerOffsetY, 0 );
+    // Center X/Y but keep Z at 0 (back of text)
+    geo.computeBoundingBox();
+    const centerOffset = -0.5 * (geo.boundingBox.max.x - geo.boundingBox.min.x);
+    const centerOffsetY = -0.5 * (geo.boundingBox.max.y - geo.boundingBox.min.y);
+    geo.translate(centerOffset, centerOffsetY, 0);
 
-        // 2. APPLY BEND (The "Wrapping" Logic)
-        // We use 'curvature' (1/radius). 0 = Flat. 0.1 = Radius 10.
-        if (Math.abs(p.bend) > 0.001) {
+    // 2. PROJECT VERTICES TO TARGET SURFACE
+    if (p.targetUuid) {
+        const target = scene.getObjectByProperty('uuid', p.targetUuid);
+        if (target) {
+            if (typeof mesh.updateMatrixWorld === 'function') mesh.updateMatrixWorld(true);
+            target.updateMatrixWorld(true);
+
             const posAttribute = geo.attributes.position;
-            const vertex = new THREE.Vector3();
+            const raycaster = new THREE.Raycaster();
 
-            // Calculate Radius from Curvature
-            // p.bend is now "Curvature".
-            // If bend is 0.05, Radius is 20.
-            const radius = 1 / p.bend;
+            const dir = new THREE.Vector3(0, 0, -1).transformDirection(mesh.matrixWorld).normalize();
+            const originOffset = new THREE.Vector3(0, 0, 100).transformDirection(mesh.matrixWorld);
 
-            for ( let i = 0; i < posAttribute.count; i ++ ) {
-                vertex.fromBufferAttribute( posAttribute, i );
+            let lastValidZ = 0;
+            const newPositions = new Float32Array(posAttribute.count * 3);
 
-                // The "Depth" of this vertex (0 to 2)
-                const zDepth = vertex.z;
+            for (let i = 0; i < posAttribute.count; i++) {
+                const origX = posAttribute.getX(i);
+                const origY = posAttribute.getY(i);
+                const origZ = posAttribute.getZ(i);
 
-                // The effective radius for THIS vertex (Thickness preservation)
-                // We wrap around the cylinder. The back of text is at 'radius'.
-                // The front of text is at 'radius + zDepth'.
-                const effectiveR = radius + zDepth;
+                const vLocal = new THREE.Vector3(origX, origY, 0);
+                const vWorld = vLocal.applyMatrix4(mesh.matrixWorld).add(originOffset);
 
-                // Calculate angle based on X position
-                const angle = vertex.x / radius;
+                raycaster.set(vWorld, dir);
+                const hits = raycaster.intersectObject(target, false);
 
-                // New positions (Cylindrical coordinates)
-                // We subtract radius from Z at the end to bring the "back" of the text to Z=0
-                const nx = effectiveR * Math.sin(angle);
-                const nz = effectiveR * Math.cos(angle) - radius;
+                let surfaceZ = lastValidZ;
+                if (hits.length > 0) {
+                    const hitLocal = new THREE.Vector3().copy(hits[0].point);
+                    hitLocal.applyMatrix4(mesh.matrixWorld.clone().invert());
+                    surfaceZ = hitLocal.z;
+                    lastValidZ = surfaceZ;
+                }
 
-                posAttribute.setXYZ( i, nx, vertex.y, nz );
+                const t = thickness > 0 ? (origZ / thickness) : 1;
+                const newZ = surfaceZ + surfaceOffset - (1 - t) * thickness;
+
+                newPositions[i * 3] = origX;
+                newPositions[i * 3 + 1] = origY;
+                newPositions[i * 3 + 2] = newZ;
             }
 
+            geo.setAttribute('position', new THREE.BufferAttribute(newPositions, 3));
             geo.computeVertexNormals();
         }
-
-        // 3. Update Mesh
-        mesh.geometry.dispose();
-        mesh.geometry = geo;
-
-        // IMPORTANT: Re-calculate bounds so the Selection Box / Gizmo matches the new curved shape
-        mesh.geometry.computeBoundingBox();
-
-        window.requestRender();
     }
 
+    // 3. Update Mesh
+    if (mesh.geometry) mesh.geometry.dispose();
+    mesh.geometry = geo;
+    mesh.geometry.computeBoundingBox();
 
+    if (typeof window.requestRender === 'function') window.requestRender();
+}
+
+
+// --- 4. RE-SNAP TEXT TO SURFACE ---
 window.reSnapText = () => {
-        if(selectedObjects.length !== 1) return;
-        const obj = selectedObjects[0];
-        if(!obj.userData.geoParams || obj.userData.geoParams.type !== 'text') return;
+    if(selectedObjects.length !== 1) return;
+    const obj = selectedObjects[0];
+    if(!obj.userData.geoParams || obj.userData.geoParams.type !== 'text') return;
 
-        // 1. Setup Ray from Object Center, pointing "Inwards" (Local -Z)
-        const origin = obj.position.clone();
-        // The text's "back" is its local negative Z? Actually we oriented Z as Normal.
-        // So we cast ray in direction of -Z (into the surface)
-        const direction = new THREE.Vector3(0,0,-1).applyQuaternion(obj.quaternion).normalize();
-
-        // Start ray slightly "above" text to ensure we hit the surface
-        const startPt = origin.clone().sub(direction.clone().multiplyScalar(2)); // Back up 2 units
-
-        ray.set(startPt, direction);
-
-        // Filter out the text itself
-        const targets = scene.children.filter(o => o.isMesh && o !== obj && !o.userData.isGhost && !o.userData.isRuler && o !== liftCone);
-        const intersects = ray.intersectObjects(targets, false);
-
-        if(intersects.length > 0) {
-            const hit = intersects[0];
-            // Reuse the math from onPointerMove...
-            // Or simpler: Just calculate the curvature logic here.
-
-            // ... Copy/Paste the "UNIVERSAL CURVATURE DETECTION" block from onPointerMove here ...
-            // ... using 'hit' as the target ...
-
-            // Simplified Logic for Re-Snap:
-            const normal = hit.face.normal.clone().applyQuaternion(hit.object.quaternion).normalize();
-
-            // Re-Align Rotation (Optional, maybe user likes their rotation?)
-            // Let's just update the BEND for now to avoid flipping rotated text.
-
-            const rightVec = new THREE.Vector3(1,0,0).applyQuaternion(obj.quaternion).normalize();
-            const sampleDist = 5.0;
-            const leftOrigin = hit.point.clone().sub(rightVec.clone().multiplyScalar(sampleDist)).add(normal.clone().multiplyScalar(2));
-            const rightOrigin = hit.point.clone().add(rightVec.clone().multiplyScalar(sampleDist)).add(normal.clone().multiplyScalar(2));
-
-            const rayDown = new THREE.Raycaster();
-            const dir = normal.clone().negate();
-            rayDown.set(leftOrigin, dir);
-            const lHit = rayDown.intersectObject(hit.object, false);
-            rayDown.set(rightOrigin, dir);
-            const rHit = rayDown.intersectObject(hit.object, false);
-
-            if(lHit.length>0 && rHit.length>0) {
-                 const lNorm = lHit[0].face.normal.clone().applyQuaternion(hit.object.quaternion).normalize();
-                 const rNorm = rHit[0].face.normal.clone().applyQuaternion(hit.object.quaternion).normalize();
-                 const angle = lNorm.angleTo(rNorm);
-                 if (angle > 0.001) {
-                     const newBend = (angle / (sampleDist * 2)) * 1.0;
-                     obj.userData.geoParams.bend = newBend;
-                     regenerateText(obj);
-                     updatePropertiesPanel(); // Refresh slider
-                     saveState();
-                 }
-            }
-        } else {
-            alert("No surface found behind text to snap to.");
-        }
+    // Save original state in case the user aborts by clicking in empty space
+    obj.userData.reSnapBackup = {
+        position: obj.position.clone(),
+        quaternion: obj.quaternion.clone(),
+        targetUuid: obj.userData.geoParams.targetUuid,
+        material: obj.material
     };
+
+    // Enter placement mode
+    textPlaceMode = true;
+    document.body.style.cursor = 'crosshair';
+
+    // Setup the selected object as the ghost
+    textGhost = obj;
+    textGhost.userData.isGhost = true;
+    textGhost.material = new THREE.MeshBasicMaterial({ color: 0x0d6efd, transparent: true, opacity: 0.5, wireframe: true });
+
+    const status = document.getElementById("auto-save-status");
+    status.innerText = "Click on a surface to re-place the text";
+    status.style.opacity = 1;
+
+    // Deselect so transform controls don't get in the way of clicking
+    selectObject(null);
+};
 
 const onPointerMove = e => {
-        // BUG FIX: Don't set isInteracting = true here.
-        // We only want a single frame update for hovering, not a continuous loop.
-        window.requestRender();
-        if (typeof window.handleExtrudeHover === 'function') {
-            // Pass the full event 'e' so we have X and Y
-            window.handleExtrudeHover(null, e);
-        }
-        // --- NEW: TEXT PLACEMENT GHOST ---
-// --- ADVANCED TEXT PLACEMENT ---
-        if (textPlaceMode && textGhost) {
-            const rect = ren.domElement.getBoundingClientRect();
-            const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
-            ray.setFromCamera(mouse, cam);
+    window.requestRender();
+    if (typeof window.handleExtrudeHover === 'function') {
+        window.handleExtrudeHover(null, e);
+    }
 
-            // 1. Raycast Center
-            const targets = scene.children.filter(o => o.isMesh && !o.userData.isGhost && !o.userData.isRuler && o !== liftCone);
-            const intersects = ray.intersectObjects(targets, false);
+    // --- TEXT PLACEMENT GHOST ---
+    if (textPlaceMode && textGhost) {
+        const rect = ren.domElement.getBoundingClientRect();
+        const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+        ray.setFromCamera(mouse, cam);
 
-            if (intersects.length > 0) {
-                const hit = intersects[0];
-                const pt = hit.point;
-                const normal = hit.face.normal.clone().applyQuaternion(hit.object.quaternion).normalize();
+        const targets = scene.children.filter(o => o.isMesh && !o.userData.isGhost && !o.userData.isRuler && o !== liftCone);
+        const intersects = ray.intersectObjects(targets, false);
 
-                // 2. STABLE ROTATION (No upside down flipping)
-                // We want the text's "Up" (Local Y) to align with Surface Normal (Z in our text logic?)
-                // Actually TextGeometry is created on XY plane.
-                // So Local Z = Surface Normal.
+        if (intersects.length > 0) {
+            const hit = intersects[0];
+            const pt = hit.point;
+            const normal = hit.face.normal.clone().applyQuaternion(hit.object.quaternion).normalize();
 
-                // Calculate a stable "Right" vector (Local X) that is parallel to the horizon
-                const worldUp = new THREE.Vector3(0, 0, 1);
-                let rightVec = new THREE.Vector3();
-
-                // If surface is floor/ceiling, define arbitrary right
-                if (Math.abs(normal.dot(worldUp)) > 0.99) {
-                    rightVec.set(1, 0, 0);
-                } else {
-                    // Cross WorldUp with Normal to get a horizon line
-                    rightVec.crossVectors(worldUp, normal).normalize();
-                    // If looking "backwards", flip it to keep text readable left-to-right
-                    // (Simple heuristic: assumes camera is somewhat upright)
-                }
-
-                // Create Basis Matrix
-                const upVec = new THREE.Vector3().crossVectors(normal, rightVec).normalize();
-                const basis = new THREE.Matrix4().makeBasis(rightVec, upVec, normal);
-                textGhost.quaternion.setFromRotationMatrix(basis);
-
-                // Position with nudge
-                textGhost.position.copy(pt).add(normal.clone().multiplyScalar(0.5));
-                textGhost.visible = true;
-
-                // 3. UNIVERSAL CURVATURE DETECTION (Tri-Ray Sample)
-                // We cast rays to the Left and Right of the hit point to measure surface angle
-                const sampleDist = 5.0; // Check 5mm to the side
-                const leftOrigin = pt.clone().sub(rightVec.clone().multiplyScalar(sampleDist)).add(normal.clone().multiplyScalar(2));
-                const rightOrigin = pt.clone().add(rightVec.clone().multiplyScalar(sampleDist)).add(normal.clone().multiplyScalar(2));
-
-                // Cast rays "Down" towards the surface (-Normal)
-                const rayDown = new THREE.Raycaster();
-                const dir = normal.clone().negate();
-
-                rayDown.set(leftOrigin, dir);
-                const leftHits = rayDown.intersectObject(hit.object, false);
-
-                rayDown.set(rightOrigin, dir);
-                const rightHits = rayDown.intersectObject(hit.object, false);
-
-                let autoBend = 0;
-
-                if (leftHits.length > 0 && rightHits.length > 0) {
-                    const lNorm = leftHits[0].face.normal.clone().applyQuaternion(hit.object.quaternion).normalize();
-                    const rNorm = rightHits[0].face.normal.clone().applyQuaternion(hit.object.quaternion).normalize();
-
-                    // Angle between normals
-                    let angle = lNorm.angleTo(rNorm);
-
-                    // Convex or Concave? Check dot product with center normal
-                    // Simple convex assumption for now (Curve wrap).
-                    // Calculation: Curvature = Angle / ArcLength (approx Distance)
-                    // Note: If normals point away, it's convex (+). If they point in, concave (-).
-                    // We assume convex for external placement.
-
-                    if (angle > 0.01) {
-                         // Curvature K = 1/R.
-                         // If we are placing on outside, we wrap positive.
-                         // Using a dampener because the math for text bending is sensitive
-                         autoBend = (angle / (sampleDist * 2)) * 1.0;
-                    }
-                }
-
-                // Apply
-                 if (!textGhost.userData.geoParams) textGhost.userData.geoParams = { type: 'text', text: 'Text', bend: 0, fontKey: currentFontKey };
-                 if (Math.abs(textGhost.userData.geoParams.bend - autoBend) > 0.005) {
-                    textGhost.userData.geoParams.bend = autoBend;
-                    regenerateText(textGhost);
-                }
-
+            // Setup proper text horizon
+            const worldUp = new THREE.Vector3(0, 0, 1);
+            let rightVec = new THREE.Vector3();
+            if (Math.abs(normal.dot(worldUp)) > 0.99) {
+                rightVec.set(1, 0, 0);
             } else {
-                textGhost.visible = false;
+                rightVec.crossVectors(worldUp, normal).normalize();
             }
-            return;
-        }
 
-        // 1. UPDATE GHOST IF IN ALIGN MODE
-        if (alignState !== 'none' && e.buttons === 0) {
-            const rect = ren.domElement.getBoundingClientRect();
-            const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
-            ray.setFromCamera(mouse, cam);
-            handleAlignHover(ray, mouse);
-            return;
-        }
+            const upVec = new THREE.Vector3().crossVectors(normal, rightVec).normalize();
+            const basis = new THREE.Matrix4().makeBasis(rightVec, upVec, normal);
+            textGhost.quaternion.setFromRotationMatrix(basis);
 
-        // ... Existing Lift Logic ...
-        if (isLifting && selectedObjects.length === 1) {
-            const deltaY = liftStartMouseY - e.clientY;
-            const newZ = liftStartObjZ + (deltaY * 0.2);
-            const deltaZ = newZ - selectedObjects[0].position.z;
-            selectedObjects[0].position.z = newZ;
-            // Move grouped siblings by the same Z delta
-            if (selectedObjects[0].userData.groupId && Math.abs(deltaZ) > 0.0001) {
-                getGroupSiblings(selectedObjects[0]).forEach(sib => {
-                    sib.position.z += deltaZ;
-                });
+            // Set base position to the hit surface
+            textGhost.position.copy(pt);
+            textGhost.visible = true;
+
+            // Link target and wrap perfectly to the geometry
+            if (textGhost.userData.geoParams.targetUuid !== hit.object.uuid) {
+                textGhost.userData.geoParams.targetUuid = hit.object.uuid;
             }
-            updateLiftConePos();
-            updateTinkerLabels();
-            updatePropertiesPanel();
+            regenerateText(textGhost);
+        } else {
+            textGhost.visible = false;
         }
-    };
+        return;
+    }
+
+    if (alignState !== 'none' && e.buttons === 0) {
+        const rect = ren.domElement.getBoundingClientRect();
+        const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+        ray.setFromCamera(mouse, cam);
+        handleAlignHover(ray, mouse);
+        return;
+    }
+
+    if (isLifting && selectedObjects.length === 1) {
+        const deltaY = liftStartMouseY - e.clientY;
+        const newZ = liftStartObjZ + (deltaY * 0.2);
+        const deltaZ = newZ - selectedObjects[0].position.z;
+        selectedObjects[0].position.z = newZ;
+        if (selectedObjects[0].userData.groupId && Math.abs(deltaZ) > 0.0001) {
+            getGroupSiblings(selectedObjects[0]).forEach(sib => {
+                sib.position.z += deltaZ;
+            });
+        }
+        updateLiftConePos();
+        updateTinkerLabels();
+        updatePropertiesPanel();
+    }
+};
 
 
     window.setMode = mode => { if(tCtrl) tCtrl.setMode(mode); document.querySelectorAll(".btn-tool").forEach(b => b.classList.remove("active-tool")); const btn = document.querySelector(`button[data-mode="${mode}"]`); if(btn) btn.classList.add("active-tool"); };
@@ -8149,6 +8134,20 @@ const updatePropertiesPanel = () => {
 
                     // --- CASE A: 3D TEXT ---
                     case 'text':
+                        // Dynamically build the font dropdown options
+                        let fontOptions = '';
+                        const currentObjFont = n.userData.geoParams.fontKey || 'helvetiker';
+
+                        for (const [key, font] of Object.entries(BUILTIN_FONTS)) {
+                            const selected = (currentObjFont === key) ? 'selected' : '';
+                            fontOptions += `<option value="${key}" ${selected}>${font.name}</option>`;
+                        }
+                        for (const [key, font] of Object.entries(customFonts)) {
+                            const selected = (currentObjFont === key) ? 'selected' : '';
+                            fontOptions += `<option value="${key}" ${selected}>★ ${font.name}</option>`;
+                        }
+
+                        // --- UPDATED TEXT UI SECTION ---
                         container.innerHTML += `
                             <div class="mb-2">
                                 <label class="small fw-bold">Text Content</label>
@@ -8157,64 +8156,74 @@ const updatePropertiesPanel = () => {
                             <div class="mb-2">
                                 <label class="small fw-bold">Font</label>
                                 <select class="form-select form-select-sm" id="prop-font-select">
-                                    <option value="helvetiker">Helvetiker (Default)</option>
-                                    <option value="helvetiker_bold">Helvetiker Bold</option>
-                                    <option value="optimer">Optimer</option>
-                                    <option value="optimer_bold">Optimer Bold</option>
-                                    <option value="droid_sans">Droid Sans</option>
-                                    <option value="droid_sans_mono">Droid Sans Mono</option>
+                                    ${fontOptions}
                                 </select>
                                 <input type="file" class="form-control form-control-sm mt-1" id="prop-font-upload" accept=".json,.ttf,.otf">
                                 <small class="text-muted d-block" style="font-size:0.65rem">Upload custom font (.json typeface)</small>
-                            </div>`;
-
-                        container.innerHTML += `
+                            </div>
                             <div class="d-flex justify-content-between align-items-center mb-1">
-                                <span class="small text-muted">Bend (Auto)</span>
-                                <input type="range" class="form-range w-50" min="-0.2" max="0.2" step="0.005" value="${n.userData.geoParams.bend}" id="prop-text-bend">
-                            </div>`;
-
-                        container.innerHTML += `
+                                <span class="small text-muted" title="Text Mesh Depth (Front to Back)">Thickness (mm)</span>
+                                <input type="range" class="form-range w-50" min="0.1" max="50" step="0.1" value="${n.userData.geoParams.thickness || 5}" id="prop-text-thickness">
+                                <span class="small fw-bold" style="width:35px">${n.userData.geoParams.thickness || 5}</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="small text-muted" title="Offset from Target Surface (0 = Flush)">Surface Offset</span>
+                                <input type="range" class="form-range w-50" min="-10" max="10" step="0.1" value="${n.userData.geoParams.surfaceOffset || 0}" id="prop-text-offset">
+                                <span class="small fw-bold" style="width:35px">${n.userData.geoParams.surfaceOffset || 0}</span>
+                            </div>
                             <div class="d-grid gap-2 mt-2">
                                 <button class="btn btn-sm btn-outline-primary" onclick="window.reSnapText()">
-                                    <i class="bi bi-arrow-repeat"></i> Auto-Wrap to Surface
+                                    <i class="bi bi-arrow-repeat"></i> Re-Wrap to Surface
                                 </button>
                             </div>`;
 
                         setTimeout(() => {
                             const txtIn = document.getElementById('prop-text-input');
-                            const bendIn = document.getElementById('prop-text-bend');
                             const fontSelect = document.getElementById('prop-font-select');
                             const fontUpload = document.getElementById('prop-font-upload');
+                            const thickIn = document.getElementById('prop-text-thickness');
+                            const offsetIn = document.getElementById('prop-text-offset');
+
                             if(txtIn) {
                                 txtIn.onchange = (e) => {
                                     n.userData.geoParams.text = e.target.value;
                                     regenerateText(n);
+                                    saveState();
                                 };
                             }
-                            
-                            // Font selector event
+
                             if (fontSelect) {
-                                fontSelect.value = currentFontKey;
                                 fontSelect.onchange = (e) => {
                                     const fontKey = e.target.value;
+                                    n.userData.geoParams.fontKey = fontKey;
+                                    // Load font into memory if missing, then regenerate
                                     loadFont(fontKey, () => {
-                                        n.userData.geoParams.fontKey = fontKey;
                                         regenerateText(n);
+                                        saveState();
                                     });
                                 };
                             }
-                            
-                            // Custom font upload event
+
                             if (fontUpload) {
                                 fontUpload.onchange = handleCustomFontUpload;
                             }
-                            if(bendIn) {
-                                bendIn.oninput = (e) => {
-                                    n.userData.geoParams.bend = parseFloat(e.target.value);
+
+                            if(thickIn) {
+                                thickIn.oninput = (e) => {
+                                    n.userData.geoParams.thickness = parseFloat(e.target.value);
+                                    e.target.nextElementSibling.innerText = e.target.value;
                                     regenerateText(n);
                                 };
-                                bendIn.onchange = () => saveState();
+                                thickIn.onchange = () => saveState();
+                            }
+
+                            if(offsetIn) {
+                                offsetIn.oninput = (e) => {
+                                    n.userData.geoParams.surfaceOffset = parseFloat(e.target.value);
+                                    e.target.nextElementSibling.innerText = e.target.value;
+                                    regenerateText(n);
+                                };
+                                offsetIn.onchange = () => saveState();
                             }
                         }, 0);
                         break;
@@ -8400,7 +8409,7 @@ const updatePropertiesPanel = () => {
     const updateColorPicker = e => { const t = e.getHexString().toLowerCase(); document.querySelectorAll(".color-option").forEach(el => el.classList.toggle("selected", el.dataset.color.includes(t))); };
 
 
-    window.selectObject = (obj, multi = false) => {
+window.selectObject = (obj, multi = false) => {
         // 1. Clear previous selection if not multi-select
         if (!multi) {
             selectedObjects.forEach(o => { if(o.material) o.material.emissive.setHex(0); });
@@ -8429,26 +8438,30 @@ const updatePropertiesPanel = () => {
         }
 
         // 3. Attach/Detach Gizmo (TransformControls)
-        if (selectedObjects.length === 1) {
-            tCtrl.attach(selectedObjects[0]);
-            // If selecting the ruler, default to move mode
-            if(selectedObjects[0].userData.isRuler) tCtrl.setMode('translate');
+        if (typeof tCtrl !== 'undefined' && tCtrl) {
+            if (selectedObjects.length === 1) {
+                tCtrl.attach(selectedObjects[0]);
+                // If selecting the ruler, default to move mode
+                if(selectedObjects[0].userData.isRuler) tCtrl.setMode('translate');
 
-            // --- GROUP: Store initial transforms for delta calculation ---
-            if (selectedObjects[0].userData.groupId) {
-                const members = getGroupMembers(selectedObjects[0]);
-                members.forEach(m => _storeGroupPrevTransform(m));
+                // --- GROUP: Store initial transforms for delta calculation ---
+                if (selectedObjects[0].userData.groupId) {
+                    const members = getGroupMembers(selectedObjects[0]);
+                    members.forEach(m => _storeGroupPrevTransform(m));
+                }
+
+                updateLiftConePos();
+                updateTinkerLabels();
+            } else {
+                tCtrl.detach();
+                updateLiftConePos();
+                // Clear dimensions labels
+                activeLabels.forEach(l => scene.remove(l));
+                activeLabels.length = 0;
+                if (schematicGroup) {
+                    while(schematicGroup.children.length > 0){ schematicGroup.remove(schematicGroup.children[0]); }
+                }
             }
-
-            updateLiftConePos();
-            updateTinkerLabels();
-        } else {
-            tCtrl.detach();
-            updateLiftConePos();
-            // Clear dimensions labels
-            activeLabels.forEach(l => scene.remove(l));
-            activeLabels.length = 0;
-            while(schematicGroup.children.length > 0){ schematicGroup.remove(schematicGroup.children[0]); }
         }
 
         // 4. Update UI
@@ -8456,7 +8469,7 @@ const updatePropertiesPanel = () => {
         updateObjectList();
 
         // 5. Force Render (Important for responsiveness)
-        window.requestRender();
+        if (typeof window.requestRender === 'function') window.requestRender();
     };
 // --- LIST INTERACTION FUNCTIONS ---
 
@@ -10648,16 +10661,19 @@ window.dMirror = (axis) => {
 function createSnapshot() {
         const l = [];
         scene.children.forEach(c => {
-            // FIX: Added !c.userData.isGhost so we don't save the placement tool
             if (c.isMesh && !c.userData.isRuler && c !== liftCone && c.userData.name !== "FaceMarker" && !c.userData.isGhost) {
                 l.push(c);
             }
         });
 
-        const d = { metadata: { type: 'Save' }, scene: new THREE.Scene().toJSON() };
+        // Pack the scene AND the customFonts dictionary into the .tinker file
+        const d = {
+            metadata: { type: 'Save' },
+            scene: new THREE.Scene().toJSON(),
+            customFonts: customFonts // <--- Embed Custom Fonts
+        };
 
         const childrenJSON = l.map(c => {
-            // Swap Text for Box during save to prevent crash
             if (c.userData.geoParams && c.userData.geoParams.type === 'text') {
                 const clone = c.clone();
                 clone.geometry = new THREE.BoxGeometry(1, 1, 1);
@@ -10848,6 +10864,14 @@ function loadSnapshot(compressedData) {
 
         let data;
         try { data = JSON.parse(jsonStr); } catch (e) { return; }
+
+        // Restore Custom Fonts from the Project File
+        if (data.customFonts) {
+            Object.assign(customFonts, data.customFonts);
+            saveCustomFonts(); // Save to browser so they persist
+            updateFontSelector();
+            updateFontManagementUI();
+        }
 
         selectObject(null);
         scene.children.filter(c => c.isMesh && !c.userData.isRuler && c !== liftCone).forEach(c => scene.remove(c));

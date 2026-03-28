@@ -1110,6 +1110,7 @@
 
 <!-- OCCT Import JS for STEP file support -->
 <script src="https://unpkg.com/occt-import-js@0.0.23/dist/occt-import-js.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/opentype.js@1.3.4/dist/opentype.min.js"></script>
 </head>
 <body>
 
@@ -1240,9 +1241,6 @@
                 <button class="file-dropdown-item" onclick="window.downloadExport('usdz'); closeAllDropdowns();">
                     <i class="bi bi-phone"></i> Export .USDZ
                     <span class="tooltip-text">Export as USDZ for AR quick look on Apple devices.</span>
-                </button>
-                <button class="file-dropdown-item" onclick="document.getElementById('export-panel').style.display='block'; closeAllDropdowns();">
-                    <i class="bi bi-three-dots"></i> More formats...
                 </button>
                 <div class="file-dropdown-divider"></div>
                 <button class="file-dropdown-item" onclick="if(confirm('Clear Scene?')) window.dDelAll(); closeAllDropdowns();">
@@ -1905,6 +1903,331 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
     // --- TEXT GLOBALS ---
     let loadedFont = null;
     let textPlaceMode = false;
+    
+    // --- FONT MANAGEMENT ---
+    const BUILTIN_FONTS = {
+        'helvetiker': { name: 'Helvetiker (Default)', url: 'https://unpkg.com/three@0.160.0/examples/fonts/helvetiker_regular.typeface.json' },
+        'helvetiker_bold': { name: 'Helvetiker Bold', url: 'https://unpkg.com/three@0.160.0/examples/fonts/helvetiker_bold.typeface.json' },
+        'optimer': { name: 'Optimer', url: 'https://unpkg.com/three@0.160.0/examples/fonts/optimer_regular.typeface.json' },
+        'optimer_bold': { name: 'Optimer Bold', url: 'https://unpkg.com/three@0.160.0/examples/fonts/optimer_bold.typeface.json' },
+        'droid_sans': { name: 'Droid Sans', url: 'https://unpkg.com/three@0.77.0/examples/fonts/droid/droid_sans_regular.typeface.json' },
+        'droid_sans_mono': { name: 'Droid Sans Mono', url: 'https://unpkg.com/three@0.77.0/examples/fonts/droid/droid_sans_mono_regular.typeface.json' }
+    };
+    let currentFontKey = 'helvetiker';
+    let customFonts = {}; // Store custom uploaded fonts
+    
+    // Function to load a font by key or URL
+    function loadFont(fontKey, callback) {
+        const fLoader = new FontLoader();
+        let fontUrl;
+        
+        if (BUILTIN_FONTS[fontKey]) {
+            fontUrl = BUILTIN_FONTS[fontKey].url;
+        } else if (customFonts[fontKey]) {
+            fontUrl = customFonts[fontKey];
+        } else {
+            fontUrl = fontKey; // Assume it's a URL
+        }
+        
+        fLoader.load(fontUrl, (font) => {
+            loadedFont = font;
+            currentFontKey = fontKey;
+            console.log('Font Loaded:', fontKey);
+            if (callback) callback(font);
+        }, undefined, (err) => {
+            console.error('Failed to load font:', fontKey, err);
+            alert('Failed to load font. Please try another.');
+        });
+    }
+    
+    // Function to handle custom font upload
+    function handleCustomFontUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const fontKey = 'custom_' + Date.now();
+        const fileName = file.name.toLowerCase();
+
+        // ---- PATH A: Already a typeface.json ----
+        if (fileName.endsWith('.json')) {
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                customFonts[fontKey] = e.target.result;
+                const fLoader = new FontLoader();
+                fLoader.load(e.target.result, (font) => {
+                    loadedFont = font;
+                    currentFontKey = fontKey;
+                    updateFontSelector();
+                    if (selectedObjects.length > 0) {
+                        const obj = selectedObjects[0];
+                        if (obj.userData.geoParams && obj.userData.geoParams.type === 'text') {
+                            obj.userData.geoParams.fontKey = fontKey;
+                            regenerateText(obj);
+                        }
+                    }
+                    alert('Custom font "' + file.name + '" loaded successfully!');
+                }, undefined, () => {
+                    alert('Failed to load typeface JSON.');
+                });
+            };
+            reader.readAsDataURL(file);
+            return;
+        }
+
+        // ---- PATH B: TTF / OTF → convert to typeface.json ----
+        if (typeof opentype === 'undefined') {
+            alert('opentype.js not loaded yet. Please wait a moment and try again, or upload a .json typeface font.');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            try {
+                const arrayBuffer = e.target.result;
+                const parsedFont = opentype.parse(arrayBuffer);
+                const typefaceJson = convertToTypefaceJson(parsedFont);
+
+                // Create a Blob URL from the JSON so FontLoader.load() can fetch it
+                const jsonStr = JSON.stringify(typefaceJson);
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                const fontUrl = URL.createObjectURL(blob);
+
+                customFonts[fontKey] = fontUrl;
+
+                const fLoader = new FontLoader();
+                fLoader.load(fontUrl, (font) => {
+                    loadedFont = font;
+                    currentFontKey = fontKey;
+                    console.log('Custom Font Loaded:', file.name);
+                    updateFontSelector();
+
+                    if (selectedObjects.length > 0) {
+                        const obj = selectedObjects[0];
+                        if (obj.userData.geoParams && obj.userData.geoParams.type === 'text') {
+                            obj.userData.geoParams.fontKey = fontKey;
+                            regenerateText(obj);
+                        }
+                    }
+                    alert('Custom font "' + file.name + '" loaded successfully!');
+                }, undefined, (err) => {
+                    console.error('FontLoader error:', err);
+                    alert('Failed to load converted font data.');
+                });
+            } catch (err) {
+                console.error('Failed to parse font file:', err);
+                alert(
+                    'Failed to parse font file.\n\n' +
+                    'Make sure it is a valid .ttf or .otf file.\n\n' +
+                    'Error: ' + err.message
+                );
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+/**
+ * Converts an opentype.js Font object into the typeface.json format
+ * that Three.js FontLoader (r160) expects.
+ *
+ * Three.js FontLoader format requirements (from source):
+ *   - data.resolution  → used as scale divisor: size / data.resolution
+ *   - data.glyphs      → OBJECT keyed by unicode string (NOT array)
+ *   - data.boundingBox  → { xMin, xMax, yMin, yMax }
+ *   - path commands use ABSOLUTE coordinates
+ *   - move=m, line=l, quad=q, bezier=b (NOT 'c')
+ *   - 'b' has ENDPOINT first: b endX endY cp1X cp1Y cp2X cp2Y
+ */
+function convertToTypefaceJson(font) {
+    const upm = font.unitsPerEm || 1000;
+
+    const safe = (v) => {
+        const n = Number(v);
+        return isNaN(n) ? 0 : Math.round(n);
+    };
+
+    // ---------- 1. Build glyphs DICTIONARY ----------
+    const glyphs = {};
+    let overallXMin = 0;
+    let overallXMax = upm;
+
+    for (let i = 0; i < font.glyphs.length; i++) {
+        const glyph = font.glyphs.get(i);
+        if (!glyph) continue;
+        if (glyph.unicode === undefined || glyph.unicode === null) continue;
+        if (glyph.name === '.notdef') continue;
+
+        const unicodeStr = String.fromCodePoint(glyph.unicode);
+
+        if (glyph.xMin != null && isFinite(glyph.xMin))
+            overallXMin = Math.min(overallXMin, glyph.xMin);
+        if (glyph.xMax != null && isFinite(glyph.xMax))
+            overallXMax = Math.max(overallXMax, glyph.xMax);
+
+        // ---------- 2. Extract path with robust fallbacks ----------
+        let commands = null;
+
+        // Try resolved path (handles compound glyphs like é, Å)
+        try {
+            const resolvedPath = glyph.getPath(0, 0, upm);
+            if (resolvedPath && resolvedPath.commands && resolvedPath.commands.length > 0) {
+                commands = resolvedPath.commands;
+            }
+        } catch (e) {
+            // getPath failed, fall through to raw path
+        }
+
+        // Fallback: use raw path directly
+        if (!commands && glyph.path && glyph.path.commands && glyph.path.commands.length > 0) {
+            commands = glyph.path.commands;
+        }
+
+        // Skip if absolutely no path data (space, etc.)
+        if (!commands) continue;
+
+        // ---------- 3. Build ABSOLUTE path string ----------
+        const parts = [];
+
+        for (let j = 0; j < commands.length; j++) {
+            const c = commands[j];
+
+            switch (c.type) {
+                case 'M':
+                    // Three.js: m x y (absolute moveTo)
+                    parts.push('m', safe(c.x), safe(c.y));
+                    break;
+
+                case 'L':
+                    // Three.js: l x y (absolute lineTo)
+                    parts.push('l', safe(c.x), safe(c.y));
+                    break;
+
+                case 'Q':
+                    // Three.js: q controlX controlY endX endY (absolute)
+                    parts.push('q',
+                        safe(c.x1), safe(c.y1),
+                        safe(c.x), safe(c.y)
+                    );
+                    break;
+
+                case 'C':
+                    // Three.js uses 'b' (NOT 'c') for cubic bezier
+                    // Parameter order is REVERSED from SVG:
+                    //   SVG: C cp1X cp1Y cp2X cp2Y endX endY
+                    //   Three.js: b endX endY cp1X cp1Y cp2X cp2Y
+                    parts.push('b',
+                        safe(c.x), safe(c.y),        // endpoint
+                        safe(c.x1), safe(c.y1),      // control point 1
+                        safe(c.x2), safe(c.y2)       // control point 2
+                    );
+                    break;
+
+                case 'Z':
+                case 'z':
+                    parts.push('z');
+                    break;
+
+                default:
+                    // Skip exotic commands (H, V, S, T, A)
+                    break;
+            }
+        }
+
+        const pathStr = parts.join(' ');
+        if (!pathStr) continue;
+
+        const glyphData = {
+            unicode: unicodeStr,
+            name:    glyph.name || unicodeStr,
+            ha:      safe(glyph.advanceWidth || upm * 0.5),
+            x_min:   safe(glyph.xMin),
+            x_max:   safe(glyph.xMax),
+            o:       pathStr
+        };
+
+        // Key by unicode STRING — Three.js does: data.glyphs["h"]
+        glyphs[unicodeStr] = glyphData;
+
+        // Also key by unicode NUMBER as fallback
+        const unicodeNum = glyph.unicode;
+        if (unicodeNum !== undefined && unicodeNum !== null) {
+            glyphs[unicodeNum] = glyphData;
+        }
+    }
+
+    const ascender  = font.ascender  != null ? font.ascender  : upm * 0.8;
+    const descender = font.descender != null ? font.descender : -upm * 0.2;
+
+    // ---------- 4. Return complete typeface.json ----------
+    return {
+        glyphs: glyphs,
+
+        familyName:
+            (font.names.fontFamily && font.names.fontFamily.en) ||
+            font.names.fontFamily ||
+            'Custom Font',
+
+        // CRITICAL: Three.js uses this as scale divisor
+        //   const scale = size / data.resolution;
+        // Without it → size / undefined = NaN → ALL vertices become NaN
+        resolution: upm,
+
+        ascender:           Math.round(ascender),
+        descender:          Math.round(descender),
+        underlinePosition:  Math.round(
+            (font.tables.post && font.tables.post.underlinePosition) || -upm * 0.1
+        ),
+        underlineThickness: Math.round(
+            (font.tables.post && font.tables.post.underlineThickness) || upm * 0.05
+        ),
+
+        // CRITICAL: Three.js crashes at createPaths line 76 if missing
+        boundingBox: {
+            xMin: Math.round(overallXMin),
+            xMax: Math.round(overallXMax),
+            yMin: Math.round(descender),
+            yMax: Math.round(ascender)
+        }
+    };
+}
+    // Function to get current font name for display
+    function getCurrentFontName() {
+        if (BUILTIN_FONTS[currentFontKey]) {
+            return BUILTIN_FONTS[currentFontKey].name;
+        } else if (currentFontKey.startsWith('custom_')) {
+            return 'Custom Font';
+        }
+        return 'Default';
+    }
+    
+    // Function to update font selector UI
+    function updateFontSelector() {
+        const selector = document.getElementById('prop-font-select');
+        const uploadInput = document.getElementById('prop-font-upload');
+        if (!selector) return;
+        
+        // Clear existing options except first
+        while (selector.options.length > 1) {
+            selector.remove(1);
+        }
+        
+        // Add built-in fonts
+        for (const [key, font] of Object.entries(BUILTIN_FONTS)) {
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = font.name;
+            selector.appendChild(option);
+        }
+        
+        // Add custom fonts
+        for (const key of Object.keys(customFonts)) {
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = 'Custom Font';
+            selector.appendChild(option);
+        }
+        
+        // Set current selection
+        selector.value = currentFontKey;
+    }
     let textGhost = null;
     let shadowPlane;
         // --- NEW GLOBALS FOR SHELL ---
@@ -4508,11 +4831,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
     window.dToggleGravity = window.togglePhysics;
 
     // Load font immediately on startup
-    const fLoader = new FontLoader();
-    fLoader.load('https://unpkg.com/three@0.160.0/examples/fonts/helvetiker_regular.typeface.json', (font) => {
-        loadedFont = font;
-        console.log("Font Loaded");
-    });
+    loadFont('helvetiker');
 
 // --- THREAD STANDARDS DATABASE ---
 const THREAD_SPECS = {
@@ -5205,9 +5524,8 @@ function handleAlignClick(ray) {
         }
 
         // --- 1. FONT LOADING (Must happen before LoadFromStorage) ---
-        const fLoader = new FontLoader();
-        fLoader.load('https://unpkg.com/three@0.160.0/examples/fonts/helvetiker_regular.typeface.json', (font) => {
-            loadedFont = font;
+        // Load default font using the new font loader
+        loadFont('helvetiker', () => {
             console.log("Font Loaded - Starting App");
 
             // This is the stable loading point
@@ -6850,7 +7168,7 @@ function createTextObject(pos, quat, bendValue) { // Added bendValue param
 
         // Use the new helper to generate the initial geometry with the correct bend
         const dummyMesh = {
-            userData: { geoParams: { type: 'text', text: textString, bend: bendValue || 0 } },
+            userData: { geoParams: { type: 'text', text: textString, bend: bendValue || 0, fontKey: currentFontKey } },
             geometry: null
         };
 
@@ -6869,7 +7187,7 @@ function createTextObject(pos, quat, bendValue) { // Added bendValue param
         mesh.userData = {
             name: `Text ${nameCount}`,
             isHole: false,
-            geoParams: { type: 'text', text: textString, bend: bendValue || 0 }
+            geoParams: { type: 'text', text: textString, bend: bendValue || 0, fontKey: currentFontKey }
         };
 
         mesh.castShadow = true;
@@ -7106,7 +7424,7 @@ const onPointerMove = e => {
                 }
 
                 // Apply
-                 if (!textGhost.userData.geoParams) textGhost.userData.geoParams = { type: 'text', text: 'Text', bend: 0 };
+                 if (!textGhost.userData.geoParams) textGhost.userData.geoParams = { type: 'text', text: 'Text', bend: 0, fontKey: currentFontKey };
                  if (Math.abs(textGhost.userData.geoParams.bend - autoBend) > 0.005) {
                     textGhost.userData.geoParams.bend = autoBend;
                     regenerateText(textGhost);
@@ -7835,6 +8153,19 @@ const updatePropertiesPanel = () => {
                             <div class="mb-2">
                                 <label class="small fw-bold">Text Content</label>
                                 <input type="text" class="form-control form-control-sm" value="${n.userData.geoParams.text}" id="prop-text-input">
+                            </div>
+                            <div class="mb-2">
+                                <label class="small fw-bold">Font</label>
+                                <select class="form-select form-select-sm" id="prop-font-select">
+                                    <option value="helvetiker">Helvetiker (Default)</option>
+                                    <option value="helvetiker_bold">Helvetiker Bold</option>
+                                    <option value="optimer">Optimer</option>
+                                    <option value="optimer_bold">Optimer Bold</option>
+                                    <option value="droid_sans">Droid Sans</option>
+                                    <option value="droid_sans_mono">Droid Sans Mono</option>
+                                </select>
+                                <input type="file" class="form-control form-control-sm mt-1" id="prop-font-upload" accept=".json,.ttf,.otf">
+                                <small class="text-muted d-block" style="font-size:0.65rem">Upload custom font (.json typeface)</small>
                             </div>`;
 
                         container.innerHTML += `
@@ -7853,12 +8184,30 @@ const updatePropertiesPanel = () => {
                         setTimeout(() => {
                             const txtIn = document.getElementById('prop-text-input');
                             const bendIn = document.getElementById('prop-text-bend');
+                            const fontSelect = document.getElementById('prop-font-select');
+                            const fontUpload = document.getElementById('prop-font-upload');
                             if(txtIn) {
                                 txtIn.onchange = (e) => {
                                     n.userData.geoParams.text = e.target.value;
                                     regenerateText(n);
-                                    saveState();
                                 };
+                            }
+                            
+                            // Font selector event
+                            if (fontSelect) {
+                                fontSelect.value = currentFontKey;
+                                fontSelect.onchange = (e) => {
+                                    const fontKey = e.target.value;
+                                    loadFont(fontKey, () => {
+                                        n.userData.geoParams.fontKey = fontKey;
+                                        regenerateText(n);
+                                    });
+                                };
+                            }
+                            
+                            // Custom font upload event
+                            if (fontUpload) {
+                                fontUpload.onchange = handleCustomFontUpload;
                             }
                             if(bendIn) {
                                 bendIn.oninput = (e) => {

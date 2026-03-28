@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-<title>3D Creator - Project History & Unmerge</title>
+<title>3D Creator - Project History, Unmerge & Group</title>
 
 <!-- 1. CSS STYLES -->
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -410,6 +410,79 @@
         gap: 4px;
     }
 
+    /* Nested Dropdown (Sub-dropdown) */
+    .file-dropdown-submenu {
+        position: relative;
+    }
+
+    .file-dropdown-submenu > .file-dropdown-menu {
+        display: none;
+        position: absolute;
+        left: 100%;
+        top: 0;
+        min-width: 200px;
+    }
+
+    .file-dropdown-submenu:hover > .file-dropdown-menu,
+    .file-dropdown-submenu.open > .file-dropdown-menu {
+        display: block;
+    }
+
+    .file-dropdown-submenu > .file-dropdown-item::after {
+        content: '▶';
+        font-size: 0.6rem;
+        margin-left: auto;
+    }
+
+    /* Popup Modal for .tinker info */
+    .tinker-info-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 2000;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .tinker-info-modal.show {
+        display: flex;
+    }
+
+    .tinker-info-modal .modal-content {
+        background: var(--ui-panel-strong);
+        border: 1px solid var(--ui-border);
+        border-radius: 12px;
+        padding: 24px;
+        max-width: 400px;
+        text-align: center;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    }
+
+    .tinker-info-modal .modal-icon {
+        font-size: 3rem;
+        color: var(--ui-accent);
+        margin-bottom: 16px;
+    }
+
+    .tinker-info-modal h3 {
+        margin: 0 0 12px 0;
+        color: var(--ui-text);
+    }
+
+    .tinker-info-modal p {
+        color: var(--ui-text-soft);
+        line-height: 1.6;
+        margin-bottom: 20px;
+    }
+
+    .tinker-info-modal .btn {
+        padding: 8px 24px;
+    }
+
     /* Object List (Bottom Right) - Enhanced */
     .float-list {
         bottom: 20px;
@@ -494,6 +567,23 @@
         flex-shrink: 0;
         width: 100%;
         margin-bottom: 5px;
+    }
+
+    /* Grouped object indicators in object list */
+    .object-list-item.grouped {
+        border-left: 3px solid #0dcaf0;
+        padding-left: 7px;
+    }
+
+    .group-badge {
+        font-size: 0.6rem;
+        background: rgba(13, 202, 240, 0.25);
+        color: #0dcaf0;
+        padding: 1px 5px;
+        border-radius: 4px;
+        margin-left: auto;
+        white-space: nowrap;
+        font-weight: 600;
     }
 
     /* Properties (Top Right) */
@@ -1084,47 +1174,78 @@
 
     <!-- Header Controls -->
     <div class="float-panel float-header">
-        <!-- File Dropdown -->
-        <div class="file-dropdown" id="file-dropdown">
-            <button class="file-dropdown-toggle" onclick="toggleFileDropdown()">
-                <i class="bi bi-file-earmark"></i> File
+        <!-- Import Dropdown -->
+        <div class="file-dropdown" id="import-dropdown">
+            <button class="file-dropdown-toggle" onclick="toggleFileDropdown('import-dropdown')">
+                <i class="bi bi-upload"></i> Import
             </button>
             <div class="file-dropdown-menu">
-                <input type="file" id="file-upload" multiple accept=".stl,.obj,.mtl,.jpg,.png,.glb,.gltf,.usdz,.step,.stp" style="display:none" onchange="window.dImportFile(this)">
+                <input type="file" id="file-upload" multiple accept=".tinker,.3mf,.stl,.obj,.mtl,.glb,.gltf,.usdz,.step,.stp,.jpg,.png" style="display:none" onchange="window.handleImportFile(this)">
                 <button class="file-dropdown-item" onclick="document.getElementById('file-upload').click(); closeFileDropdown();">
-                    <i class="bi bi-upload"></i> Import...
+                    <i class="bi bi-folder2-open"></i> Import File...
                     <span class="shortcut">Ctrl+O</span>
+                    <span class="tooltip-text">Import .tinker, .3MF, .STL, .OBJ, .GLTF, .GLB, .USDZ, or .STEP files</span>
                 </button>
                 <button class="file-dropdown-item" onclick="document.getElementById('file-upload-tinker').click(); closeFileDropdown();">
                     <i class="bi bi-file-earmark-arrow-in"></i> Import .tinker
                     <span class="tooltip-text">Import a .tinker project file to restore your saved 3D design with all objects, materials, and positions preserved.</span>
                 </button>
                 <input type="file" id="file-upload-tinker" accept=".tinker" style="display:none" onchange="window.loadProjectFile(this)">
-                <button class="file-dropdown-item" onclick="document.getElementById('file-upload-step').click(); closeFileDropdown();">
-                    <i class="bi bi-box-seam"></i> Import STEP...
-                    <span class="tooltip-text">Import a STEP file containing multiple 3D parts. The assembly structure will be preserved with proper positioning.</span>
-                </button>
-                <input type="file" id="file-upload-step" multiple accept=".step,.stp" style="display:none" onchange="window.dImportFile(this)">
-                <div class="file-dropdown-divider"></div>
-                <button class="file-dropdown-item" onclick="window.downloadExport('json'); closeFileDropdown();">
-                    <i class="bi bi-file-earmark-json"></i> Export .tinker
-                    <span class="tooltip-text">Export your project as a .tinker file to save and restore your complete 3D design including all objects, materials, and positions.</span>
-                    <span class="shortcut">Ctrl+S</span>
-                </button>
-                <button class="file-dropdown-item" onclick="document.getElementById('file-upload-3mf').click(); closeFileDropdown();">
-                    <i class="bi bi-box-seam"></i> Import 3MF...
-                    <span class="tooltip-text">Import a 3MF file to load multiple 3D parts with their assembly positions preserved.</span>
-                </button>
-                <input type="file" id="file-upload-3mf" accept=".3mf" style="display:none" onchange="window.load3MFFile(this)">
-                <button class="file-dropdown-item" onclick="window.downloadExport('3mf'); closeFileDropdown();">
-                    <i class="bi bi-box-seam-fill"></i> Export 3MF...
+            </div>
+        </div>
+
+        <div class="header-divider"></div>
+
+        <!-- Export Dropdown -->
+        <div class="file-dropdown" id="export-dropdown">
+            <button class="file-dropdown-toggle" onclick="toggleFileDropdown('export-dropdown')">
+                <i class="bi bi-download"></i> Export
+            </button>
+            <div class="file-dropdown-menu">
+                <div class="file-dropdown-submenu">
+                    <button class="file-dropdown-item">
+                        <i class="bi bi-file-earmark-code"></i> Export .tinker
+                        <span class="tooltip-text">Export as .tinker - your project's source code. Preserves all objects, materials, positions, and settings for full editing later.</span>
+                    </button>
+                    <div class="file-dropdown-menu">
+                        <button class="file-dropdown-item" onclick="showTinkerInfo(); closeAllDropdowns();">
+                            <i class="bi bi-info-circle"></i> What's this?
+                        </button>
+                        <button class="file-dropdown-item" onclick="window.downloadExport('json'); closeAllDropdowns();">
+                            <i class="bi bi-download"></i> Export .tinker
+                            <span class="shortcut">Ctrl+S</span>
+                        </button>
+                    </div>
+                </div>
+                <button class="file-dropdown-item" onclick="window.downloadExport('3mf'); closeAllDropdowns();">
+                    <i class="bi bi-box-seam-fill"></i> Export .3MF
                     <span class="tooltip-text">Export all 3D parts as a 3MF file with assembly structure preserved. 3MF is the modern standard for 3D printing.</span>
                 </button>
-                <button class="file-dropdown-item" onclick="document.getElementById('export-panel').style.display='block'; closeFileDropdown();">
-                    <i class="bi bi-download"></i> Export 3D Model...
+                <button class="file-dropdown-item" onclick="window.downloadExport('stl'); closeAllDropdowns();">
+                    <i class="bi bi-grid-3x3"></i> Export .STL
+                    <span class="tooltip-text">Export as STL for 3D printing. Best for rapid prototyping and manufacturing.</span>
+                </button>
+                <button class="file-dropdown-item" onclick="window.downloadExport('obj'); closeAllDropdowns();">
+                    <i class="bi bi-cube"></i> Export .OBJ
+                    <span class="tooltip-text">Export as OBJ for broad compatibility with 3D software and CAD tools.</span>
+                </button>
+                <button class="file-dropdown-item" onclick="window.downloadExport('gltf'); closeAllDropdowns();">
+                    <i class="bi bi-box"></i> Export .GLTF
+                    <span class="tooltip-text">Export as GLTF for web 3D. Efficient and widely supported.</span>
+                </button>
+                <button class="file-dropdown-item" onclick="window.downloadExport('glb'); closeAllDropdowns();">
+                    <i class="bi bi-box-seam"></i> Export .GLB
+                    <span class="tooltip-text">Export as GLB (binary GLTF) for compact web 3D delivery.</span>
+                </button>
+                <button class="file-dropdown-item" onclick="window.downloadExport('usdz'); closeAllDropdowns();">
+                    <i class="bi bi-phone"></i> Export .USDZ
+                    <span class="tooltip-text">Export as USDZ for AR quick look on Apple devices.</span>
+                </button>
+                <button class="file-dropdown-item" onclick="document.getElementById('export-panel').style.display='block'; closeAllDropdowns();">
+                    <i class="bi bi-three-dots"></i> More formats...
                 </button>
                 <div class="file-dropdown-divider"></div>
-                <button class="file-dropdown-item" onclick="if(confirm('Clear Scene?')) window.dDelAll(); closeFileDropdown();">
+                <button class="file-dropdown-item" onclick="if(confirm('Clear Scene?')) window.dDelAll(); closeAllDropdowns();">
                     <i class="bi bi-trash"></i> Clear Scene
                 </button>
             </div>
@@ -1334,9 +1455,11 @@
             <ul id="object-list"></ul>
 
             <!-- The Buttons -->
-            <div class="btn-group">
+            <div class="btn-group" style="flex-wrap: wrap; gap: 2px;">
                 <button class="btn btn-sm btn-warning" id="merge-btn" onclick="window.dMerge()">Merge (0)</button>
                 <button class="btn btn-sm btn-outline-dark" id="unmerge-btn" onclick="window.dUnmerge()" style="display:none;">Unmerge</button>
+                <button class="btn btn-sm btn-info" id="group-btn" onclick="window.dGroup()" title="Group selected objects together (they move as one but stay separate for multi-material export)">Group (0)</button>
+                <button class="btn btn-sm btn-outline-dark" id="ungroup-btn" onclick="window.dUngroup()" style="display:none;" title="Ungroup: detach objects so they move independently again">Ungroup</button>
                 <button class="btn btn-sm btn-danger" onclick="window.dDel()">Delete</button>
             </div>
         </div>
@@ -1454,10 +1577,6 @@
                 <div class="col-6" id="dim-radius-container" style="display: none;">
                     <input type="number" id="extrude-dim-radius" class="form-control form-control-sm" placeholder="Radius" value="5" step="0.5">
                 </div>
-                <div class="col-12 mt-2" id="dim-sides-container" style="display: none;">
-                    <label class="small text-muted">Circle Sides: <span id="circle-sides-value">32</span></label>
-                    <input type="range" id="extrude-dim-sides" class="form-range" min="3" max="64" value="32" oninput="document.getElementById('circle-sides-value').innerText=this.value; window.onExtrudeParamChange()">
-                </div>
             </div>
         </div>
         
@@ -1500,6 +1619,34 @@
             </button>
             <button class="btn btn-sm btn-outline-danger" onclick="window.cancelExtrude()">
                 <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Tinker Info Modal -->
+    <div class="tinker-info-modal" id="tinker-info-modal" onclick="if(event.target === this) window.hideTinkerInfo()">
+        <div class="modal-content">
+            <div class="modal-icon">
+                <i class="bi bi-file-earmark-code"></i>
+            </div>
+            <h3>What is .tinker?</h3>
+            <p>
+                <strong>.tinker</strong> is like the <em>source code</em> of your 3D project. 
+                Unlike other formats that just save the 3D geometry, .tinker saves everything:
+            </p>
+            <p style="text-align:left; background:rgba(0,0,0,0.2); padding:12px; border-radius:8px; margin-bottom:16px;">
+                <i class="bi bi-check2"></i> All 3D objects and their positions<br>
+                <i class="bi bi-check2"></i> Materials, colors, and textures<br>
+                <i class="bi bi-check2"></i> Groups and constraints<br>
+                <i class="bi bi-check2"></i> Your project settings<br>
+                <i class="bi bi-check2"></i> Undo/redo history
+            </p>
+            <p>
+                Use .tinker to <strong>save and restore</strong> your work anytime 
+                with full editability. Perfect for working on projects over time!
+            </p>
+            <button class="btn btn-primary" onclick="window.hideTinkerInfo()">
+                Got it!
             </button>
         </div>
     </div>
@@ -1560,7 +1707,9 @@
             <ul class="small ps-3 mb-0" style="color: #888; font-size: 0.75rem;">
                 <li>Click to select, Shift+Click for multi-select</li>
                 <li>Drag the cone above object to lift it</li>
-                <li>Use checkboxes to mark objects for merge</li>
+                <li>Use checkboxes to mark objects for merge or group</li>
+                <li><b>Group</b> glues objects together (move as one, separate in 3MF)</li>
+                <li><b>Merge</b> combines objects into one mesh (CSG boolean)</li>
                 <li>Right-click drag to rotate camera</li>
                 <li>Scroll to zoom in/out</li>
             </ul>
@@ -1729,6 +1878,8 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
     const MESH_HIGHLIGHT_COLOR = 0xff0000;
     let isInteracting = false;
     let needsRender = true;
+    let groupIdCounter = 1; // Counter for generating unique group IDs
+    let _groupTransformInProgress = false; // Guard to prevent recursive group transforms
     let rulerRotState = 0; // 0=BottomLeft, 1=BottomRight, 2=TopRight, 3=TopLeft
     // Globals for Smart Ruler
     let rulerSnapState = 0; // 0=Idle, 1=Pick Origin, 2=Pick Axis
@@ -5178,6 +5329,13 @@ function handleAlignClick(ray) {
             // Set isBeingDragged flag on the attached object
             if (tCtrl.object) {
                 tCtrl.object.userData.isBeingDragged = e.value;
+
+                // --- GROUP: Store initial transform when drag starts ---
+                if (e.value && tCtrl.object.userData.groupId) {
+                    const members = getGroupMembers(tCtrl.object);
+                    members.forEach(m => _storeGroupPrevTransform(m));
+                }
+
                 // Sync physics body position while dragging
                 if (e.value && meshToBody.has(tCtrl.object.uuid)) {
                     const body = meshToBody.get(tCtrl.object.uuid);
@@ -5201,6 +5359,9 @@ function handleAlignClick(ray) {
             }
         });
         tCtrl.addEventListener("change", () => {
+            // --- GROUP: Sync sibling transforms ---
+            syncGroupTransform();
+
             updateTinkerLabels();
             updateLiftConePos();
             updateRotationFeedback();
@@ -6969,7 +7130,15 @@ const onPointerMove = e => {
         // ... Existing Lift Logic ...
         if (isLifting && selectedObjects.length === 1) {
             const deltaY = liftStartMouseY - e.clientY;
-            selectedObjects[0].position.z = liftStartObjZ + (deltaY * 0.2);
+            const newZ = liftStartObjZ + (deltaY * 0.2);
+            const deltaZ = newZ - selectedObjects[0].position.z;
+            selectedObjects[0].position.z = newZ;
+            // Move grouped siblings by the same Z delta
+            if (selectedObjects[0].userData.groupId && Math.abs(deltaZ) > 0.0001) {
+                getGroupSiblings(selectedObjects[0]).forEach(sib => {
+                    sib.position.z += deltaZ;
+                });
+            }
             updateLiftConePos();
             updateTinkerLabels();
             updatePropertiesPanel();
@@ -7373,7 +7542,27 @@ window.dSz = () => {
     if(!isNaN(vY)) resizeObject(obj, 'y', vY);
     if(!isNaN(vZ)) resizeObject(obj, 'z', vZ);
 };
-    window.dDrop = function() { if (selectedObjects.length === 0) return alert("Select object."); selectedObjects.forEach(obj => { const box = new THREE.Box3().setFromObject(obj); obj.position.z -= box.min.z; }); updateTinkerLabels(); updateLiftConePos(); saveState(); };
+    window.dDrop = function() {
+        if (selectedObjects.length === 0) return alert("Select object.");
+        // Collect all objects to drop (including grouped siblings)
+        const toDrop = new Set();
+        selectedObjects.forEach(obj => {
+            toDrop.add(obj);
+            if (obj.userData.groupId) {
+                getGroupSiblings(obj).forEach(sib => toDrop.add(sib));
+            }
+        });
+        // Find the minimum Z across all objects in the set, then drop them all by that amount
+        let minZ = Infinity;
+        toDrop.forEach(obj => {
+            const box = new THREE.Box3().setFromObject(obj);
+            if (box.min.z < minZ) minZ = box.min.z;
+        });
+        if (minZ !== Infinity && Math.abs(minZ) > 0.001) {
+            toDrop.forEach(obj => { obj.position.z -= minZ; });
+        }
+        updateTinkerLabels(); updateLiftConePos(); saveState();
+    };
 
     // --- MODIFIER APPLICATION FUNCTIONS ---
     let activeModifier = null;
@@ -7896,6 +8085,12 @@ const updatePropertiesPanel = () => {
             // If selecting the ruler, default to move mode
             if(selectedObjects[0].userData.isRuler) tCtrl.setMode('translate');
 
+            // --- GROUP: Store initial transforms for delta calculation ---
+            if (selectedObjects[0].userData.groupId) {
+                const members = getGroupMembers(selectedObjects[0]);
+                members.forEach(m => _storeGroupPrevTransform(m));
+            }
+
             updateLiftConePos();
             updateTinkerLabels();
         } else {
@@ -7953,18 +8148,21 @@ const updatePropertiesPanel = () => {
 
         scene.children.filter(e => e.userData.name).forEach(t => {
             const li = document.createElement("li");
-            li.className = `object-list-item ${selectedObjects.includes(t)?'selected':''}`;
+            const isGrouped = !!t.userData.groupId;
+            li.className = `object-list-item ${selectedObjects.includes(t)?'selected':''} ${isGrouped?'grouped':''}`;
             li.onclick = () => window.selectObjectFromList(t.uuid);
 
             const icon = getObjectIcon(t);
             const isHole = t.userData.isHole;
             const holeStyle = isHole ? 'opacity: 0.5;' : '';
+            const groupBadge = isGrouped ? `<span class="group-badge" title="Group ${t.userData.groupId}"><i class="bi bi-link-45deg"></i> G${t.userData.groupId}</span>` : '';
 
             li.innerHTML = `
                 <input type="checkbox" class="form-check-input me-2" ${t.userData.markForMerge?'checked':''} onclick="event.stopPropagation(); window.toggleMergeStatus('${t.uuid}')">
                 <i class="bi ${icon} object-type-icon" style="${holeStyle}"></i>
                 <span style="${holeStyle}">${t.userData.name}</span>
                 ${isHole ? '<i class="bi bi-dash-circle ms-auto" style="font-size:0.7rem; opacity:0.5;" title="Hole"></i>' : ''}
+                ${groupBadge}
             `;
             list.appendChild(li);
         });
@@ -7977,10 +8175,21 @@ const updatePropertiesPanel = () => {
         } else {
             unmergeBtn.style.display = 'none';
         }
+
+        // Toggle Ungroup Button
+        const ungroupBtn = document.getElementById('ungroup-btn');
+        const hasGroupedSelection = selectedObjects.some(o => o.userData.groupId);
+        if (hasGroupedSelection) {
+            ungroupBtn.style.display = 'inline-block';
+        } else {
+            ungroupBtn.style.display = 'none';
+        }
     };
 
     const updateMergeButton = () => {
-        document.getElementById("merge-btn").innerText = `Merge (${scene.children.filter(e => e.userData.markForMerge).length})`;
+        const count = scene.children.filter(e => e.userData.markForMerge).length;
+        document.getElementById("merge-btn").innerText = `Merge (${count})`;
+        document.getElementById("group-btn").innerText = `Group (${count})`;
     };
 function cleanObject(obj) {
         if (!obj) return;
@@ -8030,6 +8239,8 @@ function cleanObject(obj) {
         let targets = selectedObjects.length > 0 ? selectedObjects : scene.children.filter(e => e.userData.markForMerge && e.isMesh);
         if(!targets.length) return alert("Select object(s).");
         const newSel = [];
+        // Map old groupIds to new groupIds for duplicated groups
+        const groupIdMap = new Map();
         targets.forEach(obj => {
             const clone = obj.clone();
             if(clone.material) clone.material = obj.material.clone();
@@ -8038,6 +8249,19 @@ function cleanObject(obj) {
             clone.userData = JSON.parse(JSON.stringify(obj.userData));
             clone.userData.name = obj.userData.name + " (Copy)";
             clone.userData.markForMerge = false;
+            // Assign new group IDs for duplicated groups
+            if (clone.userData.groupId) {
+                const oldGid = clone.userData.groupId;
+                if (!groupIdMap.has(oldGid)) {
+                    groupIdMap.set(oldGid, groupIdCounter++);
+                }
+                clone.userData.groupId = groupIdMap.get(oldGid);
+            }
+            // Clear transient group data
+            delete clone.userData._groupPrevPos;
+            delete clone.userData._groupPrevQuat;
+            delete clone.userData._groupPrevScale;
+            delete clone.userData._groupPivot;
             // Clear history on copy to avoid giant files? No, keep it so copies are editable
             // clone.userData.mergeHistory = undefined;
             scene.add(clone); newSel.push(clone);
@@ -8135,6 +8359,197 @@ window.dUnmerge = () => {
         newObjects.forEach(o => selectObject(o, true));
         saveState();
     };
+
+    // =============================================
+    // --- GROUP / UNGROUP (Glue) LOGIC ---
+    // Objects are "glued" together: they move/rotate as one unit
+    // but remain separate meshes (great for multi-material 3MF export).
+    // =============================================
+
+    // Helper: get all scene objects in the same group
+    function getGroupSiblings(obj) {
+        if (!obj.userData.groupId) return [];
+        return scene.children.filter(c => c.isMesh && c.userData.groupId === obj.userData.groupId && c !== obj);
+    }
+
+    // Helper: get ALL objects in a group (including the given one)
+    function getGroupMembers(obj) {
+        if (!obj.userData.groupId) return [obj];
+        return scene.children.filter(c => c.isMesh && c.userData.groupId === obj.userData.groupId);
+    }
+
+    window.dGroup = () => {
+        // Use selected objects or checked objects
+        const marked = selectedObjects.length > 1
+            ? selectedObjects
+            : scene.children.filter(e => e.userData.markForMerge && e.isMesh && !e.userData.isRuler);
+        if (marked.length < 2) return alert("Select or check 2+ objects to group.");
+
+        // Check if any are already in different groups — merge those groups together
+        const existingGroupIds = new Set();
+        marked.forEach(obj => {
+            if (obj.userData.groupId) existingGroupIds.add(obj.userData.groupId);
+        });
+
+        // Use existing group ID if there's exactly one, otherwise create new
+        let gid;
+        if (existingGroupIds.size === 1) {
+            gid = existingGroupIds.values().next().value;
+        } else {
+            gid = groupIdCounter++;
+            // If merging multiple existing groups, re-assign all members of those groups too
+            if (existingGroupIds.size > 1) {
+                scene.children.forEach(c => {
+                    if (c.isMesh && c.userData.groupId && existingGroupIds.has(c.userData.groupId)) {
+                        c.userData.groupId = gid;
+                    }
+                });
+            }
+        }
+
+        // Assign group ID to all marked objects
+        marked.forEach(obj => {
+            obj.userData.groupId = gid;
+            obj.userData.markForMerge = false; // Uncheck after grouping
+        });
+
+        // Store the group's pivot (centroid of all members) for rotation reference
+        _updateGroupPivot(gid);
+
+        selectObject(null);
+        marked.forEach(o => selectObject(o, true));
+        updateObjectList();
+        saveState();
+    };
+
+    window.dUngroup = () => {
+        if (selectedObjects.length === 0) return;
+
+        // Collect all group IDs from selected objects
+        const groupIds = new Set();
+        selectedObjects.forEach(obj => {
+            if (obj.userData.groupId) groupIds.add(obj.userData.groupId);
+        });
+
+        if (groupIds.size === 0) return alert("Selected objects are not in a group.");
+
+        // Remove groupId from ALL members of those groups
+        scene.children.forEach(c => {
+            if (c.isMesh && c.userData.groupId && groupIds.has(c.userData.groupId)) {
+                delete c.userData.groupId;
+                delete c.userData._groupPrevPos;
+                delete c.userData._groupPrevQuat;
+            }
+        });
+
+        updateObjectList();
+        saveState();
+    };
+
+    // Compute and cache the group centroid pivot for rotation
+    function _updateGroupPivot(gid) {
+        const members = scene.children.filter(c => c.isMesh && c.userData.groupId === gid);
+        if (!members.length) return;
+        const pivot = new THREE.Vector3();
+        members.forEach(m => pivot.add(m.position));
+        pivot.divideScalar(members.length);
+        // Store pivot on each member for reference
+        members.forEach(m => {
+            m.userData._groupPivot = { x: pivot.x, y: pivot.y, z: pivot.z };
+        });
+    }
+
+    // --- GROUP TRANSFORM SYNC ---
+    // Called during tCtrl "change" to move/rotate grouped siblings
+    function syncGroupTransform() {
+        if (_groupTransformInProgress) return;
+        if (!tCtrl.object) return;
+        const obj = tCtrl.object;
+        if (!obj.userData.groupId) return;
+
+        const siblings = getGroupSiblings(obj);
+        if (!siblings.length) return;
+
+        _groupTransformInProgress = true;
+
+        const mode = tCtrl.mode; // 'translate', 'rotate', 'scale'
+
+        if (mode === 'translate') {
+            // Calculate delta from previous position
+            const prev = obj.userData._groupPrevPos;
+            if (prev) {
+                const delta = new THREE.Vector3(
+                    obj.position.x - prev.x,
+                    obj.position.y - prev.y,
+                    obj.position.z - prev.z
+                );
+                if (delta.lengthSq() > 0.00001) {
+                    siblings.forEach(sib => {
+                        sib.position.add(delta);
+                    });
+                }
+            }
+        } else if (mode === 'rotate') {
+            // Rotate siblings around the dragged object's position
+            const prevQuat = obj.userData._groupPrevQuat;
+            if (prevQuat) {
+                const prevQ = new THREE.Quaternion(prevQuat.x, prevQuat.y, prevQuat.z, prevQuat.w);
+                const curQ = obj.quaternion.clone();
+                // Delta rotation = current * inverse(previous)
+                const deltaQ = curQ.clone().multiply(prevQ.clone().invert());
+
+                if (Math.abs(deltaQ.w) < 0.99999) { // Only if there's actual rotation
+                    const pivot = obj.position.clone();
+                    siblings.forEach(sib => {
+                        // Rotate position around pivot
+                        const offset = sib.position.clone().sub(pivot);
+                        offset.applyQuaternion(deltaQ);
+                        sib.position.copy(pivot).add(offset);
+                        // Rotate the object itself
+                        sib.quaternion.premultiply(deltaQ);
+                    });
+                }
+            }
+        } else if (mode === 'scale') {
+            // Scale siblings relative to the dragged object's center
+            const prevScale = obj.userData._groupPrevScale;
+            if (prevScale) {
+                const sx = prevScale.x > 0.001 ? obj.scale.x / prevScale.x : 1;
+                const sy = prevScale.y > 0.001 ? obj.scale.y / prevScale.y : 1;
+                const sz = prevScale.z > 0.001 ? obj.scale.z / prevScale.z : 1;
+
+                if (Math.abs(sx - 1) > 0.0001 || Math.abs(sy - 1) > 0.0001 || Math.abs(sz - 1) > 0.0001) {
+                    const pivot = obj.position.clone();
+                    siblings.forEach(sib => {
+                        // Scale position offset
+                        const offset = sib.position.clone().sub(pivot);
+                        offset.x *= sx;
+                        offset.y *= sy;
+                        offset.z *= sz;
+                        sib.position.copy(pivot).add(offset);
+                        // Scale the object
+                        sib.scale.x *= sx;
+                        sib.scale.y *= sy;
+                        sib.scale.z *= sz;
+                    });
+                }
+            }
+        }
+
+        // Update previous transform for next delta
+        _storeGroupPrevTransform(obj);
+        siblings.forEach(sib => _storeGroupPrevTransform(sib));
+
+        _groupTransformInProgress = false;
+    }
+
+    // Store current transform for delta calculation
+    function _storeGroupPrevTransform(obj) {
+        obj.userData._groupPrevPos = { x: obj.position.x, y: obj.position.y, z: obj.position.z };
+        obj.userData._groupPrevQuat = { x: obj.quaternion.x, y: obj.quaternion.y, z: obj.quaternion.z, w: obj.quaternion.w };
+        obj.userData._groupPrevScale = { x: obj.scale.x, y: obj.scale.y, z: obj.scale.z };
+    }
+
 // --- HELPER: Fixes Crash by ensuring UVs and Normals exist ---
     function ensureCSGCompatible(geometry) {
         // 1. Merge to ensure watertightness (needed for ConvexGeometry)
@@ -8916,22 +9331,71 @@ window.dImportFile = function(input) {
     window.triggerExport = () => window.downloadExport(document.getElementById("export-format").value);
 
     // File Dropdown Functions
-    window.toggleFileDropdown = function() {
-        const dropdown = document.getElementById('file-dropdown');
+    window.toggleFileDropdown = function(dropdownId) {
+        const dropdown = document.getElementById(dropdownId);
+        // Close all other dropdowns first
+        document.querySelectorAll('.file-dropdown').forEach(d => {
+            if (d.id !== dropdownId) d.classList.remove('open');
+        });
         dropdown.classList.toggle('open');
     };
 
-    window.closeFileDropdown = function() {
-        const dropdown = document.getElementById('file-dropdown');
-        dropdown.classList.remove('open');
+    window.closeFileDropdown = function(dropdownId) {
+        const dropdown = document.getElementById(dropdownId);
+        if (dropdown) dropdown.classList.remove('open');
+    };
+
+    window.closeAllDropdowns = function() {
+        document.querySelectorAll('.file-dropdown').forEach(d => d.classList.remove('open'));
+    };
+
+    window.openExportSubmenu = function() {
+        const exportDropdown = document.getElementById('export-dropdown');
+        if (exportDropdown) exportDropdown.classList.add('open');
+    };
+
+    // Handle Import File - routes to appropriate loader based on extension
+    window.handleImportFile = function(input) {
+        if (!input.files || input.files.length === 0) return;
+        const file = input.files[0];
+        const ext = file.name.split('.').pop().toLowerCase();
+        const validExtensions = ['tinker', '3mf', 'stl', 'obj', 'mtl', 'glb', 'gltf', 'usdz', 'step', 'stp', 'jpg', 'png'];
+        
+        if (!validExtensions.includes(ext)) {
+            alert('Unsupported file format. Supported formats: .tinker, .3MF, .STL, .OBJ, .GLTF, .GLB, .USDZ, .STEP');
+            return;
+        }
+        
+        // Route to appropriate loader
+        if (ext === 'tinker') {
+            window.loadProjectFile(input);
+        } else if (ext === '3mf') {
+            window.load3MFFile(input);
+        } else if (ext === 'step' || ext === 'stp') {
+            window.dImportFile(input);
+        } else {
+            window.dImportFile(input);
+        }
+    };
+
+    // Show tinker info modal
+    window.showTinkerInfo = function() {
+        const modal = document.getElementById('tinker-info-modal');
+        if (modal) modal.classList.add('show');
+    };
+
+    window.hideTinkerInfo = function() {
+        const modal = document.getElementById('tinker-info-modal');
+        if (modal) modal.classList.remove('show');
     };
 
     // Close dropdown when clicking outside
     document.addEventListener('click', function(e) {
-        const dropdown = document.getElementById('file-dropdown');
-        if (dropdown && !dropdown.contains(e.target)) {
-            dropdown.classList.remove('open');
-        }
+        document.querySelectorAll('.file-dropdown').forEach(dropdown => {
+            if (!dropdown.contains(e.target)) {
+                dropdown.classList.remove('open');
+            }
+        });
     });
 
     window.downloadExport = async fmt => {
@@ -9376,121 +9840,93 @@ function getCRC32Table() {
         input.value = '';
     };
 
-    // --- 3MF FILE LOADING ---
+    // --- 3MF FILE LOADING (using JSZip to parse the ZIP archive) ---
     window.load3MFFile = async function(input) {
         if (!input.files || input.files.length === 0) return;
         const file = input.files[0];
 
         try {
-            // Initialize lib3mf if not already done
-            if (!window.lib3mfWrapper) {
-                console.log('Initializing lib3mf for import...');
-                const lib3mf = await import('https://cdn.jsdelivr.net/npm/@3mfconsortium/lib3mf@2.5.0-fix.2/+esm');
-                const Module = await lib3mf.default();
-                window.lib3mfWrapper = new Module.CWrapper();
-                console.log('lib3mf initialized for import');
+            // Initialize JSZip
+            const jszipModule = await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm');
+            const JSZip = jszipModule.default || jszipModule;
+            const zip = await JSZip.loadAsync(file);
+
+            // Find the model file (usually at 3D/3dmodel.model)
+            let modelFile = zip.file(/3D\/3dmodel\.model/i)[0];
+            if (!modelFile) {
+                // Try alternative paths
+                modelFile = zip.file(/3dmodel\.model/i)[0] || zip.file(/\.model$/i)[0];
+            }
+            if (!modelFile) {
+                throw new Error('No model file found in 3MF archive');
             }
 
-            // Read the file
-            const buffer = await file.arrayBuffer();
-            const uint8Array = new Uint8Array(buffer);
+            const modelText = await modelFile.async('text');
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(modelText, 'text/xml');
 
-            // Create a model from the buffer
-            const model = window.lib3mfWrapper.CreateModel();
-            model.ReadFromBuffer(uint8Array);
+            // Parse mesh objects from XML
+            const meshObjects = xmlDoc.getElementsByTagName('mesh');
+            console.log('3MF file contains', meshObjects.length, 'mesh objects');
 
-            // Get all mesh objects - try different API methods
-            let meshObjects = null;
-            let count = 0;
-            
-            try {
-                // Try GetMeshObjects first
-                meshObjects = model.GetMeshObjects();
-                count = meshObjects.GetCount();
-            } catch (e) {
-                console.log('GetMeshObjects failed, trying GetObjects:', e);
-                // Try alternative
-                meshObjects = model.GetObjects();
-                count = meshObjects.GetCount();
+            if (meshObjects.length === 0) {
+                throw new Error('No mesh data found in 3MF file');
             }
-            
-            console.log('3MF file contains', count, 'mesh objects');
 
-            for (let i = 0; i < count; i++) {
-                let meshObject = null;
-                try {
-                    meshObject = meshObjects.GetAt(i);
-                } catch (e) {
-                    console.log('GetAt failed:', e);
-                    continue;
-                }
-                if (!meshObject) continue;
+            for (let i = 0; i < meshObjects.length; i++) {
+                const meshEl = meshObjects[i];
 
-                // Get the mesh data - try different API methods
-                let mesh = null;
-                try {
-                    mesh = meshObject.GetMesh();
-                } catch (e) {
-                    console.log('GetMesh failed:', e);
-                    // Try alternative method name
-                    try {
-                        mesh = meshObject.GetGeometry();
-                    } catch (e2) {
-                        console.log('GetGeometry also failed:', e2);
-                        continue;
-                    }
-                }
-                if (!mesh) continue;
+                // Get vertices
+                const verticesEl = meshEl.getElementsByTagName('vertices')[0];
+                const vertexEls = verticesEl.getElementsByTagName('vertex');
+                const vertexCount = vertexEls.length;
+                const vertices = new Float32Array(vertexCount * 3);
 
-                // Get vertex data
-                let vertexCount = 0;
-                let vertices = null;
-                try {
-                    vertexCount = mesh.GetVertexCount();
-                    vertices = new Float32Array(vertexCount * 3);
-                    mesh.GetVertices(vertices);
-                } catch (e) {
-                    console.log('Get vertex data failed:', e);
-                    continue;
+                for (let j = 0; j < vertexCount; j++) {
+                    const v = vertexEls[j];
+                    vertices[j * 3] = parseFloat(v.getAttribute('x')) || 0;
+                    vertices[j * 3 + 1] = parseFloat(v.getAttribute('y')) || 0;
+                    vertices[j * 3 + 2] = parseFloat(v.getAttribute('z')) || 0;
                 }
 
-                // Get index data
-                let triangleCount = 0;
+                // Get triangles
+                const trianglesEl = meshEl.getElementsByTagName('triangles')[0];
                 let indices = null;
-                try {
-                    triangleCount = mesh.GetTriangleCount();
-                    if (triangleCount > 0) {
-                        indices = new Uint32Array(triangleCount * 3);
-                        mesh.GetTriangleIndices(indices);
+                let triangleCount = 0;
+
+                if (trianglesEl) {
+                    const triangleEls = trianglesEl.getElementsByTagName('triangle');
+                    triangleCount = triangleEls.length;
+                    indices = new Uint32Array(triangleCount * 3);
+
+                    for (let j = 0; j < triangleCount; j++) {
+                        const t = triangleEls[j];
+                        indices[j * 3] = parseInt(t.getAttribute('v1')) || 0;
+                        indices[j * 3 + 1] = parseInt(t.getAttribute('v2')) || 0;
+                        indices[j * 3 + 2] = parseInt(t.getAttribute('v3')) || 0;
                     }
-                } catch (e) {
-                    console.log('Get triangle data failed (optional):', e);
                 }
 
-                // Get the name
+                // Get object name if available
+                const parentObj = meshEl.parentElement;
                 let name = file.name + ' (Part ' + (i + 1) + ')';
-                try {
-                    const objName = meshObject.GetName();
-                    if (objName) name = objName;
-                } catch (e) {
-                    // Name is optional
+                if (parentObj && parentObj.getAttribute('name')) {
+                    name = parentObj.getAttribute('name') || name;
                 }
 
-                // Get the transform
-                let transform = null;
-                try {
-                    transform = new Float32Array(16);
-                    meshObject.GetTransform(transform);
-                } catch (e) {
-                    console.log('GetTransform failed (optional):', e);
-                    transform = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+                // Get transform if available
+                let transform = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+                if (parentObj && parentObj.getAttribute('transform')) {
+                    const transformStr = parentObj.getAttribute('transform');
+                    const transformParts = transformStr.split(/[\s,]+/).filter(p => p);
+                    for (let k = 0; k < Math.min(16, transformParts.length); k++) {
+                        transform[k] = parseFloat(transformParts[k]) || 0;
+                    }
                 }
 
                 // Extract position, rotation, scale from transform matrix
-                // 3MF uses a 4x4 transform matrix (column-major)
                 const position = new THREE.Vector3(transform[12], transform[13], transform[14]);
                 
-                // Extract rotation (orthonormal matrix -> quaternion)
                 const rotMatrix = new THREE.Matrix4();
                 rotMatrix.set(
                     transform[0], transform[4], transform[8], 0,
@@ -9501,7 +9937,6 @@ function getCRC32Table() {
                 const quaternion = new THREE.Quaternion();
                 quaternion.setFromRotationMatrix(rotMatrix);
                 
-                // Extract scale from the rotation matrix columns
                 const scale = new THREE.Vector3(
                     Math.sqrt(transform[0]*transform[0] + transform[1]*transform[1] + transform[2]*transform[2]),
                     Math.sqrt(transform[4]*transform[4] + transform[5]*transform[5] + transform[6]*transform[6]),
@@ -9510,21 +9945,19 @@ function getCRC32Table() {
 
                 // Create Three.js geometry
                 const geometry = new THREE.BufferGeometry();
-                geometry.setAttribute('position', vertices);
+                geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
                 
                 if (indices) {
-                    geometry.setIndex(new THREE.Uint32BufferAttribute(indices, 1));
+                    geometry.setIndex(new THREE.BufferAttribute(indices, 1));
                 }
                 
                 geometry.computeVertexNormals();
 
-                // Ensure UVs exist
                 if (!geometry.attributes.uv) {
                     const uvCount = geometry.attributes.position.count;
                     geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvCount * 2), 2));
                 }
 
-                // Create material
                 const material = new THREE.MeshStandardMaterial({
                     color: 0x888888,
                     metalness: 0.3,
@@ -9532,7 +9965,6 @@ function getCRC32Table() {
                     wireframe: appSettings.wireframe
                 });
 
-                // Create mesh
                 const mesh2 = new THREE.Mesh(geometry, material);
                 mesh2.name = name;
                 mesh2.position.copy(position);
@@ -9542,7 +9974,6 @@ function getCRC32Table() {
                 mesh2.receiveShadow = appSettings.shadows !== false;
                 mesh2.userData = { isHole: false, name: name, geoParams: null };
 
-                // Add to scene
                 scene.add(mesh2);
                 selectObject(mesh2);
                 updateObjectList();
@@ -9550,7 +9981,7 @@ function getCRC32Table() {
                 window.requestRender();
             }
 
-            alert('3MF file loaded successfully with ' + count + ' parts!');
+            alert('3MF file loaded successfully with ' + meshObjects.length + ' parts!');
         } catch (error) {
             console.error('Error loading 3MF file:', error);
             alert('Error loading 3MF file: ' + error.message);
@@ -10108,6 +10539,16 @@ function loadSnapshot(compressedData) {
                 }
             });
         }
+
+        // Restore groupIdCounter to be higher than any existing groupId
+        let maxGroupId = 0;
+        scene.children.forEach(c => {
+            if (c.isMesh && c.userData.groupId && c.userData.groupId >= maxGroupId) {
+                maxGroupId = c.userData.groupId;
+            }
+        });
+        if (maxGroupId >= groupIdCounter) groupIdCounter = maxGroupId + 1;
+
         updateObjectList();
         window.requestRender();
     }
@@ -10278,16 +10719,13 @@ window.onExtrudeShapeChange = function() {
     const widthContainer = document.getElementById('dim-width-container');
     const heightContainer = document.getElementById('dim-height-container');
     const radiusContainer = document.getElementById('dim-radius-container');
-    const sidesContainer = document.getElementById('dim-sides-container');
     
     if (shape === 'face') {
         dimsContainer.style.display = 'none';
         customControls.style.display = 'none';
-        sidesContainer.style.display = 'none';
     } else if (shape === 'custom') {
         dimsContainer.style.display = 'none';
         customControls.style.display = 'block';
-        sidesContainer.style.display = 'none';
     } else {
         dimsContainer.style.display = 'block';
         customControls.style.display = 'none';
@@ -10296,12 +10734,10 @@ window.onExtrudeShapeChange = function() {
             widthContainer.style.display = 'none';
             heightContainer.style.display = 'none';
             radiusContainer.style.display = 'block';
-            sidesContainer.style.display = 'block';
         } else if (shape === 'square') {
             widthContainer.style.display = 'block';
             heightContainer.style.display = 'block';
             radiusContainer.style.display = 'none';
-            sidesContainer.style.display = 'none';
         }
     }
     
@@ -10539,25 +10975,14 @@ window.cancelExtrude = function() {
 // HELPER: Create Extrusion (Position-Based Topology) with Normal Fix
 
 // Create shape-based extrusion (circle, square, etc.)
-function createShapeExtrusion(shapeType, dimensions, height, localNormal, taperScale = 1.0, skewOffset = new THREE.Vector3(0,0,0), sides = 32) {
+function createShapeExtrusion(shapeType, dimensions, height, localNormal, taperScale = 1.0, skewOffset = new THREE.Vector3(0,0,0)) {
     let shape;
     const center = new THREE.Vector3(0, 0, 0);
     
     if (shapeType === 'circle') {
         const radius = dimensions.radius || 5;
         shape = new THREE.Shape();
-        // Create circle with specified number of sides
-        const segments = Math.max(3, Math.min(64, sides));
-        for (let i = 0; i <= segments; i++) {
-            const angle = (i / segments) * Math.PI * 2;
-            const x = Math.cos(angle) * radius;
-            const y = Math.sin(angle) * radius;
-            if (i === 0) {
-                shape.moveTo(x, y);
-            } else {
-                shape.lineTo(x, y);
-            }
-        }
+        shape.absarc(0, 0, radius, 0, Math.PI * 2, false);
     } else if (shapeType === 'square') {
         const width = dimensions.width || 10;
         const heightDim = dimensions.height || 10;
@@ -10915,17 +11340,6 @@ window.handleExtrudeClick = (ray, event) => {
     // --- STAGE 1: After selection - use input fields for parameters ---
     // Mouse clicking no longer changes stages - use input fields instead
     if (extrudeState === 1) {
-        // Check if user clicked on the ghost to re-select it
-        if (extrudeData && extrudeData.ghost) {
-            const ghostIntersects = ray.intersectObject(extrudeData.ghost, true);
-            if (ghostIntersects.length > 0) {
-                // Re-attach transform gizmo to ghost for manipulation
-                if (typeof tCtrl !== 'undefined' && tCtrl) {
-                    tCtrl.attach(extrudeData.ghost);
-                }
-                return true;
-            }
-        }
         // Just return - let the user use input fields
         return false;
     }
@@ -11139,8 +11553,7 @@ window.handleExtrudeClick = (ray, event) => {
                 shapeDimensions: {
                     width: parseFloat(document.getElementById('extrude-dim-width').value) || 10,
                     height: parseFloat(document.getElementById('extrude-dim-height').value) || 10,
-                    radius: parseFloat(document.getElementById('extrude-dim-radius').value) || 5,
-                    sides: parseInt(document.getElementById('extrude-dim-sides').value) || 32
+                    radius: parseFloat(document.getElementById('extrude-dim-radius').value) || 5
                 },
                 hitPoint: hit.point.clone()
             };
@@ -11153,15 +11566,11 @@ window.handleExtrudeClick = (ray, event) => {
                 geo = createExtrusionGeo(primaryMesh, allIndices, 0.1, localNormal);
             } else {
                 // Shape-based extrusion (circle, square)
-                const sides = extrudeData.shapeDimensions.sides || 32;
                 geo = createShapeExtrusion(
                     shapeType,
                     extrudeData.shapeDimensions,
                     0.1,
-                    localNormal,
-                    1.0,
-                    new THREE.Vector3(0,0,0),
-                    sides
+                    localNormal
                 );
                 // Offset to hit point for shapes
                 if (geo) {
@@ -11350,8 +11759,7 @@ window.updateExtrudeGhost = function() {
         }
     } else {
         // Shape-based extrusion (circle, square)
-        const sides = shapeDimensions.sides || 32;
-        newGeo = createShapeExtrusion(shapeType, shapeDimensions, currentHeight, localNormal, currentScale, currentSkew, sides);
+        newGeo = createShapeExtrusion(shapeType, shapeDimensions, currentHeight, localNormal, currentScale, currentSkew);
         if (newGeo && hitPoint) {
             newGeo.translate(hitPoint.x, hitPoint.y, hitPoint.z);
         }
@@ -11416,15 +11824,13 @@ window.finishExtrude = function() {
                     }
                 } else {
                     // Shape-based cut (circle, square)
-                    const sides = extrudeData.shapeDimensions.sides || 32;
                     finalGeo = createShapeExtrusion(
                         shapeType,
                         extrudeData.shapeDimensions,
                         currentHeight,
                         extrudeData.localNormal,
                         extrudeData.currentScale,
-                        extrudeData.currentSkew,
-                        sides
+                        extrudeData.currentSkew
                     );
                     if (finalGeo && extrudeData.hitPoint) {
                         finalGeo.translate(extrudeData.hitPoint.x, extrudeData.hitPoint.y, extrudeData.hitPoint.z);

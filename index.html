@@ -5856,43 +5856,18 @@ async function init3D() {
             }
         });
 
-        document.querySelectorAll('.float-panel').forEach(panel => {
-            panel.addEventListener('pointerdown', e => {
-                // Allow events on form elements and interactive elements to propagate
-                const tag = e.target.tagName;
-                if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' ||
-                    tag === 'BUTTON' || tag === 'OPTION' ||
-                    e.target.classList.contains('form-range') ||
-                    e.target.classList.contains('color-option') ||
-                    e.target.classList.contains('form-check-input')) {
-                    return;
+document.querySelectorAll('.float-panel').forEach(panel => {
+            const handlePanelEvent = e => {
+                // e.target.closest() checks if the tapped element OR any of its parents match the list.
+                // This prevents icons/text inside buttons from blocking the touch click on mobile!
+                if (e.target.closest('button, input, select, textarea, option, .form-range, .color-option, .form-check-input, [onclick]')) {
+                    return; 
                 }
                 e.stopPropagation();
-            });
-            panel.addEventListener('mousedown', e => {
-                // Allow events on form elements and interactive elements to propagate
-                const tag = e.target.tagName;
-                if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' ||
-                    tag === 'BUTTON' || tag === 'OPTION' ||
-                    e.target.classList.contains('form-range') ||
-                    e.target.classList.contains('color-option') ||
-                    e.target.classList.contains('form-check-input')) {
-                    return;
-                }
-                e.stopPropagation();
-            });
-            panel.addEventListener('touchstart', e => {
-                // Allow events on form elements and interactive elements to propagate
-                const tag = e.target.tagName;
-                if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' ||
-                    tag === 'BUTTON' || tag === 'OPTION' ||
-                    e.target.classList.contains('form-range') ||
-                    e.target.classList.contains('color-option') ||
-                    e.target.classList.contains('form-check-input')) {
-                    return;
-                }
-                e.stopPropagation();
-            });
+            };
+            panel.addEventListener('pointerdown', handlePanelEvent);
+            panel.addEventListener('mousedown', handlePanelEvent);
+            panel.addEventListener('touchstart', handlePanelEvent, { passive: false });
         });
 
         then = window.performance.now();

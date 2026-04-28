@@ -1182,6 +1182,10 @@
                 <i class="bi bi-upload"></i> Import
             </button>
             <div class="file-dropdown-menu">
+                <button class="file-dropdown-item" id="btn-import-store" style="display:none;" onclick="window.requestStoreImport(); closeAllDropdowns();">
+                <i class="bi bi-shop"></i> Import from Store
+                <span class="tooltip-text">Browse and import 3D parts directly from the Portal's Store Inventory.</span>
+                </button>
                 <input type="file" id="file-upload" multiple accept=".tinker,.3mf,.stl,.obj,.mtl,.glb,.gltf,.usdz,.step,.stp,.jpg,.png" style="display:none" onchange="window.handleImportFile(this)">
                 <button class="file-dropdown-item" onclick="document.getElementById('file-upload').click(); closeFileDropdown();">
                     <i class="bi bi-folder2-open"></i> Import File...
@@ -2134,10 +2138,30 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
             });
         }
     };
-        // 1. EMBED LOGIC: Check if embedded in iframe to show Add to Cart
+// 1. EMBED LOGIC: Check if embedded in iframe to show Portal specific buttons
     if (window.self !== window.top) {
         document.getElementById('btn-add-to-cart').style.display = 'block';
+        
+        // Show the Import from Store button
+        const btnImportStore = document.getElementById('btn-import-store');
+        if (btnImportStore) btnImportStore.style.display = 'flex';
     }
+
+    // NEW: Function to ask the GAS portal to open the Store Modal
+    window.requestStoreImport = function() {
+        if (window.self !== window.top) {
+            window.parent.postMessage({ action: 'OPEN_STORE_MODAL' }, '*');
+        } else {
+            alert("Store import is only available when running inside the 3D Portal.");
+        }
+    };
+
+    // 2. EMBED LOGIC: Listen for files sent from the GAS Portal
+    window.addEventListener('message', (event) => {
+        if (event.data && event.data.action === 'LOAD_MODEL') {
+            window.dImportFromData(event.data.name, event.data.data);
+        }
+    });
 
     // 2. EMBED LOGIC: Listen for files sent from the GAS Portal
     window.addEventListener('message', (event) => {

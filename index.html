@@ -9767,23 +9767,80 @@ window.dImportFile = function(input) {
     window.triggerExport = () => window.downloadExport(document.getElementById("export-format").value);
 
     // File Dropdown Functions
+// File Dropdown Functions
     window.toggleFileDropdown = function(dropdownId) {
+        // Prevent iOS Safari from double-firing or instantly closing the menu
+        if (window.event) window.event.stopPropagation();
+
         const dropdown = document.getElementById(dropdownId);
+        const header = document.querySelector('.float-header');
+        
         // Close all other dropdowns first
         document.querySelectorAll('.file-dropdown').forEach(d => {
             if (d.id !== dropdownId) d.classList.remove('open');
         });
-        dropdown.classList.toggle('open');
+        
+        const isNowOpen = dropdown.classList.toggle('open');
+
+        // CRITICAL MOBILE FIX: Remove horizontal scroll clipping so the menu can drop down!
+        if (window.innerWidth <= 950) {
+            if (isNowOpen) {
+                header.style.overflow = 'visible';
+            } else {
+                header.style.overflow = '';
+                header.style.overflowX = 'auto';
+            }
+        }
     };
 
     window.closeFileDropdown = function(dropdownId) {
         const dropdown = document.getElementById(dropdownId);
         if (dropdown) dropdown.classList.remove('open');
+        
+        // Restore mobile horizontal scrolling
+        if (window.innerWidth <= 950) {
+            const header = document.querySelector('.float-header');
+            if (header) {
+                header.style.overflow = '';
+                header.style.overflowX = 'auto';
+            }
+        }
     };
 
     window.closeAllDropdowns = function() {
         document.querySelectorAll('.file-dropdown').forEach(d => d.classList.remove('open'));
+        
+        // Restore mobile horizontal scrolling
+        if (window.innerWidth <= 950) {
+            const header = document.querySelector('.float-header');
+            if (header) {
+                header.style.overflow = '';
+                header.style.overflowX = 'auto';
+            }
+        }
     };
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        let closedAny = false;
+        document.querySelectorAll('.file-dropdown').forEach(dropdown => {
+            if (!dropdown.contains(e.target)) {
+                if (dropdown.classList.contains('open')) {
+                    dropdown.classList.remove('open');
+                    closedAny = true;
+                }
+            }
+        });
+        
+        // Restore mobile horizontal scrolling if we closed a menu
+        if (closedAny && window.innerWidth <= 950) {
+            const header = document.querySelector('.float-header');
+            if (header) {
+                header.style.overflow = '';
+                header.style.overflowX = 'auto';
+            }
+        }
+    });
 
     window.openExportSubmenu = function() {
         const exportDropdown = document.getElementById('export-dropdown');

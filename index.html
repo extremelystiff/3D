@@ -1086,6 +1086,7 @@
         font-family: 'JetBrains Mono', monospace;
         font-size: 0.65rem;
     }
+    #btn-add-to-cart { display: none; }
 </style>
 
 <!-- 2. IMPORT MAP -->
@@ -1674,6 +1675,9 @@
             <button class="btn btn-primary" onclick="window.triggerExport()">
                 <i class="bi bi-download me-1"></i> Download File
             </button>
+            <button class="btn btn-success" id="btn-add-to-cart" onclick="window.exportToCart()">
+                <i class="bi bi-cart-plus me-1"></i> Add to Cart (Portal)
+            </button>
             <div class="divider my-2"></div>
             <button class="btn btn-sm btn-secondary" onclick="document.getElementById('project-upload').click()">
                 <i class="bi bi-folder2-open me-1"></i> Open Project File
@@ -2128,6 +2132,82 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
                     regenerateText(selectedObjects[0]);
                 }
             });
+        }
+    };
+        // 1. EMBED LOGIC: Check if embedded in iframe to show Add to Cart
+    if (window.self !== window.top) {
+        document.getElementById('btn-add-to-cart').style.display = 'block';
+    }
+
+    // 2. EMBED LOGIC: Listen for files sent from the GAS Portal
+    window.addEventListener('message', (event) => {
+        if (event.data && event.data.action === 'LOAD_MODEL') {
+            window.dImportFromData(event.data.name, event.data.data);
+        }
+    });
+
+    // 3. Helper to decode base64 model from the store and load it
+    window.dImportFromData = function(fileName, base64Data) {
+        try {
+            const ext = fileName.split('.').pop().toLowerCase();
+            const u8 = base64ToUint8(base64Data);
+            
+            if (ext === 'stl') {
+                const geo = new STLLoader().parse(u8.buffer);
+                buildAndAddMesh(geo, fileName.split('.')[0]);
+            } else if (ext === 'obj') {
+                const text = new TextDecoder().decode(u8);
+                const group = new OBJLoader().parse(text);
+                group.traverse(child => {
+                    if (child.isMesh) buildAndAddMesh(child.geometry, fileName.split('.')[0]);
+                });
+            } else if (ext === 'tinker') {
+                loadSnapshot(u8);
+            } else {
+                alert("Format " + ext + " imported from store is not natively supported by the quick-importer. Download and drag-drop instead.");
+            }
+        } catch (e) {
+            console.error("Failed to import from portal", e);
+            alert("Failed to load part from store.");
+        }
+    };
+
+    // 4. EMBED LOGIC: Export design back to the GAS Portal cart
+    window.exportToCart = async function() {
+        const fmt = document.getElementById("export-format").value;
+        const name = (document.getElementById("d-name").value || "Custom_Design");
+
+        const sendToParent = async (blob, ext) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(blob);
+            reader.onloadend = () => {
+                const b64 = reader.result.split(',')[1];
+                window.parent.postMessage({
+                    action: 'ADD_TO_CART',
+                    name: name + '.' + ext,
+                    fileType: ext,
+                    data: b64
+                }, '*');
+            };
+        };
+
+        if (fmt === 'json') {
+            const rawData = createSnapshot(); // zstd Uint8Array
+            await sendToParent(new Blob([rawData]), 'tinker');
+        } else {
+            const l = selectedObjects.length ? selectedObjects : scene.children.filter(c => c.isMesh && !c.userData.isRuler && c !== liftCone && c.parent !== faceMarkerGroup);
+            if(!l.length) return alert("Nothing to export");
+            const g = new THREE.Group(); l.forEach(o => g.add(o.clone()));
+
+            if (fmt === 'stl') {
+                await sendToParent(new Blob([new STLExporter().parse(g, {binary:true})]), 'stl');
+            } else if (fmt === 'obj') {
+                await sendToParent(new Blob([new OBJExporter().parse(g)]), 'obj');
+            } else if (fmt === 'glb') {
+                new GLTFExporter().parse(g, r => sendToParent(new Blob([r]), 'glb'), err=>console.error(err), {binary:true});
+            } else {
+                alert("Please export as .tinker, .stl, or .glb to add to cart.");
+            }
         }
     };
 

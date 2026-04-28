@@ -2163,12 +2163,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
         }
     });
 
-    // 2. EMBED LOGIC: Listen for files sent from the GAS Portal
-    window.addEventListener('message', (event) => {
-        if (event.data && event.data.action === 'LOAD_MODEL') {
-            window.dImportFromData(event.data.name, event.data.data);
-        }
-    });
+
 
     // 3. Helper to decode base64 model from the store and load it
     window.dImportFromData = function(fileName, base64Data) {

@@ -483,6 +483,191 @@
         padding: 8px 24px;
     }
 
+    /* Import Preview Modal — shows dimensions + scale controls before commit */
+    .import-modal {
+        display: none;
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background: rgba(0, 0, 0, 0.75);
+        z-index: 2100;
+        align-items: center;
+        justify-content: center;
+    }
+    .import-modal.show { display: flex; }
+    .import-modal .modal-content {
+        background: var(--ui-panel-strong);
+        border: 1px solid var(--ui-border);
+        border-radius: 12px;
+        padding: 20px;
+        width: min(720px, 95vw);
+        max-height: 92vh;
+        overflow-y: auto;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+        color: var(--ui-text);
+    }
+    .import-modal .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--ui-border);
+        padding-bottom: 10px;
+        margin-bottom: 14px;
+    }
+    .import-modal .modal-header h3 {
+        margin: 0;
+        font-size: 1.05rem;
+        color: var(--ui-text);
+    }
+    .import-modal .modal-body {
+        display: grid;
+        grid-template-columns: 1fr 280px;
+        gap: 16px;
+    }
+    @media (max-width: 640px) {
+        .import-modal .modal-body { grid-template-columns: 1fr; }
+    }
+    .import-modal .preview-canvas-wrap {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 4/3;
+        background: radial-gradient(circle at center, #2a2a2a 0%, #000 100%);
+        border: 1px solid var(--ui-border);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .import-modal .preview-canvas-wrap canvas {
+        width: 100% !important;
+        height: 100% !important;
+        display: block;
+    }
+    .import-modal .info-section {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    .import-modal .dim-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 6px;
+    }
+    .import-modal .dim-cell {
+        background: rgba(0,0,0,0.25);
+        border: 1px solid var(--ui-border);
+        border-radius: 6px;
+        padding: 6px 8px;
+        text-align: center;
+    }
+    .import-modal .dim-cell .dim-label {
+        font-size: 0.65rem;
+        color: var(--ui-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .import-modal .dim-cell .dim-value {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.95rem;
+        font-weight: bold;
+        color: var(--ui-accent);
+    }
+    .import-modal .scale-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .import-modal .scale-row label {
+        font-size: 0.75rem;
+        color: var(--ui-text-muted);
+        width: 28px;
+        flex-shrink: 0;
+    }
+    .import-modal .scale-row input[type="number"] {
+        flex: 1;
+        background: rgba(0,0,0,0.3);
+        border: 1px solid var(--ui-border);
+        color: var(--ui-text);
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 0.85rem;
+        font-family: 'JetBrains Mono', monospace;
+    }
+    .import-modal .lock-toggle {
+        background: rgba(0,0,0,0.3);
+        border: 1px solid var(--ui-border);
+        color: var(--ui-text-muted);
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 0.7rem;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    .import-modal .lock-toggle.active {
+        background: var(--ui-accent-soft);
+        color: var(--ui-accent);
+        border-color: var(--ui-accent);
+    }
+    .import-modal .uniform-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(120, 183, 255, 0.08);
+        border: 1px solid var(--ui-accent-soft);
+        border-radius: 6px;
+        padding: 6px 8px;
+    }
+    .import-modal .uniform-row label {
+        font-size: 0.75rem;
+        color: var(--ui-text-soft);
+        flex: 1;
+    }
+    .import-modal .uniform-row input[type="range"] {
+        flex: 2;
+        accent-color: var(--ui-accent);
+    }
+    .import-modal .uniform-row .uniform-val {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.8rem;
+        color: var(--ui-accent);
+        width: 50px;
+        text-align: right;
+    }
+    .import-modal .modal-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 16px;
+        padding-top: 12px;
+        border-top: 1px solid var(--ui-border);
+        gap: 8px;
+    }
+    .import-modal .modal-footer .left-info {
+        font-size: 0.7rem;
+        color: var(--ui-text-muted);
+    }
+    .import-modal .modal-footer .btn-group-action {
+        display: flex;
+        gap: 8px;
+    }
+
+    /* Uniform Scale Lock toggle in Properties Panel */
+    .scale-lock-btn {
+        background: rgba(0,0,0,0.25);
+        border: 1px solid var(--ui-border);
+        color: var(--ui-text-muted);
+        border-radius: 6px;
+        padding: 2px 8px;
+        font-size: 0.7rem;
+        cursor: pointer;
+        transition: all 0.15s;
+        white-space: nowrap;
+    }
+    .scale-lock-btn.active {
+        background: var(--ui-accent-soft);
+        color: var(--ui-accent);
+        border-color: var(--ui-accent);
+    }
+    .scale-lock-btn:active { transform: scale(0.95); }
+
     /* Object List (Bottom Right) - Enhanced */
     .float-list {
         bottom: 20px;
@@ -1186,11 +1371,11 @@
                 <i class="bi bi-shop"></i> Import from Store
                 <span class="tooltip-text">Browse and import 3D parts directly from the Portal's Store Inventory.</span>
                 </button>
-                <input type="file" id="file-upload" multiple accept=".tinker,.3mf,.stl,.obj,.mtl,.glb,.gltf,.usdz,.step,.stp,.jpg,.png" style="display:none" onchange="window.handleImportFile(this)">
+                <input type="file" id="file-upload" multiple accept=".tinker,.3mf,.stl,.obj,.mtl,.glb,.gltf,.usdz,.step,.stp,.fbx,.jpg,.png" style="display:none" onchange="window.handleImportFile(this)">
                 <button class="file-dropdown-item" onclick="document.getElementById('file-upload').click(); closeFileDropdown();">
                     <i class="bi bi-folder2-open"></i> Import File...
                     <span class="shortcut">Ctrl+O</span>
-                    <span class="tooltip-text">Import .tinker, .3MF, .STL, .OBJ, .GLTF, .GLB, .USDZ, or .STEP files</span>
+                    <span class="tooltip-text">Import .tinker, .3MF, .STL, .OBJ, .GLTF, .GLB, .USDZ, .FBX, or .STEP files</span>
                 </button>
                 <button class="file-dropdown-item" onclick="document.getElementById('file-upload-tinker').click(); closeFileDropdown();">
                     <i class="bi bi-file-earmark-arrow-in"></i> Import .tinker
@@ -1512,10 +1697,15 @@
             <div id="shape-params" class="mb-3 pt-2 border-top" style="display:none; background:rgba(255,255,255,0.05); padding:8px; border-radius:8px;"></div>
 
             <div class="row g-2 mb-3">
-                <label class="small text-muted col-12 mb-1">Size (mm)</label>
-                <div class="col-4"><input type="number" id="opt-sz-x" class="form-control form-control-sm" placeholder="W" onchange="window.dSz()"></div>
-                <div class="col-4"><input type="number" id="opt-sz-y" class="form-control form-control-sm" placeholder="L" onchange="window.dSz()"></div>
-                <div class="col-4"><input type="number" id="opt-sz-z" class="form-control form-control-sm" placeholder="H" onchange="window.dSz()"></div>
+                <label class="small text-muted col-12 mb-1 d-flex justify-content-between align-items-center">
+                    <span>Size (mm)</span>
+                    <button class="scale-lock-btn active" id="uniform-scale-lock" onclick="window.toggleUniformScaleLock()" title="When linked, changing one axis scales all three proportionally (preserves aspect ratio). When unlinked, axes scale independently.">
+                        <i class="bi bi-link-45deg"></i> <span id="uniform-scale-lock-label">Linked</span>
+                    </button>
+                </label>
+                <div class="col-4"><input type="number" id="opt-sz-x" class="form-control form-control-sm" placeholder="W" onchange="window.dSz('x')"></div>
+                <div class="col-4"><input type="number" id="opt-sz-y" class="form-control form-control-sm" placeholder="L" onchange="window.dSz('y')"></div>
+                <div class="col-4"><input type="number" id="opt-sz-z" class="form-control form-control-sm" placeholder="H" onchange="window.dSz('z')"></div>
             </div>
             <div class="row g-2">
                 <label class="small text-muted col-12 mb-1">Rotation (°)</label>
@@ -1651,6 +1841,85 @@
             <button class="btn btn-primary" onclick="window.hideTinkerInfo()">
                 Got it!
             </button>
+        </div>
+    </div>
+
+    <!-- Import Preview Modal — shows dimensions & scaling before committing the imported model -->
+    <div class="import-modal" id="import-preview-modal" onclick="if(event.target === this) window.cancelImportPreview()">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="bi bi-box-arrow-in-down-right"></i> Import Preview</h3>
+                <button class="btn-close btn-sm" onclick="window.cancelImportPreview()"></button>
+            </div>
+            <div class="modal-body">
+                <div class="preview-canvas-wrap" id="import-preview-canvas-wrap"></div>
+                <div class="info-section">
+                    <div>
+                        <div class="small text-muted mb-1" style="font-size:0.7rem;">FILE</div>
+                        <div id="import-preview-filename" style="font-family:'JetBrains Mono',monospace;font-size:0.8rem;color:var(--ui-text);word-break:break-all;"></div>
+                    </div>
+                    <div>
+                        <div class="small text-muted mb-1" style="font-size:0.7rem;">ORIGINAL DIMENSIONS (mm)</div>
+                        <div class="dim-grid">
+                            <div class="dim-cell"><div class="dim-label">X</div><div class="dim-value" id="import-orig-x">0</div></div>
+                            <div class="dim-cell"><div class="dim-label">Y</div><div class="dim-value" id="import-orig-y">0</div></div>
+                            <div class="dim-cell"><div class="dim-label">Z</div><div class="dim-value" id="import-orig-z">0</div></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="small text-muted mb-1" style="font-size:0.7rem;">SCALED DIMENSIONS (mm)</div>
+                        <div class="dim-grid">
+                            <div class="dim-cell"><div class="dim-label">X</div><div class="dim-value" id="import-cur-x">0</div></div>
+                            <div class="dim-cell"><div class="dim-label">Y</div><div class="dim-value" id="import-cur-y">0</div></div>
+                            <div class="dim-cell"><div class="dim-label">Z</div><div class="dim-value" id="import-cur-z">0</div></div>
+                        </div>
+                    </div>
+                    <div class="uniform-row">
+                        <label><i class="bi bi-link"></i> Uniform</label>
+                        <input type="range" id="import-uniform-slider" min="0.01" max="10" step="0.01" value="1">
+                        <span class="uniform-val" id="import-uniform-val">1.00x</span>
+                    </div>
+                    <div>
+                        <div class="small text-muted mb-1" style="font-size:0.7rem;display:flex;justify-content:space-between;align-items:center;">
+                            <span>PER-AXIS SCALE</span>
+                            <button class="lock-toggle" id="import-lock-toggle" onclick="window.toggleImportLock()" title="Lock axes to uniform scaling">
+                                <i class="bi bi-link-45deg"></i> Link
+                            </button>
+                        </div>
+                        <div class="scale-row mb-1">
+                            <label>X</label>
+                            <input type="number" id="import-scale-x" step="0.01" min="0.001" value="1">
+                        </div>
+                        <div class="scale-row mb-1">
+                            <label>Y</label>
+                            <input type="number" id="import-scale-y" step="0.01" min="0.001" value="1">
+                        </div>
+                        <div class="scale-row">
+                            <label>Z</label>
+                            <input type="number" id="import-scale-z" step="0.01" min="0.001" value="1">
+                        </div>
+                    </div>
+                    <div>
+                        <div class="small text-muted mb-1" style="font-size:0.7rem;">QUICK PRESETS</div>
+                        <div class="d-flex gap-1 flex-wrap">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="window.setImportScale(0.5)">0.5x</button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="window.setImportScale(1)">1x</button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="window.setImportScale(2)">2x</button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="window.fitImportTo100mm()">Fit to 100mm</button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="window.resetImportScale()">Reset</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div class="left-info" id="import-status-text">Drag to rotate • Scroll to zoom</div>
+                <div class="btn-group-action">
+                    <button class="btn btn-sm btn-outline-secondary" onclick="window.cancelImportPreview()">Cancel</button>
+                    <button class="btn btn-sm btn-primary" onclick="window.confirmImportPreview()">
+                        <i class="bi bi-check2-circle"></i> Import
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1868,6 +2137,7 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
     import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
     import { USDZLoader } from "three/addons/loaders/USDZLoader.js";
     import { MTLLoader } from "three/addons/loaders/MTLLoader.js";
+    import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
 
     // occtImportJs is loaded via script tag
     // Make it available globally
@@ -5757,6 +6027,16 @@ async function init3D() {
             if (tCtrl.object) {
                 tCtrl.object.userData.isBeingDragged = e.value;
 
+                // --- UNIFORM SCALE LOCK: capture pre-drag scale baseline ---
+                // When a scale-mode drag starts, snapshot the object's scale so the
+                // "change" handler can compute the per-axis ratio and propagate it.
+                if (e.value && tCtrl.mode === 'scale') {
+                    const s = tCtrl.object.scale;
+                    _gizmoDragStartScale = { x: s.x, y: s.y, z: s.z };
+                } else if (!e.value) {
+                    _gizmoDragStartScale = null;
+                }
+
                 // --- GROUP: Store initial transform when drag starts ---
                 if (e.value && tCtrl.object.userData.groupId) {
                     const members = getGroupMembers(tCtrl.object);
@@ -5786,6 +6066,48 @@ async function init3D() {
             }
         });
         tCtrl.addEventListener("change", () => {
+            // --- UNIFORM SCALE LOCK: enforce during gizmo scale drag ---
+            // When the user drags a single-axis scale handle (X/Y/Z bar) on the
+            // RGB gizmo in 3D space, propagate that axis's scale ratio to the
+            // other two so the object scales uniformly (preserves aspect ratio).
+            // The center "uniform" handle already scales all axes together, so
+            // we detect single-axis drags by checking which axis actually moved
+            // relative to the pre-drag baseline.
+            if (_uniformScaleLocked && _gizmoDragStartScale && tCtrl.object && tCtrl.mode === 'scale') {
+                const obj = tCtrl.object;
+                const start = _gizmoDragStartScale;
+                // Compute per-axis ratios relative to the pre-drag baseline
+                const rx = start.x > 0.0001 ? obj.scale.x / start.x : 1;
+                const ry = start.y > 0.0001 ? obj.scale.y / start.y : 1;
+                const rz = start.z > 0.0001 ? obj.scale.z / start.z : 1;
+
+                // Find the axis with the largest deviation from 1 (the one being dragged)
+                const dx = Math.abs(rx - 1);
+                const dy = Math.abs(ry - 1);
+                const dz = Math.abs(rz - 1);
+                const maxDev = Math.max(dx, dy, dz);
+
+                // Only enforce if exactly one axis is being dragged (not the uniform center handle)
+                // Threshold: the dragged axis must deviate meaningfully more than the others
+                if (maxDev > 0.001) {
+                    const isXDragged = dx === maxDev && dx > dy * 1.5 && dx > dz * 1.5;
+                    const isYDragged = dy === maxDev && dy > dx * 1.5 && dy > dz * 1.5;
+                    const isZDragged = dz === maxDev && dz > dx * 1.5 && dz > dy * 1.5;
+
+                    if (isXDragged) {
+                        obj.scale.y = start.y * rx;
+                        obj.scale.z = start.z * rx;
+                    } else if (isYDragged) {
+                        obj.scale.x = start.x * ry;
+                        obj.scale.z = start.z * ry;
+                    } else if (isZDragged) {
+                        obj.scale.x = start.x * rz;
+                        obj.scale.y = start.y * rz;
+                    }
+                    // If none of the above (e.g. uniform center handle), leave as-is
+                }
+            }
+
             // --- GROUP: Sync sibling transforms ---
             syncGroupTransform();
 
@@ -7747,8 +8069,29 @@ function buildAndAddMesh(geometry, name, geoParams = null, incomingMaterial = nu
 
         if (incomingMaterial) {
             // 1. USE IMPORTED MATERIAL (TEXTURES)
-            // We clone it so if you import the same file twice, you can edit them independently
-            material = incomingMaterial.clone();
+            // Defensive: some loaders (e.g. FBXLoader in three@0.160.0) can hand us an
+            // array of materials (legacy MultiMaterial) or a raw object that isn't a real
+            // THREE.Material and therefore has no .clone(). Flatten arrays to the first
+            // entry, and fall back to a fresh MeshStandardMaterial if .clone() is missing.
+            let src = Array.isArray(incomingMaterial) ? (incomingMaterial[0] || null) : incomingMaterial;
+
+            if (src && typeof src.clone === 'function') {
+                // We clone it so if you import the same file twice, you can edit them independently
+                material = src.clone();
+            } else {
+                // Fallback for non-Material objects (missing .clone)
+                material = new THREE.MeshStandardMaterial({ roughness: 0.5, metalness: 0.1, side: THREE.DoubleSide });
+                if (src) {
+                    if (src.color) {
+                        try {
+                            if (src.color.isColor) material.color.copy(src.color);
+                            else if (Array.isArray(src.color)) material.color.setRGB(src.color[0] || 0, src.color[1] || 0, src.color[2] || 0);
+                            else material.color.set(src.color);
+                        } catch (e) { /* default white */ }
+                    }
+                    if (src.map) material.map = src.map;
+                }
+            }
 
             // Ensure wireframe toggle respects global settings
             material.wireframe = appSettings.wireframe;
@@ -7903,21 +8246,70 @@ function updateParametricUI(obj) {
     }
 
     window.dRot = () => { if (selectedObjects.length!==1) return; const o=selectedObjects[0]; o.rotation.set(document.getElementById("opt-rot-x").value*(Math.PI/180), document.getElementById("opt-rot-y").value*(Math.PI/180), document.getElementById("opt-rot-z").value*(Math.PI/180)); updateTinkerLabels(); saveState(); };
-window.dSz = () => {
+
+    // Uniform-scale lock state for the Properties panel size inputs.
+    // When locked, editing one axis scales all three proportionally (preserves aspect ratio).
+    // _lastPropsSize is refreshed by updatePropertiesPanel so we can compute ratios.
+    let _uniformScaleLocked = true;
+    let _lastPropsSize = null;
+
+    // Pre-drag scale baseline for the TransformControls (RGB gizmo) scale mode.
+    // Captured when a scale-mode drag starts so we can propagate one axis's scale
+    // ratio to the other two while the uniform lock is on.
+    let _gizmoDragStartScale = null;
+
+    window.toggleUniformScaleLock = function() {
+        _uniformScaleLocked = !_uniformScaleLocked;
+        const btn = document.getElementById('uniform-scale-lock');
+        const label = document.getElementById('uniform-scale-lock-label');
+        if (btn && label) {
+            btn.classList.toggle('active', _uniformScaleLocked);
+            label.textContent = _uniformScaleLocked ? 'Linked' : 'Free';
+        }
+    };
+
+window.dSz = (changedAxis) => {
     if (selectedObjects.length !== 1) return;
 
     const obj = selectedObjects[0];
 
-    // 1. Capture ALL values immediately (before the UI gets updated/reset)
-    const vX = parseFloat(document.getElementById("opt-sz-x").value);
-    const vY = parseFloat(document.getElementById("opt-sz-y").value);
-    const vZ = parseFloat(document.getElementById("opt-sz-z").value);
+    // If no axis specified (legacy callers), fall back to applying all three independently
+    if (!changedAxis) {
+        const vX = parseFloat(document.getElementById("opt-sz-x").value);
+        const vY = parseFloat(document.getElementById("opt-sz-y").value);
+        const vZ = parseFloat(document.getElementById("opt-sz-z").value);
+        if(!isNaN(vX)) resizeObject(obj, 'x', vX);
+        if(!isNaN(vY)) resizeObject(obj, 'y', vY);
+        if(!isNaN(vZ)) resizeObject(obj, 'z', vZ);
+        return;
+    }
 
-    // 2. Apply them using the CAPTURED values
-    // Even if resizeObject resets the text box, we already have the value stored in vY/vZ
-    if(!isNaN(vX)) resizeObject(obj, 'x', vX);
-    if(!isNaN(vY)) resizeObject(obj, 'y', vY);
-    if(!isNaN(vZ)) resizeObject(obj, 'z', vZ);
+    // Read the new value for the axis that was actually edited
+    const inputId = { x: 'opt-sz-x', y: 'opt-sz-y', z: 'opt-sz-z' }[changedAxis];
+    const newVal = parseFloat(document.getElementById(inputId).value);
+    if (isNaN(newVal) || newVal <= 0.1) return;
+
+    // Uniform scale lock: apply the same ratio to all three axes (preserves aspect ratio).
+    // We capture _lastPropsSize BEFORE calling resizeObject, because resizeObject
+    // internally calls updatePropertiesPanel which overwrites _lastPropsSize.
+    if (_uniformScaleLocked && _lastPropsSize) {
+        const oldVal = _lastPropsSize[changedAxis];
+        if (oldVal > 0.01) {
+            const ratio = newVal / oldVal;
+            // Snapshot the baseline so the three resizeObject calls use consistent targets
+            const base = { x: _lastPropsSize.x, y: _lastPropsSize.y, z: _lastPropsSize.z };
+            const tX = Math.max(0.1, base.x * ratio);
+            const tY = Math.max(0.1, base.y * ratio);
+            const tZ = Math.max(0.1, base.z * ratio);
+            resizeObject(obj, 'x', tX);
+            resizeObject(obj, 'y', tY);
+            resizeObject(obj, 'z', tZ);
+            return;
+        }
+    }
+
+    // Independent mode (or no baseline yet): resize only the edited axis
+    resizeObject(obj, changedAxis, newVal);
 };
     window.dDrop = function() {
         if (selectedObjects.length === 0) return alert("Select object.");
@@ -8465,6 +8857,9 @@ const updatePropertiesPanel = () => {
             document.getElementById("opt-sz-x").value = Math.round(size.x);
             document.getElementById("opt-sz-y").value = Math.round(size.y);
             document.getElementById("opt-sz-z").value = Math.round(size.z);
+
+            // Track last-known size so dSz can compute uniform-scale ratios
+            _lastPropsSize = { x: size.x, y: size.y, z: size.z };
 
             const r = n.rotation;
             document.getElementById("opt-rot-x").value = Math.round(r.x * (180/Math.PI));
@@ -9397,6 +9792,377 @@ window.toggleRulerMode = () => {
         }
     };
 
+    // Sanitize materials produced by FBXLoader (and similar loaders that may emit
+    // non-standard materials) into proper MeshStandardMaterial instances. This mirrors
+    // the standalone 3D Pro Converter's convertToStandardMaterial() and prevents the
+    // "incomingMaterial.clone is not a function" error inside buildAndAddMesh().
+    // Handles two problem cases from three@0.160.0's FBXLoader:
+    //   1. Array materials (legacy MultiMaterial) - arrays don't have .clone()
+    //   2. Raw material objects missing .clone() / .type
+    function convertFBXMaterialsToStandard(object) {
+        object.traverse((child) => {
+            if (!child.isMesh || !child.material) return;
+
+            // Flatten arrays; pick the first usable material as the source of color/texture
+            const old = Array.isArray(child.material) ? (child.material[0] || null) : child.material;
+
+            // Already a single proper MeshStandardMaterial with a working .clone()? Skip.
+            if (old && old.type === 'MeshStandardMaterial' && typeof old.clone === 'function' && !Array.isArray(child.material)) {
+                return;
+            }
+
+            const mat = new THREE.MeshStandardMaterial({
+                roughness: 0.5,
+                metalness: 0.1,
+                side: THREE.DoubleSide
+            });
+
+            if (old) {
+                // Color: handle THREE.Color, raw [r,g,b] arrays, and hex/strings
+                if (old.color) {
+                    try {
+                        if (old.color.isColor) mat.color.copy(old.color);
+                        else if (Array.isArray(old.color)) mat.color.setRGB(old.color[0] || 0, old.color[1] || 0, old.color[2] || 0);
+                        else mat.color.set(old.color);
+                    } catch (e) { /* leave default white */ }
+                }
+                if (old.map) mat.map = old.map;
+                if (old.normalMap) mat.normalMap = old.normalMap;
+                if (old.transparent !== undefined) mat.transparent = !!old.transparent;
+                if (old.opacity !== undefined && !isNaN(old.opacity)) mat.opacity = old.opacity;
+            }
+
+            child.material = mat;
+        });
+    }
+
+    // ============================================================
+    // IMPORT PREVIEW MODAL
+    // Shows the imported model in an isolated preview scene with its
+    // dimensions and a uniform / per-axis scale UI before committing
+    // it to the main scene via buildAndAddMesh.
+    // ============================================================
+
+    // Module-level helper: detect AR-style tiny scales (under 2 units) and scale up by 1000x.
+    // Hoisted out of dImportFile so the preview modal can also use it.
+    function _checkAndFixGeometryScale(geometry) {
+        geometry.computeBoundingBox();
+        const size = new THREE.Vector3();
+        geometry.boundingBox.getSize(size);
+        const maxDim = Math.max(size.x, size.y, size.z);
+        if (maxDim < 2.0 && maxDim > 0.0001) {
+            geometry.scale(1000, 1000, 1000);
+        }
+        return geometry;
+    }
+
+    // Preview scene state
+    let _importPreviewRen = null;
+    let _importPreviewScene = null;
+    let _importPreviewCam = null;
+    let _importPreviewCtrl = null;
+    let _importPreviewAnimId = null;
+    let _importPreviewGrid = null;
+    let _pendingImportData = null; // { object, fileName, origSize }
+    let _importScale = { x: 1, y: 1, z: 1 };
+    let _importLockLinked = true; // start in linked/uniform mode
+
+    function _centerImportObject(object) {
+        const box = new THREE.Box3().setFromObject(object);
+        const center = box.getCenter(new THREE.Vector3());
+        object.position.sub(center);
+        object.updateMatrixWorld(true);
+    }
+
+    function _measureImportObjectSize(object) {
+        // Measure with scale=1 so we get the "original" geometry size
+        const savedScale = object.scale.clone();
+        object.scale.set(1, 1, 1);
+        object.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(object);
+        const size = box.getSize(new THREE.Vector3());
+        object.scale.copy(savedScale);
+        object.updateMatrixWorld(true);
+        return size;
+    }
+
+    function _applyImportScale() {
+        if (!_pendingImportData) return;
+        _pendingImportData.object.scale.set(_importScale.x, _importScale.y, _importScale.z);
+        _pendingImportData.object.updateMatrixWorld(true);
+    }
+
+    function _updateScaledDims() {
+        if (!_pendingImportData) return;
+        const o = _pendingImportData.origSize;
+        document.getElementById('import-cur-x').textContent = (o.x * _importScale.x).toFixed(2);
+        document.getElementById('import-cur-y').textContent = (o.y * _importScale.y).toFixed(2);
+        document.getElementById('import-cur-z').textContent = (o.z * _importScale.z).toFixed(2);
+    }
+
+    function _setupImportPreview() {
+        _teardownImportPreview();
+        const wrap = document.getElementById('import-preview-canvas-wrap');
+        const width = wrap.clientWidth || 400;
+        const height = wrap.clientHeight || 300;
+
+        _importPreviewScene = new THREE.Scene();
+        _importPreviewScene.background = new THREE.Color(0x1a1a1a);
+
+        _importPreviewCam = new THREE.PerspectiveCamera(45, width / height, 0.01, 5000);
+        _importPreviewCam.position.set(50, 50, 50);
+        _importPreviewCam.lookAt(0, 0, 0);
+
+        _importPreviewRen = new THREE.WebGLRenderer({ antialias: true });
+        _importPreviewRen.setSize(width, height);
+        _importPreviewRen.setPixelRatio(window.devicePixelRatio);
+        wrap.appendChild(_importPreviewRen.domElement);
+
+        _importPreviewCtrl = new OrbitControls(_importPreviewCam, _importPreviewRen.domElement);
+        _importPreviewCtrl.enableDamping = true;
+        _importPreviewCtrl.dampingFactor = 0.1;
+
+        const ambient = new THREE.AmbientLight(0xffffff, 1.0);
+        _importPreviewScene.add(ambient);
+        const dir = new THREE.DirectionalLight(0xffffff, 1.2);
+        dir.position.set(50, 80, 30);
+        _importPreviewScene.add(dir);
+        const back = new THREE.DirectionalLight(0xffffff, 0.4);
+        back.position.set(-30, -20, -40);
+        _importPreviewScene.add(back);
+
+        _importPreviewGrid = new THREE.GridHelper(100, 20, 0x444444, 0x222222);
+        _importPreviewScene.add(_importPreviewGrid);
+
+        window.addEventListener('resize', _onImportPreviewResize);
+    }
+
+    function _teardownImportPreview() {
+        if (_importPreviewAnimId) {
+            cancelAnimationFrame(_importPreviewAnimId);
+            _importPreviewAnimId = null;
+        }
+        if (_importPreviewCtrl) { _importPreviewCtrl.dispose(); _importPreviewCtrl = null; }
+        if (_importPreviewRen) {
+            _importPreviewRen.dispose();
+            const wrap = document.getElementById('import-preview-canvas-wrap');
+            if (wrap && _importPreviewRen.domElement && _importPreviewRen.domElement.parentNode === wrap) {
+                wrap.removeChild(_importPreviewRen.domElement);
+            }
+            _importPreviewRen = null;
+        }
+        _importPreviewScene = null;
+        _importPreviewCam = null;
+        _importPreviewGrid = null;
+        window.removeEventListener('resize', _onImportPreviewResize);
+    }
+
+    function _onImportPreviewResize() {
+        if (!_importPreviewRen || !_importPreviewCam) return;
+        const wrap = document.getElementById('import-preview-canvas-wrap');
+        const w = wrap.clientWidth || 400;
+        const h = wrap.clientHeight || 300;
+        _importPreviewCam.aspect = w / h;
+        _importPreviewCam.updateProjectionMatrix();
+        _importPreviewRen.setSize(w, h);
+    }
+
+    function _animateImportPreview() {
+        _importPreviewAnimId = requestAnimationFrame(_animateImportPreview);
+        if (_importPreviewCtrl) _importPreviewCtrl.update();
+        if (_importPreviewRen && _importPreviewScene && _importPreviewCam) {
+            _importPreviewRen.render(_importPreviewScene, _importPreviewCam);
+        }
+    }
+
+    function _fitImportCamera(size) {
+        const maxDim = Math.max(size.x, size.y, size.z, 1);
+        const dist = maxDim * 2.2;
+        _importPreviewCam.position.set(dist, dist * 0.7, dist);
+        _importPreviewCam.lookAt(0, 0, 0);
+        _importPreviewCtrl.target.set(0, 0, 0);
+        _importPreviewCam.near = maxDim / 1000;
+        _importPreviewCam.far = maxDim * 100;
+        _importPreviewCam.updateProjectionMatrix();
+
+        if (_importPreviewGrid && _importPreviewScene) {
+            _importPreviewScene.remove(_importPreviewGrid);
+            const gridSize = Math.max(10, maxDim * 2);
+            _importPreviewGrid = new THREE.GridHelper(gridSize, 20, 0x444444, 0x222222);
+            _importPreviewScene.add(_importPreviewGrid);
+        }
+    }
+
+    window.showImportPreviewModal = function(object, fileName) {
+        if (!object) { alert('Import failed: no object loaded.'); return; }
+
+        // Verify there's at least one mesh
+        let hasMesh = false;
+        object.traverse(c => { if (c.isMesh) hasMesh = true; });
+        if (!hasMesh) { alert('Import failed: no meshes found in file.'); return; }
+
+        // Center the object at the origin for the preview
+        _centerImportObject(object);
+
+        // Measure original (unscaled) size — geometries have already been
+        // run through _checkAndFixGeometryScale by the loader branch, so
+        // "original" already reflects the AR-scale fixup.
+        const origSize = _measureImportObjectSize(object);
+
+        _pendingImportData = { object, fileName, origSize: origSize.clone() };
+        _importScale = { x: 1, y: 1, z: 1 };
+        _importLockLinked = true;
+
+        document.getElementById('import-preview-filename').textContent = fileName;
+        document.getElementById('import-orig-x').textContent = origSize.x.toFixed(2);
+        document.getElementById('import-orig-y').textContent = origSize.y.toFixed(2);
+        document.getElementById('import-orig-z').textContent = origSize.z.toFixed(2);
+
+        document.getElementById('import-scale-x').value = 1;
+        document.getElementById('import-scale-y').value = 1;
+        document.getElementById('import-scale-z').value = 1;
+        document.getElementById('import-uniform-slider').value = 1;
+        document.getElementById('import-uniform-val').textContent = '1.00x';
+        document.getElementById('import-lock-toggle').classList.add('active');
+
+        _applyImportScale();
+        _updateScaledDims();
+
+        document.getElementById('import-preview-modal').classList.add('show');
+        _setupImportPreview();
+        _importPreviewScene.add(object);
+        _fitImportCamera(origSize);
+        _animateImportPreview();
+    };
+
+    window.toggleImportLock = function() {
+        _importLockLinked = !_importLockLinked;
+        document.getElementById('import-lock-toggle').classList.toggle('active', _importLockLinked);
+        if (_importLockLinked) {
+            // Sync all axes to the current X value
+            const v = _importScale.x;
+            _importScale.y = v; _importScale.z = v;
+            document.getElementById('import-scale-y').value = v;
+            document.getElementById('import-scale-z').value = v;
+            document.getElementById('import-uniform-slider').value = v;
+            document.getElementById('import-uniform-val').textContent = v.toFixed(2) + 'x';
+            _applyImportScale();
+            _updateScaledDims();
+        }
+    };
+
+    window.setImportScale = function(factor) {
+        _importScale.x = factor; _importScale.y = factor; _importScale.z = factor;
+        document.getElementById('import-scale-x').value = factor;
+        document.getElementById('import-scale-y').value = factor;
+        document.getElementById('import-scale-z').value = factor;
+        document.getElementById('import-uniform-slider').value = factor;
+        document.getElementById('import-uniform-val').textContent = factor.toFixed(2) + 'x';
+        _applyImportScale();
+        _updateScaledDims();
+    };
+
+    window.resetImportScale = function() { window.setImportScale(1); };
+
+    window.fitImportTo100mm = function() {
+        if (!_pendingImportData) return;
+        const maxDim = Math.max(_pendingImportData.origSize.x, _pendingImportData.origSize.y, _pendingImportData.origSize.z, 0.001);
+        window.setImportScale(100 / maxDim);
+    };
+
+    window.cancelImportPreview = function() {
+        if (_pendingImportData && _pendingImportData.object) {
+            _pendingImportData.object.traverse(child => {
+                if (child.isMesh) {
+                    if (child.geometry) child.geometry.dispose();
+                    if (child.material) {
+                        if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+                        else child.material.dispose();
+                    }
+                }
+            });
+        }
+        _teardownImportPreview();
+        _pendingImportData = null;
+        document.getElementById('import-preview-modal').classList.remove('show');
+    };
+
+    window.confirmImportPreview = function() {
+        if (!_pendingImportData) return;
+        const { object, fileName } = _pendingImportData;
+
+        let added = 0;
+        object.traverse(child => {
+            if (child.isMesh && child.geometry) {
+                // Clone geometry, apply user's scale, then buildAndAddMesh centers it
+                const geo = child.geometry.clone();
+                geo.scale(_importScale.x, _importScale.y, _importScale.z);
+                buildAndAddMesh(geo, fileName, null, child.material);
+                added++;
+            }
+        });
+
+        if (added === 0) alert('No meshes found in imported file.');
+
+        // Dispose the original geometries (we cloned them); leave materials alone
+        // because buildAndAddMesh cloned them and may share texture references.
+        object.traverse(child => {
+            if (child.isMesh && child.geometry) child.geometry.dispose();
+        });
+
+        _teardownImportPreview();
+        _pendingImportData = null;
+        document.getElementById('import-preview-modal').classList.remove('show');
+    };
+
+    // Wire up input listeners for the modal's scale controls (runs once on module init)
+    (function _wireImportPreviewInputs() {
+        const sx = document.getElementById('import-scale-x');
+        const sy = document.getElementById('import-scale-y');
+        const sz = document.getElementById('import-scale-z');
+        const slider = document.getElementById('import-uniform-slider');
+        const sliderVal = document.getElementById('import-uniform-val');
+
+        function syncAllFromValue(v, source) {
+            if (isNaN(v) || v < 0.001) return;
+            _importScale.x = v; _importScale.y = v; _importScale.z = v;
+            if (source !== 'sx') sx.value = v;
+            if (source !== 'sy') sy.value = v;
+            if (source !== 'sz') sz.value = v;
+            if (source !== 'slider') slider.value = v;
+            sliderVal.textContent = v.toFixed(2) + 'x';
+            _applyImportScale();
+            _updateScaledDims();
+        }
+
+        sx.addEventListener('input', () => {
+            const v = parseFloat(sx.value);
+            if (isNaN(v) || v < 0.001) return;
+            _importScale.x = v;
+            if (_importLockLinked) { _importScale.y = v; _importScale.z = v; sy.value = v; sz.value = v; slider.value = v; sliderVal.textContent = v.toFixed(2) + 'x'; }
+            _applyImportScale(); _updateScaledDims();
+        });
+        sy.addEventListener('input', () => {
+            const v = parseFloat(sy.value);
+            if (isNaN(v) || v < 0.001) return;
+            _importScale.y = v;
+            if (_importLockLinked) { _importScale.x = v; _importScale.z = v; sx.value = v; sz.value = v; slider.value = v; sliderVal.textContent = v.toFixed(2) + 'x'; }
+            _applyImportScale(); _updateScaledDims();
+        });
+        sz.addEventListener('input', () => {
+            const v = parseFloat(sz.value);
+            if (isNaN(v) || v < 0.001) return;
+            _importScale.z = v;
+            if (_importLockLinked) { _importScale.x = v; _importScale.y = v; sx.value = v; sy.value = v; slider.value = v; sliderVal.textContent = v.toFixed(2) + 'x'; }
+            _applyImportScale(); _updateScaledDims();
+        });
+        slider.addEventListener('input', () => {
+            const v = parseFloat(slider.value);
+            if (isNaN(v) || v < 0.001) return;
+            syncAllFromValue(v, 'slider');
+        });
+    })();
+
 window.dImportFile = function(input) {
         if (!input.files || input.files.length === 0) return;
 
@@ -9416,81 +10182,94 @@ window.dImportFile = function(input) {
             return fileMap[fileName] || url;
         });
 
-        // 3. Helper for Scaling (Same as before)
-        const checkAndFixScale = (geometry) => {
-            geometry.computeBoundingBox();
-            const size = new THREE.Vector3();
-            geometry.boundingBox.getSize(size);
-            const maxDim = Math.max(size.x, size.y, size.z);
-            if (maxDim < 2.0 && maxDim > 0.0001) {
-                console.log("Detected AR Scale. Fixing...");
-                geometry.scale(1000, 1000, 1000);
-            }
-            return geometry;
+        // 3. Helper: apply AR-scale fixup to every mesh geometry in the loaded object
+        const preprocessGeometries = (object) => {
+            object.traverse(child => {
+                if (child.isMesh && child.geometry) _checkAndFixGeometryScale(child.geometry);
+            });
         };
 
         // 4. Find the Main Model File
-        const mainFile = files.find(f => /\.(obj|stl|gltf|glb|usdz|step|stp)$/i.test(f.name));
-        if (!mainFile) return alert("No model file (.obj, .stl, .glb, .step) found in selection.");
+        const mainFile = files.find(f => /\.(obj|stl|gltf|glb|usdz|step|stp|fbx)$/i.test(f.name));
+        if (!mainFile) return alert("No model file (.obj, .stl, .glb, .usdz, .fbx, .step) found in selection.");
 
         const ext = mainFile.name.split('.').pop().toLowerCase();
         const url = fileMap[mainFile.name]; // Get the blob URL for the main file
 
-        // 5. Load based on extension
+        // 5. Load based on extension — each loader hands its result to the preview modal
         if (ext === 'step' || ext === 'stp') {
-            // Load STEP file using occt-import-js
+            // STEP uses its own multi-part pipeline that adds meshes directly to the scene.
+            // It bypasses the preview modal because STEP files can contain many parts with
+            // individual transforms that are processed by createSTEPMeshWithTransform.
             loadSTEPFile(mainFile, url);
         }
         else if (ext === 'obj') {
-            // Check if there is a matching MTL file in the selection
             const mtlFile = files.find(f => f.name.endsWith('.mtl'));
 
             const loadObj = (materials = null) => {
                 const loader = new OBJLoader(manager);
-                if(materials) {
-                    loader.setMaterials(materials);
-                }
+                if(materials) loader.setMaterials(materials);
                 loader.load(url, (objGroup) => {
-                    objGroup.traverse(child => {
-                        if (child.isMesh) buildAndAddMesh(checkAndFixScale(child.geometry), mainFile.name, null, child.material);
-                    });
+                    preprocessGeometries(objGroup);
+                    window.showImportPreviewModal(objGroup, mainFile.name);
                 });
             };
 
             if (mtlFile) {
-                // Load MTL first, then OBJ
                 const mtlLoader = new MTLLoader(manager);
                 mtlLoader.load(fileMap[mtlFile.name], (materials) => {
                     materials.preload();
                     loadObj(materials);
                 });
             } else {
-                // Just load OBJ
                 loadObj();
             }
         }
         else if (ext === 'stl') {
             new STLLoader(manager).load(url, (geo) => {
-                buildAndAddMesh(checkAndFixScale(geo), mainFile.name, null, null);
+                _checkAndFixGeometryScale(geo);
+                const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.5, metalness: 0.1 }));
+                const group = new THREE.Group();
+                group.add(mesh);
+                window.showImportPreviewModal(group, mainFile.name);
             });
         }
         else if (ext === 'gltf' || ext === 'glb') {
             new GLTFLoader(manager).load(url, (gltf) => {
-                gltf.scene.traverse(child => {
-                    if (child.isMesh) buildAndAddMesh(checkAndFixScale(child.geometry), mainFile.name, null, child.material);
-                });
+                preprocessGeometries(gltf.scene);
+                window.showImportPreviewModal(gltf.scene, mainFile.name);
             });
+        }
+        else if (ext === 'fbx') {
+            // FBX (binary or ASCII) - parses ArrayBuffer directly. The LoadingManager
+            // URL modifier resolves any embedded/external texture references against fileMap.
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const group = new FBXLoader(manager).parse(e.target.result, '');
+
+                    // FBXLoader in three@0.160.0 can return materials that aren't proper
+                    // THREE.Material instances (raw objects missing .clone(), or arrays for
+                    // legacy MultiMaterial). Sanitize ALL materials to MeshStandardMaterial
+                    // before traversal — same as the standalone 3D Pro Converter.
+                    convertFBXMaterialsToStandard(group);
+
+                    preprocessGeometries(group);
+                    window.showImportPreviewModal(group, mainFile.name);
+                } catch (err) {
+                    console.error('Error loading FBX file:', err);
+                    alert('Error loading FBX file: ' + err.message);
+                }
+            };
+            reader.readAsArrayBuffer(mainFile);
         }
         else if (ext === 'usdz') {
             // USDZ usually self-contained, logic remains similar but uses the Blob URL
-            // Note: USDZLoader doesn't fully support LoadingManager in all versions,
-            // but usually works fine for textures embedded in the archive.
             const reader = new FileReader();
             reader.onload = (e) => {
                 const group = new USDZLoader().parse(e.target.result);
-                group.traverse(child => {
-                    if (child.isMesh) buildAndAddMesh(checkAndFixScale(child.geometry), mainFile.name, null, child.material);
-                });
+                preprocessGeometries(group);
+                window.showImportPreviewModal(group, mainFile.name);
             };
             reader.readAsArrayBuffer(mainFile);
         }
@@ -9852,10 +10631,10 @@ window.dImportFile = function(input) {
         if (!input.files || input.files.length === 0) return;
         const file = input.files[0];
         const ext = file.name.split('.').pop().toLowerCase();
-        const validExtensions = ['tinker', '3mf', 'stl', 'obj', 'mtl', 'glb', 'gltf', 'usdz', 'step', 'stp', 'jpg', 'png'];
+        const validExtensions = ['tinker', '3mf', 'stl', 'obj', 'mtl', 'glb', 'gltf', 'usdz', 'step', 'stp', 'fbx', 'jpg', 'png'];
         
         if (!validExtensions.includes(ext)) {
-            alert('Unsupported file format. Supported formats: .tinker, .3MF, .STL, .OBJ, .GLTF, .GLB, .USDZ, .STEP');
+            alert('Unsupported file format. Supported formats: .tinker, .3MF, .STL, .OBJ, .GLTF, .GLB, .USDZ, .FBX, .STEP');
             return;
         }
         

@@ -1282,7 +1282,7 @@
         "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
         "three-mesh-bvh": "https://unpkg.com/three-mesh-bvh@0.7.3/build/index.module.js",
         "three-bvh-csg": "https://unpkg.com/three-bvh-csg@0.0.16/build/index.module.js",
-        "zstd-wasm": "https://esm.sh/@bokuweb/zstd-wasm@0.0.27",
+
         "three-rounded-box": "https://unpkg.com/three@0.160.0/examples/jsm/geometries/RoundedBoxGeometry.js",
         "three/addons/loaders/FontLoader.js": "https://unpkg.com/three@0.160.0/examples/jsm/loaders/FontLoader.js",
         "three/addons/geometries/TextGeometry.js": "https://unpkg.com/three@0.160.0/examples/jsm/geometries/TextGeometry.js",
@@ -1290,7 +1290,9 @@
     }
 }
 </script>
-
+<!-- Pure JS Compression: fzstd (Zstd reader for old .tinker files) & fflate (fast writer) -->
+<script src="https://cdn.jsdelivr.net/npm/fzstd@0.1.1/umd/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
 <!-- Polyfills -->
 <script async src="https://ga.jspm.io/npm:es-module-shims@1.8.0/dist/es-module-shims.js"></script>
 <!-- Fallback -->
@@ -5902,19 +5904,8 @@ function handleAlignClick(ray) {
 
 async function init3D() {
         // Init ZSTD
-        try {
-            const zstd = await import("zstd-wasm");
-            initZstd = zstd.init;
-            compress = zstd.compress;
-            decompress = zstd.decompress;
-    
-            // Correct WASM location is in lib/wasm/
-            await initZstd('https://cdn.jsdelivr.net/npm/@bokuweb/zstd-wasm@0.0.27/lib/wasm/zstd.wasm');
-            zstdReady = true;
-            console.log("Zstd Compression Ready");
-        } catch(e) {
-            console.warn("Zstd failed to load, saving will be uncompressed", e);
-        }
+        zstdReady = !!(window.fzstd && window.fflate);
+        console.log("Compression Ready (Pure JS, no WASM required)");
 
         // LOAD CUSTOM FONTS FROM STORAGE BEFORE STARTING APP
         loadCustomFonts();
@@ -11606,12 +11597,12 @@ function createSnapshot() {
         const encoder = new TextEncoder();
         const data = encoder.encode(jsonStr);
 
-        if (zstdReady) {
-            return compress(data, 10);
-        } else {
-            return data;
+        if (window.fflate && typeof window.fflate.zlibSync === 'function') {
+            return window.fflate.zlibSync(data, { level: 6 });
         }
+        return data;
     }
+
 // --- INCREASE MESH RESOLUTION (FIXED SMOOTHING) ---
     window.subdivideObject = () => {
         if (selectedObjects.length !== 1) return;
@@ -11757,95 +11748,105 @@ function saveState() {
     }
 
 function loadSnapshot(compressedData) {
-        if (!compressedData) return;
-    
-        let jsonStr;
-        try {
-            if (zstdReady && typeof decompress === 'function') {
-                const decompressed = decompress(compressedData);
-                jsonStr = new TextDecoder().decode(decompressed);
-            } else if (window.fzstd && typeof window.fzstd.decompress === 'function') {
-                // Pure JavaScript fallback for Zstandard decompression
+    if (!compressedData || !compressedData.length) return;
+
+    let jsonStr = '';
+
+    try {
+        const b0 = compressedData[0];
+        const b1 = compressedData[1];
+        const b2 = compressedData[2];
+        const b3 = compressedData[3];
+
+        // 1. Check for legacy Zstandard frame (magic bytes: 0x28, 0xB5, 0x2F, 0xFD)
+        if (b0 === 0x28 && b1 === 0xb5 && b2 === 0x2f && b3 === 0xfd) {
+            if (window.fzstd && typeof window.fzstd.decompress === 'function') {
                 const decompressed = window.fzstd.decompress(compressedData);
                 jsonStr = new TextDecoder().decode(decompressed);
             } else {
-                throw new Error("No decompressor available");
+                throw new Error("fzstd decompressor not found.");
             }
-        } catch (e) {
-            // Fallback for plain uncompressed JSON
+        }
+        // 2. Check for Zlib / Deflate header (0x78)
+        else if (b0 === 0x78 && window.fflate) {
+            const decompressed = window.fflate.unzlibSync(compressedData);
+            jsonStr = new TextDecoder().decode(decompressed);
+        }
+        // 3. Plain UTF-8 JSON text (uncompressed fallback)
+        else {
+            jsonStr = new TextDecoder().decode(compressedData);
+        }
+    } catch (e) {
+        // Fallback: try raw decode directly
+        try {
+            jsonStr = new TextDecoder().decode(compressedData);
+            JSON.parse(jsonStr);
+        } catch (err) {
+            console.error("Decompression failed:", e, err);
+            return;
+        }
+    }
+
+    let data;
+    try { data = JSON.parse(jsonStr); } catch (e) { return; }
+
+    // Restore Custom Fonts from the Project File
+    if (data.customFonts) {
+        Object.assign(customFonts, data.customFonts);
+        saveCustomFonts();
+        updateFontSelector();
+        updateFontManagementUI();
+    }
+
+    selectObject(null);
+    scene.children.filter(c => c.isMesh && !c.userData.isRuler && c !== liftCone).forEach(c => scene.remove(c));
+
+    const loader = new THREE.ObjectLoader();
+
+    if (data.scene && data.scene.object && data.scene.object.children) {
+        data.scene.object.children.forEach(childData => {
             try {
-                const decoder = new TextDecoder();
-                jsonStr = decoder.decode(compressedData);
-                JSON.parse(jsonStr);
-            } catch (e2) {
-                console.error("Decompression failed", e, e2);
-                return;
-            }
-        }
-    
-        let data;
-        try { data = JSON.parse(jsonStr); } catch (e) { return; }
+                if (childData.userData && childData.userData.isGhost) return;
 
-        // Restore Custom Fonts from the Project File
-        if (data.customFonts) {
-            Object.assign(customFonts, data.customFonts);
-            saveCustomFonts(); // Save to browser so they persist
-            updateFontSelector();
-            updateFontManagementUI();
-        }
+                const mesh = loader.parse(childData);
 
-        selectObject(null);
-        scene.children.filter(c => c.isMesh && !c.userData.isRuler && c !== liftCone).forEach(c => scene.remove(c));
+                if (mesh.isMesh) {
+                    const isHole = !!mesh.userData.isHole;
 
-        const loader = new THREE.ObjectLoader();
+                    mesh.material = new THREE.MeshStandardMaterial({
+                        color: mesh.material.color,
+                        roughness: 0.5, metalness: 0.1,
+                        transparent: isHole,
+                        opacity: isHole ? 0.5 : 1,
+                        wireframe: appSettings.wireframe
+                    });
 
-        if (data.scene && data.scene.object && data.scene.object.children) {
-            data.scene.object.children.forEach(childData => {
-                try {
-                    // Check if this is a ghost data before even parsing
-                    if(childData.userData && childData.userData.isGhost) return;
-
-                    const mesh = loader.parse(childData);
-
-                    if (mesh.isMesh) {
-                        // FIX: Ensure transparent is strictly true/false
-                        const isHole = !!mesh.userData.isHole;
-
-                        mesh.material = new THREE.MeshStandardMaterial({
-                            color: mesh.material.color,
-                            roughness: 0.5, metalness: 0.1,
-                            transparent: isHole,
-                            opacity: isHole ? 0.5 : 1,
-                            wireframe: appSettings.wireframe
-                        });
-
-                        if (mesh.userData.geoParams && mesh.userData.geoParams.type === 'text') {
-                            regenerateText(mesh);
-                        }
-                        else if (mesh.userData.geoParams) {
-                            regenerateGeometry(mesh);
-                        }
-
-                        scene.add(mesh);
+                    if (mesh.userData.geoParams && mesh.userData.geoParams.type === 'text') {
+                        regenerateText(mesh);
                     }
-                } catch (err) {
-                    console.warn("Skipping corrupted object:", err);
-                }
-            });
-        }
+                    else if (mesh.userData.geoParams) {
+                        regenerateGeometry(mesh);
+                    }
 
-        // Restore groupIdCounter to be higher than any existing groupId
-        let maxGroupId = 0;
-        scene.children.forEach(c => {
-            if (c.isMesh && c.userData.groupId && c.userData.groupId >= maxGroupId) {
-                maxGroupId = c.userData.groupId;
+                    scene.add(mesh);
+                }
+            } catch (err) {
+                console.warn("Skipping corrupted object:", err);
             }
         });
-        if (maxGroupId >= groupIdCounter) groupIdCounter = maxGroupId + 1;
-
-        updateObjectList();
-        window.requestRender();
     }
+
+    let maxGroupId = 0;
+    scene.children.forEach(c => {
+        if (c.isMesh && c.userData.groupId && c.userData.groupId >= maxGroupId) {
+            maxGroupId = c.userData.groupId;
+        }
+    });
+    if (maxGroupId >= groupIdCounter) groupIdCounter = maxGroupId + 1;
+
+    updateObjectList();
+    window.requestRender();
+}
 
     // --- FIX: Robust Load Logic ---
     function loadFromStorage() {

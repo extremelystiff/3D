@@ -1282,7 +1282,7 @@
         "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
         "three-mesh-bvh": "https://unpkg.com/three-mesh-bvh@0.7.3/build/index.module.js",
         "three-bvh-csg": "https://unpkg.com/three-bvh-csg@0.0.16/build/index.module.js",
-        "zstd-wasm": "https://cdn.jsdelivr.net/npm/@bokuweb/zstd-wasm@0.0.27/dist/web/index.web.min.js",
+        "zstd-wasm": "https://esm.sh/@bokuweb/zstd-wasm@0.0.27",
         "three-rounded-box": "https://unpkg.com/three@0.160.0/examples/jsm/geometries/RoundedBoxGeometry.js",
         "three/addons/loaders/FontLoader.js": "https://unpkg.com/three@0.160.0/examples/jsm/loaders/FontLoader.js",
         "three/addons/geometries/TextGeometry.js": "https://unpkg.com/three@0.160.0/examples/jsm/geometries/TextGeometry.js",
@@ -1293,7 +1293,9 @@
 
 <!-- Polyfills -->
 <script async src="https://ga.jspm.io/npm:es-module-shims@1.8.0/dist/es-module-shims.js"></script>
-
+<!-- Fallback -->
+<script src="https://cdn.jsdelivr.net/npm/fzstd@0.1.1/umd/index.js"></script>
+    
 <!-- OCCT Import JS for STEP file support -->
 <script src="https://unpkg.com/occt-import-js@0.0.23/dist/occt-import-js.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/opentype.js@1.3.4/dist/opentype.min.js"></script>
@@ -2149,10 +2151,10 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
     import { SUBTRACTION, ADDITION, Brush, Evaluator } from "three-bvh-csg";
     import { MeshBVH } from "three-mesh-bvh";
 
-    // IMPORT ZSTD
-    import { init as initZstd, compress, decompress } from "zstd-wasm";
+
 
     // --- GLOBALS ---
+    let initZstd = null, compress = null, decompress = null;
     let scene, cam, ren, labelRen, ctrl, tCtrl, ray;
     let selectedObjects = [];
     let liftCone, isLifting = false, liftStartMouseY = 0, liftStartObjZ = 0;
@@ -5901,7 +5903,13 @@ function handleAlignClick(ray) {
 async function init3D() {
         // Init ZSTD
         try {
-            await initZstd('https://unpkg.com/@bokuweb/zstd-wasm@0.0.27/dist/web/zstd.wasm');
+            const zstd = await import("zstd-wasm");
+            initZstd = zstd.init;
+            compress = zstd.compress;
+            decompress = zstd.decompress;
+    
+            // Correct WASM location is in lib/wasm/
+            await initZstd('https://cdn.jsdelivr.net/npm/@bokuweb/zstd-wasm@0.0.27/lib/wasm/zstd.wasm');
             zstdReady = true;
             console.log("Zstd Compression Ready");
         } catch(e) {
@@ -11750,28 +11758,31 @@ function saveState() {
 
 function loadSnapshot(compressedData) {
         if (!compressedData) return;
-
+    
         let jsonStr;
-        if (zstdReady) {
-            try {
+        try {
+            if (zstdReady && typeof decompress === 'function') {
                 const decompressed = decompress(compressedData);
-                const decoder = new TextDecoder();
-                jsonStr = decoder.decode(decompressed);
-            } catch (e) {
-                try {
-                    const decoder = new TextDecoder();
-                    jsonStr = decoder.decode(compressedData);
-                    JSON.parse(jsonStr);
-                } catch (e2) {
-                    console.error("Decompression failed", e);
-                    return;
-                }
+                jsonStr = new TextDecoder().decode(decompressed);
+            } else if (window.fzstd && typeof window.fzstd.decompress === 'function') {
+                // Pure JavaScript fallback for Zstandard decompression
+                const decompressed = window.fzstd.decompress(compressedData);
+                jsonStr = new TextDecoder().decode(decompressed);
+            } else {
+                throw new Error("No decompressor available");
             }
-        } else {
-            const decoder = new TextDecoder();
-            jsonStr = decoder.decode(compressedData);
+        } catch (e) {
+            // Fallback for plain uncompressed JSON
+            try {
+                const decoder = new TextDecoder();
+                jsonStr = decoder.decode(compressedData);
+                JSON.parse(jsonStr);
+            } catch (e2) {
+                console.error("Decompression failed", e, e2);
+                return;
+            }
         }
-
+    
         let data;
         try { data = JSON.parse(jsonStr); } catch (e) { return; }
 
